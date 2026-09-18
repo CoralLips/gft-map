@@ -1,0 +1,188 @@
+/* ThinkingMapPanel 样式 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--poe-surface);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--poe-gray-100);
+  flex-shrink: 0;
+}
+
+.btnGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addNodeBtn {
+  font-size: 13px;
+  color: var(--poe-gray-700);
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 5px 10px;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.addNodeBtn:hover:not(:disabled) {
+  color: var(--poe-blue-dark);
+  border-color: var(--tint-blue-border);
+  background: var(--tint-blue-bg);
+}
+
+.addNodeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.freshBtn {
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--poe-gray-500);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.freshBtn:hover {
+  color: var(--poe-red-dark);
+}
+
+.generateBtn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--poe-on-accent);
+  background: var(--poe-blue-dark);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+.generateBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.generateBtn:disabled {
+  background: var(--tint-blue-border);
+  cursor: not-allowed;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--poe-gray-500);
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.error {
+  flex-shrink: 0;
+  margin: 8px 12px 0;
+  font-size: 13px;
+  color: var(--poe-red-dark);
+  background: var(--tint-red-bg);
+  border: 1px solid var(--tint-red-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.mapArea {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* error 横幅可关闭（零建议永驻横幅的教训——一切提示必须可消除） */
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.errorClose {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--poe-red-dark);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.errorClose:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* 进行中按钮的可中止态（2026-07-12）：平时显示进度文案，hover 换「■ 中止」——
+   点击即软中断（生成=回滚到生成前 / 整理=停在当前步） */
+.stopOnHover { cursor: pointer; position: relative; }
+.stopOnHover .stopLabel { display: none; }
+/* hover 换「■ 中止」但按钮尺寸纹丝不动：进度文案隐形保占位，中止字样绝对定位居中覆盖；颜色继承不另染 */
+.stopOnHover:hover .runLabel { visibility: hidden; }
+.stopOnHover:hover .stopLabel { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; }
+
+/* 普通主题文字，最多两行，悬停看全文；与 Doc 共用同一份。 */
+.theme {
+  display: block;
+  flex-shrink: 0;
+  width: 100%;
+  padding: 4px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--poe-gray-500);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--poe-gray-100);
+}
+.themeText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+}
+
+/* Narrow panels wrap actions without squeezing labels. */
+.toolbar .btnGroup { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.toolbar .btnGroup:last-child { margin-left: auto; }

@@ -1,0 +1,250 @@
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.editor {
+  flex: 1;
+  background: var(--poe-surface);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.editor:focus-within {
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
+}
+
+/* 生成中状态 */
+.generating {
+  opacity: 0.9;
+}
+
+/* AI 生成中指示器 */
+.generatingBadge {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--poe-purple) 0%, var(--tone-purple-deep) 100%);
+  color: var(--poe-on-accent);
+  border-radius: 20px;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  background: var(--poe-surface);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* 选中文本工具栏 */
+.selectionToolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--poe-surface);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toolbarBtn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--poe-gray-100);
+  font-size: 13px;
+  color: var(--poe-gray-600);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.toolbarBtn:hover {
+  background: var(--poe-purple);
+  color: var(--poe-on-accent);
+}
+
+/* 自定义 prompt 输入 */
+.customPromptInput {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.customPromptInput input {
+  padding: 6px 10px;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 6px;
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+}
+
+.customPromptInput input:focus {
+  border-color: var(--poe-purple);
+}
+
+.customPromptInput button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.customPromptInput button:first-of-type {
+  background: var(--poe-purple);
+  color: var(--poe-on-accent);
+}
+
+.customPromptInput button:last-of-type {
+  background: var(--poe-gray-100);
+  color: var(--poe-gray-500);
+}
+
+/* 右栏 Doc：沿用编辑器，把章节、判断和论述排成可连续阅读的文档。 */
+
+.compact .editor {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.compact :global(.cm-editor) {
+  font-size: 14px !important;
+  color: var(--poe-gray-800, #303746);
+}
+
+.compact :global(.cm-content) {
+  line-height: 1.85 !important;
+  padding: 20px 24px 56px !important;
+  max-width: 760px;
+}
+
+.compact :global(.cm-doc-heading) {
+  color: var(--poe-gray-900);
+  font-weight: 600;
+  line-height: 1.6;
+  padding-top: 16px;
+  padding-bottom: 5px;
+}
+
+.compact :global(.cm-doc-heading-1) {
+  font-size: 20px;
+  padding-top: 28px;
+  padding-bottom: 10px;
+}
+
+.compact :global(.cm-doc-heading-2) {
+  font-size: 17px;
+  padding-top: 26px;
+  padding-bottom: 9px;
+}
+
+.compact :global(.cm-doc-heading-3) {
+  font-size: 14.5px;
+}
+
+.compact :global(.cm-doc-heading:first-child) {
+  padding-top: 0;
+}
+
+/* 字阶在整行上；预览内联标记不能再次放大，聚焦前后块高一致。 */
+.compact :global(.cm-heading) {
+  font-size: inherit !important;
+  font-weight: inherit;
+  color: inherit;
+  display: inline;
+  border: 0;
+  padding: 0;
+}
+
+.compact :global(.cm-doc-paragraph-break) {
+  line-height: 0.85;
+}
+
+/* 相邻判断是一组共同论述的落点，不是逐条卡片。块形状不随光标进入而变化。 */
+.compact :global(.cm-doc-node) {
+  border-left: 2px solid var(--poe-gray-200);
+  background: var(--poe-gray-50);
+  padding: 2px 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--poe-gray-800, #303746);
+}
+
+.compact :global(.cm-doc-node-start) {
+  padding-top: 8px;
+  border-top-right-radius: 4px;
+}
+
+.compact :global(.cm-doc-node-end) {
+  padding-bottom: 8px;
+  border-bottom-right-radius: 4px;
+}
+
+.compact :global(.cm-doc-node-mark) {
+  color: var(--poe-gray-500);
+  font-weight: 400;
+}
+
+/* 白盒留痕行（`> ◇→✗ 日期：理由`）：柔化成小字灰——记录在，但不抢阅读注意力
+   （锚 ^jN 走 Decoration.replace 直接隐藏，无需样式） */
+.compact :global(.cm-whitebox-trail) {
+  font-size: 0.86em;
+  color: var(--poe-gray-400);
+  opacity: 0.85;
+}

@@ -1,0 +1,47 @@
+{
+  "name": "gft-map",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node apps/gft-local/build.mjs",
+    "start": "node apps/gft-local/cli.mjs serve",
+    "test": "node apps/gft-local/release/run-tests.mjs",
+    "typecheck": "tsc -p apps/gft-local/tsconfig.json",
+    "check:source": "node apps/gft-local/release/verify-source.mjs",
+    "pack:skill": "node apps/gft-local/release/package-skill.mjs"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@anthropic-ai/claude-agent-sdk": "0.3.270",
+    "@codemirror/commands": "6.10.1",
+    "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/language": "6.12.1",
+    "@codemirror/state": "6.5.3",
+    "@codemirror/view": "6.39.7",
+    "@lezer/highlight": "1.2.3",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "dagre": "0.8.5",
+    "diff": "8.0.4",
+    "katex": "0.16.27",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "reactflow": "11.11.4",
+    "zustand": "5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/dagre": "0.7.53",
+    "@types/react": "18.3.24",
+    "@types/react-dom": "18.3.7",
+    "autoprefixer": "10.4.21",
+    "esbuild": "0.21.5",
+    "postcss": "8.5.15",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.9.3"
+  },
+  "license": "MIT"
+}

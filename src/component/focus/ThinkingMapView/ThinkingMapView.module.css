@@ -1,0 +1,358 @@
+/* ThinkingMapView 样式 */
+
+.container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* ===== 空态 ===== */
+.emptyState {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--poe-gray-400);
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.emptyDesc {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ===== 边编辑工具条 ===== */
+.edgeToolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+}
+
+.edgeToolbarLabel {
+  font-size: 12px;
+  color: var(--poe-gray-500);
+  margin-right: 2px;
+}
+
+.edgeTypeBtn {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1.5px solid var(--edge-color);
+  color: var(--edge-color);
+  background: var(--poe-surface);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.edgeTypeBtn:hover {
+  background: color-mix(in srgb, var(--edge-color) 12%, var(--poe-surface));
+}
+
+.edgeTypeBtnActive {
+  background: var(--edge-color);
+  color: var(--poe-on-accent);
+}
+
+.edgeDeleteBtn {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--tint-red-border);
+  color: var(--poe-red-dark);
+  background: var(--poe-surface);
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.edgeDeleteBtn:hover {
+  background: var(--tint-red-bg);
+}
+
+.edgeCloseBtn {
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  border: none;
+  border-radius: 6px;
+  color: var(--poe-gray-400);
+  background: transparent;
+  cursor: pointer;
+}
+
+.edgeCloseBtn:hover {
+  background: var(--poe-gray-100);
+  color: var(--poe-gray-600);
+}
+
+/* ===== ⊙ 恢复视图（右上角文字按钮，旧探索树同款） ===== */
+.resetViewBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  font-size: 12px;
+  color: var(--poe-gray-500);
+  background: color-mix(in srgb, var(--poe-surface) 95%, transparent);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.resetViewBtn:hover {
+  color: var(--poe-blue-dark);
+  border-color: var(--tint-blue-border);
+  background: var(--tint-blue-bg);
+}
+
+/* ===== 选中节点工具条（顺滑编辑统一入口） ===== */
+.nodeToolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  padding: 5px 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
+}
+
+.nodeToolbarBtn {
+  font-size: 13px;
+  color: var(--poe-gray-700);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.nodeToolbarBtn:hover {
+  background: var(--tint-blue-bg);
+  color: var(--poe-blue-dark);
+}
+
+.nodeToolbarBtnDanger:hover {
+  background: var(--tint-red-bg);
+  color: var(--poe-red-dark);
+}
+
+.nodeToolbarClose {
+  font-size: 14px;
+  color: var(--poe-gray-400);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+/* ===== 连线态提示 ===== */
+.linkingHint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font-size: 13px;
+  color: var(--poe-purple);
+  background: var(--tint-purple-bg);
+  border: 1px solid var(--tint-purple-border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12);
+}
+
+/* hover 到不可连目标:提示条转红,就地解释拒因(与预览虚线变红同步) */
+.linkingHintBad {
+  color: var(--poe-red-dark);
+  background: var(--tint-red-bg);
+  border-color: var(--tint-red-border);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.12);
+}
+
+/* 连线预览虚线:纯视觉,不许挡目标节点的 hover/点击 */
+.previewEdge {
+  pointer-events: none;
+}
+
+/* ===== 删除撤销 toast ===== */
+.undoToast {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--poe-gray-700);
+  background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  padding: 7px 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.undoBtn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--poe-blue-dark);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* ===== 点线浮出的 🗑（点击位置旁，零行程） ===== */
+.edgeDeleteFloat {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 25;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--poe-gray-700);
+  background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+  transition: all 0.12s;
+}
+
+.edgeDeleteFloat:hover {
+  border-color: var(--tint-red-border);
+  background: var(--tint-red-bg);
+}
+
+/* 空态手动种节点按钮(无 AI 路径的入口;画布空白右键同功能) */
+.emptySeedBtn {
+  margin-top: 10px;
+  padding: 8px 16px;
+  border: 1px solid var(--poe-purple);
+  border-radius: 8px;
+  background: var(--poe-surface);
+  color: var(--poe-purple);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.emptySeedBtn:hover {
+  background: color-mix(in srgb, var(--poe-purple) 10%, var(--poe-surface));
+}
+
+/* 多选工具条：框选/加选 ≥2 节点时顶部浮现 */
+.multiSelectBar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--poe-gray-700);
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-purple-light, var(--tint-purple-border));
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.15);
+}
+
+.multiSelectBtn {
+  font-size: 12.5px;
+  color: var(--poe-red-dark);
+  background: none;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multiSelectBtn:hover {
+  border-color: var(--poe-red-dark);
+  background: var(--tint-red-bg);
+}
+
+.multiSelectCancel {
+  font-size: 12px;
+  color: var(--poe-gray-400);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.multiSelectCancel:hover {
+  color: var(--poe-gray-700);
+}
+
+.multiSelectTidyBtn {
+  font-size: 12.5px;
+  color: var(--poe-purple);
+  background: none;
+  border: 1px solid var(--poe-purple-light, var(--tint-purple-border));
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multiSelectTidyBtn:hover:not(:disabled) {
+  background: var(--poe-purple-100, #ede9fe);
+}
+
+.multiSelectTidyBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 整理操作流进行中：节点位移平滑过渡（合并/丢弃引发的重排滑动就位而非瞬跳）。
+   只在 isTidying 期间挂载——拖动手感与日常布局零影响 */
+.tidyingAnim :global(.react-flow__node) {
+  transition: transform 0.25s ease;
+}
+
+/* 进行中按钮的可中止态（与 Panel 同款）：hover 换「■ 中止」 */
+.stopOnHover { cursor: pointer; position: relative; }
+.stopOnHover .stopLabel { display: none; }
+/* hover 换「■ 中止」但按钮尺寸纹丝不动：进度文案隐形保占位，中止字样绝对定位居中覆盖；颜色继承不另染 */
+.stopOnHover:hover .runLabel { visibility: hidden; }
+.stopOnHover:hover .stopLabel { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; }

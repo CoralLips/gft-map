@@ -1,0 +1,77 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.panel {
+  width: 90%;
+  max-width: 400px;
+  background: var(--poe-surface);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 24px;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--poe-gray-800);
+}
+
+.message {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--poe-gray-500);
+  white-space: pre-line;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancelBtn {
+  padding: 8px 16px;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 6px;
+  background: var(--poe-surface);
+  font-size: 13px;
+  color: var(--poe-gray-500);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--poe-gray-100);
+}
+
+.confirmBtn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--poe-purple);
+  font-size: 13px;
+  color: var(--poe-on-accent);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.confirmBtn:hover {
+  background: var(--tone-purple-deep);
+}
+
+.confirmBtn.danger {
+  background: var(--poe-red-dark);
+}
+
+.confirmBtn.danger:hover {
+  background: #c62828;
+}

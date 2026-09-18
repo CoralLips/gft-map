@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/gft-local/
+release/gft-map/
+release/*.tar.gz
+release/*.zip
+release/SHA256SUMS
+.data/
+test-results/

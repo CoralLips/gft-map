@@ -1,0 +1,1447 @@
+/* ExploreTreeNode — 探索模式节点样式 */
+
+.wrapper {
+  position: relative;
+}
+
+.node {
+  position: relative;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--tint-green-border);           /* 浅绿边（旧 type_fragment 默认色）*/
+  background-color: var(--tint-green-bg);       /* 浅绿底 */
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s;
+  max-width: 180px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.node:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.12);
+}
+
+/* ===== 当前查看的节点 ===== */
+.highlighted {
+  /* 高亮全靠 shadow ring + 变色——绝不改 border-width：
+     边框变宽会把节点撑大几像素 → ReactFlow 重测尺寸 → 全图布局微移（07-05 实测坑） */
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.45), 0 6px 16px rgba(124, 58, 237, 0.2);
+  border-color: var(--poe-purple) !important;
+  background-color: var(--tint-purple-bg) !important;
+  z-index: 5;
+}
+
+/* ===== 虚框候选 ===== */
+.candidate {
+  border-style: dashed !important;
+  opacity: 0.9;
+  background-color: color-mix(in srgb, var(--poe-surface) 90%, transparent);
+  box-shadow: none;
+}
+
+.candidateActions {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  display: flex;
+  gap: 4px;
+  z-index: 1200;
+}
+
+.candidateBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
+}
+
+.candidateBtn:hover {
+  transform: scale(1.15);
+}
+
+.confirmBtn {
+  background: var(--tone-green);
+  color: var(--poe-on-accent);
+}
+
+.rejectBtn {
+  background: var(--poe-red);
+  color: var(--poe-on-accent);
+}
+
+/* ===== 内容 ===== */
+.content {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.iconSpan {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.title {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--poe-gray-800);
+  line-height: 1.35;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.title.placeholder {
+  color: var(--poe-gray-400);
+  font-weight: 400;
+}
+
+/* inlineBody 模式（思维导航）：title 不设行数上限，完整显示（图上唯一可见内容，不许截断） */
+.titleFull {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+}
+
+
+.toggleButton {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.2s;
+}
+.toggleButton:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.toggleIcon {
+  font-size: 0.65rem;
+  color: var(--poe-gray-600);
+}
+
+/* ===== Hover 操作（节点正下方小按钮区） =====
+ * 关键修复：
+ *  1) 容器不撑满宽度 — 只占按钮的实际宽度，不挡住节点下方大片区域
+ *     （避免拖拽命中 hoverActions 容器导致 drop target 识别错误）
+ *  2) ::before 透明桥梁 — 桥接节点和按钮之间的 4px 间隙
+ *     保证鼠标从节点移到按钮过程中 hover 不中断（否则按钮闪烁/无法点击）
+ *  3) 容器 pointer-events: none，只让 ::before 和按钮接收事件
+ */
+.hoverActions {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  display: flex;
+  gap: 0.5rem;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* 透明桥梁：让鼠标从节点移到按钮时 hover 不断（变大避免间隙误判）*/
+.hoverActions::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -12px;
+  right: -12px;
+  height: 16px;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.actionButton {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.15s;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.actionButton:hover {
+  transform: scale(1.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 添加子节点按钮（绿色，跟节点配色统一）*/
+.addFocusCardBtn {
+  background: var(--tone-green);
+  color: var(--poe-on-accent);
+}
+.addFocusCardBtn:hover { background: var(--tone-green); }
+
+/* 删除按钮（红色 ✕，比 🗑 emoji 更清爽）*/
+.deleteButton {
+  background: var(--poe-red);
+  color: var(--poe-on-accent);
+}
+.deleteButton:hover { background: var(--poe-red-dark); }
+
+/* ===== 拖拽相关 ===== */
+.dragging {
+  opacity: 0.5;
+  transform: scale(1.05);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  cursor: grabbing !important;
+  z-index: 1000;
+}
+
+.dropBefore::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0; bottom: 0;
+  width: 4px;
+  background: var(--poe-purple);
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.dropAfter::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 0; bottom: 0;
+  width: 4px;
+  background: var(--poe-purple);
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.dropInside {
+  border-color: var(--tone-green) !important;
+  background-color: rgba(34, 197, 94, 0.1) !important;
+  transform: scale(1.02);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+}
+
+.invalidDropTarget {
+  border-color: var(--poe-red) !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  cursor: not-allowed !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+}
+
+/* ===== 编辑模式 ===== */
+.editInput {
+  width: 100%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border: 2px solid var(--poe-purple);
+  border-radius: 0.25rem;
+  outline: none;
+  background: var(--poe-surface);
+  color: var(--poe-gray-900);
+}
+
+/* ===== ⋯ 详情按钮（节点 title 旁） ===== */
+.detailToggleBtn {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--poe-gray-500);
+  transition: background-color 0.15s, color 0.15s;
+}
+.detailToggleBtn:hover {
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--poe-purple);
+}
+.detailToggleBtnActive {
+  background: rgba(124, 58, 237, 0.18);
+  color: var(--poe-purple);
+}
+
+/* 思维导航（inlineBody 模式）：⋯ 装进小方框——有边界=控件感，不再被误读成省略号 */
+.detailToggleBtnBoxed {
+  border: 1px solid var(--poe-gray-300);
+  background: var(--poe-surface);
+  border-radius: 0.3rem;
+}
+.detailToggleBtnBoxed:hover {
+  border-color: var(--poe-purple);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+/* ===== 思维脉络 hover 角标（节点右侧外挂，垂直居中）：轻读操作容器 =====
+   容器纵向占满节点、横向从右边缘延伸——透明过道=空间缓冲，鼠标横滑不掉线 */
+.hoverBadge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 4px;
+  gap: 4px;
+  z-index: 1100;
+  /* 容器透明，仅按钮可见；按钮贴节点边（4px 间隙），余下宽度+250ms 延迟=缓冲 */
+}
+
+/* ===== 思维脉络选中工具条（浮在选中节点正下方——零行程，跟随缩放平移） ===== */
+.selectedToolbar {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  padding: 3px 5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  z-index: 1200;
+  white-space: nowrap;
+}
+
+.selectedToolbarBtn {
+  font-size: 12px;
+  color: var(--poe-gray-700);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.selectedToolbarBtn:hover {
+  background: var(--tint-blue-bg);
+  color: var(--poe-blue-dark);
+}
+
+.selectedToolbarBtnDanger:hover {
+  background: var(--tint-red-bg);
+  color: var(--poe-red-dark);
+}
+
+.hoverBadgeBtn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--poe-gray-500);
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: all 0.12s;
+}
+
+.hoverBadgeBtn:hover {
+  color: var(--poe-purple);
+  border-color: var(--poe-purple);
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.hoverBadgeBtnActive {
+  color: var(--poe-purple);
+  border-color: var(--poe-purple);
+  background: rgba(124, 58, 237, 0.10);
+}
+
+/* ===== 锚定详情小卡：body + notes，由 ⋯ 按钮控制开关 ===== */
+.detailPanel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 14px);
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--poe-surface) 99%, transparent);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  z-index: 9999;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--poe-gray-800);
+  pointer-events: auto;
+  animation: detailPanelFade 0.12s ease-out;
+}
+
+@keyframes detailPanelFade {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* 头部：title + 关闭按钮 */
+.detailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.12);
+}
+.detailHeaderTitle {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--poe-gray-700);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detailCloseBtn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--poe-gray-500);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.detailCloseBtn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--poe-gray-800);
+}
+
+/* 极简复制按钮 — 跟 close 按钮风格一致，绿色 hover 表示"动作型" */
+.detailCopyBtn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--poe-gray-500);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-right: 4px;
+}
+.detailCopyBtn:hover {
+  background: var(--tint-green-bg);
+  color: var(--tone-green2);
+}
+
+/* 段落 */
+.detailSection {
+  margin-bottom: 12px;
+}
+.detailSection:last-child {
+  margin-bottom: 0;
+}
+.detailSectionLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(124, 58, 237, 0.85);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* body 段 */
+.detailBody {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: text;
+  transition: background 0.1s;
+}
+.detailBody:hover {
+  background: rgba(124, 58, 237, 0.05);
+}
+.detailBodyEmpty {
+  color: var(--poe-gray-400);
+  font-style: italic;
+}
+.detailBodyEdit {
+  width: 100%;
+  min-height: 40px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 6px 8px;
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  color: var(--poe-gray-900);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* notes 列表 */
+.detailNotesList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.detailNoteItem {
+  position: relative;
+  padding: 4px 8px 4px 16px;
+  color: var(--poe-gray-700);
+  border-radius: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  transition: background 0.1s;
+}
+.detailNoteItem::before {
+  content: '·';
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  color: rgba(124, 58, 237, 0.6);
+  font-weight: 700;
+  font-size: 14px;
+}
+.detailNoteItem:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+.detailNoteItem:hover .detailNoteDelBtn {
+  opacity: 1;
+}
+.detailNoteText {
+  flex: 1;
+  word-break: break-word;
+}
+.detailNoteDelBtn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.detailNoteDelBtn:hover {
+  transform: scale(1.15);
+}
+
+/* ===== Body 操作栏（Commit 按钮）===== */
+.detailBodyActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.commitBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  background: var(--poe-surface);
+  color: var(--poe-purple);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.commitBtn:hover {
+  background: var(--poe-purple);
+  color: var(--poe-on-accent);
+}
+
+/* ===== Log 段 ===== */
+.detailLogEmpty {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--poe-gray-400);
+  font-style: italic;
+}
+
+.detailLogList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailLogItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--poe-gray-600);
+  cursor: default;
+  transition: background 0.1s;
+}
+.detailLogItem:hover {
+  background: rgba(124, 58, 237, 0.05);
+}
+
+.detailLogItemHead {
+  font-weight: 600;
+  color: var(--poe-gray-800);
+}
+
+.detailLogDot {
+  flex-shrink: 0;
+  color: var(--poe-purple);
+  font-size: 10px;
+  width: 10px;
+  text-align: center;
+}
+
+.detailLogTime {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--poe-gray-400);
+  font-variant-numeric: tabular-nums;
+  width: 64px;
+}
+
+.detailLogMsg {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-word;
+}
+
+/* ===== Commit 弹窗（嵌在 detailPanel 内部）===== */
+.commitDialogOverlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--poe-surface) 85%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  border-radius: 10px;
+  animation: detailPanelFade 0.1s ease-out;
+}
+
+.commitDialog {
+  width: 92%;
+  background: var(--poe-surface);
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commitDialogTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--poe-gray-800);
+}
+
+.commitInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 6px 8px;
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  color: var(--poe-gray-900);
+  box-sizing: border-box;
+}
+
+.commitDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.commitDialogCancel,
+.commitDialogSubmit {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid;
+}
+
+.commitDialogCancel {
+  background: var(--poe-surface);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--poe-gray-600);
+}
+.commitDialogCancel:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.commitDialogSubmit {
+  background: var(--poe-purple);
+  border-color: var(--poe-purple);
+  color: var(--poe-on-accent);
+}
+.commitDialogSubmit:hover {
+  background: var(--tone-purple-deep);
+}
+.commitDialogSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--poe-gray-400);
+  border-color: var(--poe-gray-400);
+}
+
+/* ===== Viewing past banner ===== */
+.viewingBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.viewingBannerText {
+  color: var(--tone-amber);
+  flex: 1;
+  overflow: hidden;
+}
+
+.viewingBannerMsg {
+  font-weight: 600;
+}
+
+.viewingBannerActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.viewingBannerBackBtn,
+.viewingBannerRestoreBtn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid;
+}
+
+.viewingBannerBackBtn {
+  background: var(--poe-surface);
+  border-color: rgba(146, 64, 14, 0.4);
+  color: var(--tone-amber);
+}
+.viewingBannerBackBtn:hover {
+  background: rgba(146, 64, 14, 0.08);
+}
+
+.viewingBannerRestoreBtn {
+  background: var(--tone-amber);
+  border-color: var(--tone-amber);
+  color: var(--poe-on-accent);
+}
+.viewingBannerRestoreBtn:hover {
+  background: var(--tone-amber);
+}
+
+/* read-only 标签 */
+.detailReadOnlyTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  background: rgba(146, 64, 14, 0.12);
+  color: var(--tone-amber);
+  border-radius: 8px;
+  letter-spacing: 0.4px;
+}
+
+.detailBodyReadonly {
+  background: rgba(0, 0, 0, 0.02);
+  cursor: default;
+}
+.detailBodyReadonly:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* log 项可点击 */
+.detailLogItem {
+  cursor: pointer;
+}
+
+/* viewing 中的 commit 高亮 */
+.detailLogItemViewing {
+  background: rgba(251, 191, 36, 0.15) !important;
+  border-left: 2px solid rgb(245, 158, 11);
+  padding-left: 4px !important;
+}
+
+/* ===== Diff 视图 ===== */
+.detailDiffTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  background: rgba(59, 130, 246, 0.12);
+  color: rgb(37, 99, 235);
+  border-radius: 8px;
+  letter-spacing: 0.4px;
+}
+
+.detailBodyDiff {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.02);
+  cursor: default;
+  line-height: 1.7;
+}
+
+.diffEmpty {
+  color: var(--poe-gray-400);
+  font-style: italic;
+}
+
+.diffAdded {
+  background: rgba(34, 197, 94, 0.18);
+  color: var(--tone-green-deep);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.diffRemoved {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--tone-red-strong);
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.diffUnchanged {
+  color: var(--poe-gray-600);
+}
+
+/* ===== Modified state ===== */
+.detailModifiedTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--tone-amber);
+  border-radius: 8px;
+  letter-spacing: 0.4px;
+}
+
+.commitBtnHighlighted {
+  background: var(--poe-purple);
+  color: var(--poe-on-accent);
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35);
+}
+.commitBtnHighlighted:hover {
+  background: var(--tone-purple-deep);
+}
+.commitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--poe-gray-400);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.commitBtn:disabled:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--poe-gray-400);
+}
+
+.discardBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--poe-surface);
+  color: var(--poe-gray-500);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.discardBtn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--tone-red-strong);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* ===== 锚定小卡：title 单击编辑 ===== */
+.detailHeaderIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.detailHeaderTitle {
+  cursor: text;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.detailHeaderTitle:hover {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.detailHeaderTitleEdit {
+  flex: 1;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--poe-gray-800);
+  padding: 2px 6px;
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  box-sizing: border-box;
+}
+
+/* ===== body 单击编辑：cursor + hover 提示 ===== */
+.detailBody {
+  cursor: text;
+}
+.detailBody:hover {
+  background: rgba(124, 58, 237, 0.06);
+}
+/* 空 body 的 hover 视觉一致 */
+.detailBodyEmpty:hover {
+  background: rgba(124, 58, 237, 0.06);
+}
+/* viewing past / read-only 不显示编辑 hover */
+.detailBodyReadonly,
+.detailBodyReadonly:hover {
+  cursor: default;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* ===== Log item 操作（Reword / Drop）===== */
+.detailLogActions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.detailLogItem:hover .detailLogActions {
+  display: inline-flex;
+}
+
+.detailLogActionBtn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: background 0.1s;
+  padding: 0;
+  color: var(--poe-gray-500);
+}
+.detailLogActionBtn:hover {
+  background: rgba(124, 58, 237, 0.12);
+  color: var(--poe-purple);
+}
+.detailLogActionBtnDisabled,
+.detailLogActionBtnDisabled:hover {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* Reword input */
+.detailLogRewordInput {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: inherit;
+  color: var(--poe-gray-800);
+  padding: 1px 4px;
+  border: 1px solid rgba(124, 58, 237, 0.5);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  box-sizing: border-box;
+}
+
+/* ===== AI suggest 按钮 ===== */
+.aiSuggestBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: var(--poe-surface);
+  color: rgb(37, 99, 235);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.aiSuggestBtn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.08);
+}
+.aiSuggestBtn:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* ===== Suggestion 卡片 ===== */
+.suggestionCard {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(124, 58, 237, 0.05));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  position: relative;
+}
+
+.suggestionCardLoading {
+  border-style: dashed;
+}
+
+.suggestionCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.suggestionCardTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgb(37, 99, 235);
+  letter-spacing: 0.2px;
+}
+
+.suggestionCardCloseBtn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--poe-gray-500);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.suggestionCardCloseBtn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.suggestionCardLoadingText {
+  font-size: 12px;
+  color: var(--poe-gray-500);
+  font-style: italic;
+}
+
+.suggestionCardField {
+  margin-bottom: 8px;
+}
+.suggestionCardField:last-child {
+  margin-bottom: 0;
+}
+
+.suggestionCardFieldLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--poe-gray-500);
+  margin-bottom: 3px;
+}
+
+.suggestionCardMessage {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--poe-gray-800);
+  padding: 4px 0;
+}
+
+.suggestionCardDiff {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: color-mix(in srgb, var(--poe-surface) 60%, transparent);
+  padding: 6px 8px;
+  border-radius: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.suggestionCardActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.suggestionCardDismissBtn,
+.suggestionCardEditBtn,
+.suggestionCardAcceptBtn,
+.suggestionCardCancelBtn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 0.12s;
+}
+
+.suggestionCardDismissBtn {
+  background: var(--poe-surface);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--poe-gray-500);
+}
+.suggestionCardDismissBtn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--tone-red-strong);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.suggestionCardEditBtn {
+  background: var(--poe-surface);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--poe-gray-600);
+}
+.suggestionCardEditBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.suggestionCardCancelBtn {
+  background: var(--poe-surface);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--poe-gray-600);
+}
+.suggestionCardCancelBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.suggestionCardAcceptBtn {
+  background: rgb(37, 99, 235);
+  border-color: rgb(37, 99, 235);
+  color: var(--poe-on-accent);
+}
+.suggestionCardAcceptBtn:hover:not(:disabled) {
+  background: rgb(29, 78, 216);
+}
+.suggestionCardAcceptBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Edit 模式下的 input/textarea */
+.suggestionCardEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestionCardMessageInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  box-sizing: border-box;
+}
+
+.suggestionCardBodyEdit {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 6px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 4px;
+  outline: none;
+  background: var(--poe-surface);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* ===== 收拢（L2 判断）：×N 角标 + 面板成员列表 + 拆开 ===== */
+
+/* 图上角标：收了几条（数字自解释） */
+.memberBadge {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--poe-purple);
+  background: var(--poe-purple-100);
+  border-radius: 8px;
+  align-self: center;
+}
+
+/* 面板：拆开按钮（挂在"由 N 条收成"标签行右侧） */
+.dissolveBtn {
+  float: right;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--poe-gray-500);
+  background: none;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 6px;
+  padding: 1px 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.dissolveBtn:hover {
+  color: var(--poe-red-dark);
+  border-color: var(--poe-red-dark);
+}
+
+/* 面板：成员列表（只读——成员已折叠进判断，编辑先拆开） */
+.memberList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.memberItem {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--poe-gray-700);
+  padding: 5px 8px;
+  background: var(--poe-gray-50, var(--poe-gray-50));
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 6px;
+}
+
+.memberItemTitle {
+  font-weight: 600;
+}
+
+.memberItemBody {
+  color: var(--poe-gray-500);
+}
+
+/* 框选/加选态（多选）：虚线描边——与"正在展开"的紫实线 ring 区分,shadow 不占盒不扰布局 */
+.multiSelected {
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.55);
+  outline: 2px dashed var(--poe-purple);
+  outline-offset: 3px;
+}
+
+/* 未读红点：右上角外挂小圆点（增量新增未点开；单击节点即清）——不占布局、自解释 */
+.unreadDot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--poe-red);
+  border: 1.5px solid var(--poe-surface);
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* ===== 瞬态层：已确认永久态 + AI 建议虚化层（思维脉络专用）===== */
+
+/* 已否决（✗）节点的灰显/虚线样式 2026-09-05 删除（用户拍：图上只留三态——未读红点／问号／普通；
+   ✗ 标记只住白盒文档，图上按普通节点画）。8-28 的"归档观感"版本见 git 历史。 */
+
+/* 已确认"未解"：左上角常驻问号（完全态） */
+.unresolvedMark {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--poe-on-accent);
+  background: var(--poe-purple);
+  border: 1.5px solid var(--poe-surface);
+  border-radius: 50%;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* AI 建议虚化层：半透明叠在节点上，点它=确认；弱于实体=不污染、看得见 */
+
+/* 推翻建议：半透明灰叠加（确认后就是灰显） */
+
+/* 未解建议：半透明紫问号（确认后就是挂?） */
+
+/* ===== AI 推进提议（2026-08-05）：落库、默认保留、显式 ✓/× ===== */
+
+/* AI 补充的新节点：虚线 + 半透明——一眼分得清"这是 AI 加的、我还没认" */
+.proposedNode {
+  opacity: 0.68;
+  border-style: dashed !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+}
+
+/* 低调角标容器：左上角，不覆盖节点内容 */
+.proposalCorner {
+  position: absolute;
+  top: -9px;
+  left: -6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  z-index: 8;
+}
+
+/* 虚化问号（质疑标记）：小、安静——理由点开详情才见（08-07 用户拍：图上别浮夸） */
+.proposalQ {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--poe-surface);
+  border: 1px dashed rgba(124, 58, 237, 0.55);
+  color: rgba(124, 58, 237, 0.75);
+  cursor: help;
+}
+
+/* ✓ / ×：hover 节点才出现（仅 add 型提议——challenge 的操作在详情面板里是文字按钮） */
+.proposalBtn {
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: 1px solid var(--poe-gray-300, var(--poe-gray-300));
+  border-radius: 50%;
+  background: var(--poe-surface);
+  color: var(--poe-gray-500, var(--poe-gray-500));
+  font-size: 11px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.node:hover .proposalBtn { display: flex; }
+.proposalBtn:hover { border-color: var(--tone-green2); color: var(--tone-green2); }
+.proposalBtnDanger:hover { border-color: var(--poe-red); color: var(--poe-red); }
+
+/* ⚔ 质疑块（详情面板内）：图上只留 ? 角标，理由与认账操作点开才见（08-07 用户拍：别浮夸）。
+   操作复用 .proposalBtn 小圆钮——与图上 add 型提议同一套视觉语言。虚化紫调=与提议视觉同族 */
+.proposalDetail {
+  margin: 8px 10px 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px dashed rgba(124, 58, 237, 0.35);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.proposalDetailReason {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(88, 42, 173, 0.9);
+  word-break: break-word;
+}
+.proposalDetailBtns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* 面板内常显（.proposalBtn 默认 display:none 靠 node:hover 才出，这里已在点开的面板里，不再藏） */
+.proposalBtnShow { display: flex; }

@@ -1,0 +1,652 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden; /* 根容器锁死，防整页被 scrollIntoView/focus 顶走漂移、露上下黑带 */
+  background: var(--poe-gray-50);
+}
+
+/* 主内容区域（包含 SessionSidebar + 主体） */
+.mainContent {
+  display: flex;
+  flex: 1;
+  min-height: 0; /* flex 子项收缩到容器高度，内容才不撑破整条链（flex 经典坑，移动端漂移/溢出根因）*/
+  overflow: hidden;
+}
+
+/* 右侧主体区域（标题栏 + 内容） */
+.mainBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0; /* 同上：纵向 flex 链必须能收缩，否则内部 overflow 失效 */
+}
+
+/* 顶部导航 - 放在 mainBody 内 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  padding: 0 20px;
+  background: var(--poe-surface);
+  border-bottom: 1px solid var(--poe-gray-200);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--poe-gray-800);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.title:hover {
+  background-color: var(--poe-gray-100);
+}
+
+/* 非房主：标题只读，去掉「可点」假象（不进编辑、不亮 hover 底）*/
+.titleReadonly {
+  cursor: default;
+}
+.titleReadonly:hover {
+  background-color: transparent;
+}
+
+.titleInput {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--poe-gray-800);
+  border: 1px solid var(--poe-purple);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  background: var(--poe-surface);
+  min-width: 120px;
+}
+
+/* 视图切换页签 */
+.viewTabs {
+  display: flex;
+  background: var(--poe-gray-100);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.viewTab {
+  position: relative; /* betaBadge 角标定位锚 */
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--poe-gray-500);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.viewTab:hover {
+  color: var(--poe-gray-800);
+}
+
+.viewTabActive {
+  background: var(--poe-surface);
+  color: var(--poe-purple);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settingsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 8px;
+  background: var(--poe-surface);
+  color: var(--poe-gray-500);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settingsBtn:hover {
+  background: var(--poe-gray-100);
+  color: var(--poe-purple);
+  border-color: var(--poe-purple);
+}
+
+.shareBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--poe-gray-500);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+/* 会话设置齿轮 + 分享：紧凑成一组 */
+.titleActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shareBtn:hover {
+  background: var(--tint-blue-bg);
+  color: var(--poe-blue);
+}
+
+
+/* 主内容区域 */
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0; /* 纵向收缩，内部 messageList 才能滚而非撑破 */
+  overflow: hidden;
+  position: relative;  /* 为浮游池定位提供参考 */
+}
+
+/* 左侧编辑区 */
+.editorArea {
+  flex: 1;
+  min-width: 0; /* 防止 flex 子元素横向溢出 */
+  min-height: 0; /* 防止 flex 子元素纵向撑破（内部 ChatView 该滚的滚）*/
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden;
+  height: 100%;
+  position: relative; /* 为 AiCue absolute 定位 */
+}
+
+/* 对话视图时去掉 padding，让 ChatView 占满 */
+.editorAreaChat {
+  padding: 0;
+}
+
+/* 操作栏 */
+.actionBar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0 0 0;
+  flex-shrink: 0;
+}
+
+.confirmBtn {
+  padding: 12px 24px;
+  background: var(--poe-surface);
+  color: var(--tone-green);
+  border: 2px solid var(--tone-green);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.confirmBtn:hover:not(:disabled) {
+  background: var(--tone-green);
+  color: var(--poe-on-accent);
+}
+
+.confirmBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.organizeBtn {
+  padding: 12px 28px;
+  background: linear-gradient(135deg, var(--poe-purple) 0%, var(--tone-purple-deep) 100%);
+  color: var(--poe-on-accent);
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.organizeBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+}
+
+.organizeBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 右侧思维网络容器 */
+.networkPanel {
+  position: relative;
+  height: 100%;
+  background-color: var(--poe-gray-50);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 右侧标题栏 */
+.networkHeader {
+  display: flex;
+  min-height: 4rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--poe-gray-200);
+  background-color: var(--poe-surface);
+  padding: 0 1rem;
+}
+
+.networkHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.nodeCount {
+  font-size: 0.875rem;
+  color: var(--poe-gray-500);
+}
+
+.networkHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 右侧主视图切换 Map｜Doc（08-25 白盒轮）：尺寸对齐右上角实验按钮（比左边 Doc/Chat 紧一档） */
+.mapDocTabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--poe-gray-100);
+  border-radius: 7px;
+}
+
+.mapDocTab {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--poe-gray-500);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.mapDocTab:hover {
+  color: var(--poe-gray-800);
+}
+
+.mapDocTabActive {
+  color: var(--poe-purple);
+  background: var(--poe-surface);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Doc 实验功能小标：预期管理——实验轨道功能，可能调整或撤。
+   绝对定位浮于按钮右上角，不占布局宽度（按钮尺寸零变化） */
+.betaBadge {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  padding: 1px 3px;
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--poe-purple);
+  background: var(--poe-purple-100);
+  border: 1px solid var(--poe-surface);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* 思维网络内容区 */
+.networkContent {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.networkContentInner {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* 聚焦信息提示 */
+.focusedInfo {
+  font-size: 13px;
+  color: var(--poe-purple);
+  padding: 6px 12px;
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: 6px;
+}
+
+/* ========== Hamburger 按钮（桌面端隐藏） ========== */
+
+.hamburgerBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--poe-gray-300);
+  border-radius: 8px;
+  background: var(--poe-surface);
+  color: var(--poe-gray-500);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* 折叠态展开按钮（桌面端；样式与侧栏内收起钮 collapseBtn 保持一致）*/
+.sidebarToggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--poe-gray-400);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.sidebarToggleBtn:hover {
+  background: var(--poe-gray-100);
+  color: var(--poe-purple);
+}
+
+/* ========== 侧边栏抽屉（桌面端透明包裹） ========== */
+
+.sidebarDrawer {
+  display: flex;
+  width: 240px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--poe-gray-200); /* 分界线放外层（内层 sidebar 的 border 会被 overflow 裁掉）*/
+  transition: width 0.24s ease;
+}
+
+/* 桌面收起：外层宽度归零 + 去分界线，内层侧栏(固定 240)被裁切 → 内容不挤压变形 */
+.sidebarDrawerCollapsed {
+  width: 0;
+  border-right: none;
+}
+
+.sidebarBackdrop {
+  display: none;
+}
+
+/* ========== 小屏桌面适配（平板/小笔记本） ========== */
+
+@media (max-width: 1024px) {
+  /* 隐藏右侧思维网络，让聊天区占满 */
+  .networkPanel {
+    display: none;
+  }
+}
+
+
+@media (max-width: 768px) {
+  /* 隐藏右侧卡片面板 */
+  .networkPanel {
+    display: none;
+  }
+
+  /* 隐藏编辑/对话视图切换 */
+  .viewTabs {
+    display: none;
+  }
+
+  /* 隐藏分享按钮 */
+  .shareBtn {
+    display: none;
+  }
+
+  /* Header 紧凑化 */
+  .header {
+    padding: 0 12px;
+  }
+
+  .headerLeft {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .title {
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 显示 hamburger 按钮 */
+  .hamburgerBtn {
+    display: flex;
+  }
+
+  /* 移动端用 hamburger 开抽屉，不要桌面的收起按钮 */
+  .sidebarToggleBtn {
+    display: none;
+  }
+
+  /* 编辑区去掉 padding，ChatView 占满 */
+  .editorArea {
+    padding: 0;
+  }
+
+  /* 侧边栏抽屉 - 移动端（覆盖桌面的 width 动画，回归 fixed 抽屉）*/
+  .sidebarDrawer {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: auto;
+    overflow: visible;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebarDrawerOpen {
+    transform: translateX(0);
+  }
+
+  .sidebarBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+}
+
+/* ===== ProjectDropdown 共用样式 ===== */
+/* 项目下拉 */
+.projectDropdown {
+  position: relative;
+}
+
+.projectDropdownBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  background: var(--poe-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--poe-gray-800);
+  cursor: pointer;
+  max-width: 180px;
+  transition: all 0.2s;
+}
+
+.projectDropdownBtn:hover {
+  border-color: var(--poe-purple);
+}
+
+.projectDropdownTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectDropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  padding: 4px;
+}
+
+.projectDropdownItem {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.projectDropdownItem:hover {
+  background: var(--poe-gray-100);
+}
+
+.projectDropdownItem.active {
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.projectDropdownItemBtn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--poe-gray-800);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.projectSharedIcon {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--tint-blue-border);
+  opacity: 0.9;
+}
+
+.projectDropdownItem.active .projectDropdownItemBtn {
+  color: var(--poe-purple);
+  font-weight: 500;
+}
+
+.projectDropdownDeleteBtn {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--poe-gray-300);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.projectDropdownItem:hover .projectDropdownDeleteBtn {
+  opacity: 1;
+}
+
+.projectDropdownDeleteBtn:hover {
+  color: var(--poe-red-dark);
+  background: rgba(211, 47, 47, 0.08);
+}
+
+.projectDropdownDivider {
+  height: 1px;
+  background: var(--poe-gray-100);
+  margin: 4px 0;
+}
+
+.projectDropdownCreate {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--poe-purple);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.projectDropdownCreate:hover {
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.projectDropdownCreateInput {
+  padding: 4px;
+}
+
+.projectDropdownInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--poe-purple);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}

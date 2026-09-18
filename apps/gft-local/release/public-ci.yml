@@ -1,0 +1,61 @@
+name: Validate and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:source
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm run pack:skill
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: gft-map-skill
+          path: |
+            apps/gft-local/release/gft-map-*.tar.gz
+            apps/gft-local/release/SHA256SUMS
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: gft-map-skill
+          path: artifacts
+      - name: Publish versioned Skill
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
+          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "GFT Map $RELEASE_TAG" --notes "本地主题记忆 Skill。下载并解压完整 gft-map 目录；需要 Node.js 20 或更高版本。安装和使用说明见 README。"

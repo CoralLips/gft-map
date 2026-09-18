@@ -1,0 +1,45 @@
+# 同源发行维护
+
+原 GFT 仓库维护源码，独立发行仓接收白名单快照；公开名称为 GFT Map，目标仓库为 CoralLips/gft-map。公开仓保留 `apps/gft-local` 与共享 `src` 的相对路径，文件直接复制；只有公开仓根包配置与来源清单由导出器生成。不要在发行阶段删除或改写云端逻辑，应先修正纯模块与宿主的依赖边界。
+
+## 本地验收
+
+在原仓根目录运行，目标必须为空目录：
+
+```text
+node scripts/export-gft-local.mjs --out <临时目录>/gft-local-source
+```
+
+进入导出目录后运行：
+
+```text
+npm ci
+npm run check:source
+npm run typecheck
+npm run build
+npm test
+npm run pack:skill
+```
+
+导出器只复制 `source-files.json` 中列明的文件，并检查 TypeScript 类型依赖及构建资源依赖。新增依赖不在白名单时导出失败，需检查后明确加入。它拒绝环境文件、运行数据、云服务入口及可识别的私钥或令牌格式；固定白名单与人工审核共同负责发布范围，字符串检查不等于完整保密审计。
+
+`SOURCE-MANIFEST.json` 记录源提交、是否含未提交变更、每个文件的来源与 SHA-256。文本校验统一换行符，避免 Windows checkout 导致误报；源码复制时不改写内容。常规发行推荐从干净提交导出，CI 使用 `--require-clean` 检查。首次发行可保留真实的 `sourceDirty: true`：以已审核的文件校验值固定快照，不能为清空该标记擅自提交其他任务的修改。生成的 Skill 带源码清单、MIT 许可和实际浏览器依赖的完整许可文本，不包含 `node_modules`、构建路径元数据、个人数据或源仓库 Git 历史。
+
+## 双仓流程
+
+1. 名称已确定；发布前创建公开仓、建立 `main`。尚未正式发布时只做本地导出，不启用同步工作流。不要把原仓设为公开仓的 Git 远端。
+2. 在原仓配置 `GFT_LOCAL_RELEASE_TOKEN`，仅授予目标公开仓 Contents 与 Workflows 写入权限。密钥通过仓库设置保存，不写入源码。
+3. 原仓 `Export GFT Map` 工作流默认只验收并生成 Skill 附件。手动选择 `publish` 才同步公开 `main`。推送 `gft-map-v版本` 标签会在验收后同步，并给公开提交打 `v版本` 标签；版本必须与本地包配置一致。
+4. 同步步骤单独检出公开仓，只复制清单文件并删除上次清单中已撤出的文件。提交基于公开仓历史，推送不使用 force；远端并发变化或标签已存在会失败，需要检查后重试。
+5. 公开仓在 Linux 与 Windows 上独立安装、检查、构建和测试。`v版本` 标签通过后，由公开 CI 创建 Release 并上传 Skill 与校验值。普通源码同步不创建 Release。
+
+公开仓是同源发行快照；需要长期保留的修复先并回维护源，再重新导出。公开仓的手改会在来源校验中显现，不能当作原源提交已经包含的变更。
+
+CI 尚未合入原仓或密钥尚未配置时，也可本地同步到单独检出的公开仓：
+
+```text
+node scripts/sync-gft-local.mjs --source <已验收的导出目录> --target <公开仓检出目录> --check
+node scripts/sync-gft-local.mjs --source <已验收的导出目录> --target <公开仓检出目录>
+```
+
+脚本只核对并同步清单文件；之后审查公开仓 diff，按普通 Git 流程提交和推送。它不改变远端，不复制 `.git`，不创建提交或标签。

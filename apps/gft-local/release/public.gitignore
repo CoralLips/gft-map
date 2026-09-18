@@ -1,0 +1,15 @@
+node_modules/
+apps/gft-local/dist/
+apps/gft-local/release/gft-local/
+apps/gft-local/release/gft-map/
+apps/gft-local/release/*.tar.gz
+apps/gft-local/release/*.zip
+apps/gft-local/release/SHA256SUMS
+THIRD_PARTY_NOTICES.txt
+.gft-local/
+.data/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

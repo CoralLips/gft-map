@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ Design Tokens(2026-07 样式收拢,单一真相) ============
+ * 规矩:新代码颜色一律用 var(--poe-*),不再写字面量。
+ * 灰阶 = Tailwind 灰系(正统);主紫 = var(--poe-purple)(7b1fa2/7c5cfc 已并入,见样式收拢批)。
+ * 尺度立规供新代码(存量不迁移):间距 4 的倍数;字号常用 12/13/14/16;圆角常用 4/6/8/12。
+ */
+:root {
+  color-scheme: light;
+
+  /* 主色:紫(品牌/交互主色) */
+  --poe-purple: #7c3aed;
+  --poe-purple-light: #a855f7;
+  --poe-purple-100: #f3e8ff;   /* 紫淡底(激活态背景) */
+
+  /* 语义色 */
+  --poe-blue: #3b82f6;
+  --poe-blue-dark: #2563eb;    /* 蓝 hover/强调档 */
+  --poe-red: #ef4444;
+  --poe-red-dark: #dc2626;
+
+  /* 底面(2026-08 暗色模式):bg=页面底,surface=卡片/弹窗/输入底 */
+  --poe-bg: #ffffff;
+  --poe-surface: #ffffff;
+  /* 彩色底上的文字(按钮/徽章白字):恒白、不随主题——surface 是"表面"不是"白字",
+   * 混用会在暗色下把彩底白字变黑字(8-31 实翻车,「更新脉络」黑字即此) */
+  --poe-on-accent: #ffffff;
+
+  /* 灰阶(Tailwind 灰系) */
+  --poe-gray-50: #f9fafb;
+  --poe-gray-100: #f3f4f6;
+  --poe-gray-200: #e5e7eb;
+  --poe-gray-300: #d1d5db;
+  --poe-gray-400: #9ca3af;
+  --poe-gray-500: #6b7280;
+  --poe-gray-600: #4b5563;
+  --poe-gray-700: #374151;
+  --poe-gray-800: #1f2937;
+  --poe-gray-900: #111827;
+
+  /* 彩色 tint 族(状态底/边/字,2026-08 暗色模式收拢——值=原字面量,亮色像素不变) */
+  --tint-red-bg: #fef2f2;
+  --tint-red-border: #fecaca;
+  --tone-red-strong: #b91c1c;
+  --tint-blue-bg: #eff6ff;
+  --tint-blue-border: #bfdbfe;
+  --tint-indigo-bg: #f6f8ff;      /* 纪要卡淡蓝紫系 */
+  --tint-indigo-border: #dbe3f8;
+  --tint-indigo-border2: #b9c8f0;
+  --tint-purple-bg: #faf5ff;
+  --tint-purple-border: #c4b5fd;
+  --tone-purple: #8b5cf6;
+  --tone-purple-deep: #6a1b9a;
+  --tint-amber-bg: #fef9c3;
+  --tone-green: #22c55e;
+  --tone-green2: #10b981;
+  --tone-green-deep: #2e7d32;
+  --tint-green-bg: #f0fdf4;
+  --tint-green-border: #34d399;
+  --tone-amber: #b45309;
+  --poe-modal-border: transparent;
+}
+
+/* ============ 暗色主题(data-theme 由 util/theme.ts 挂在 <html> 上,首帧前 index.html 内联脚本先行) ============ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --poe-purple: #8b5cf6;          /* 暗底上提亮半档 */
+  --poe-purple-light: #b78bff;
+  --poe-purple-100: #322350;
+
+  --poe-blue: #4f8ae8;
+  --poe-blue-dark: #82b3fa;       /* 暗色下"强调"=更亮 */
+  --poe-red: #f47171;
+  --poe-red-dark: #f68f8f;
+
+  --poe-bg: #101014;
+  --poe-surface: #1b1b22;
+
+  /* 灰阶反转:50-300 当底/边(变暗),400-900 当文字(变亮) */
+  --poe-gray-50: #16161c;
+  --poe-gray-100: #20202a;
+  --poe-gray-200: #2b2b36;
+  --poe-gray-300: #44444f;
+  --poe-gray-400: #9494a2;
+  --poe-gray-500: #adadba;
+  --poe-gray-600: #c1c1cb;
+  --poe-gray-700: #d6d6de;
+  --poe-gray-800: #e8e8ee;
+  --poe-gray-900: #f4f4f8;
+
+  --tint-red-bg: #3a181c;
+  --tint-red-border: #5f2b30;
+  --tone-red-strong: #fda4a4;
+  --tint-blue-bg: #1a2a47;
+  --tint-blue-border: #31538a;
+  --tint-indigo-bg: #1d2130;
+  --tint-indigo-border: #333c5c;
+  --tint-indigo-border2: #465387;
+  --tint-purple-bg: #2b2142;
+  --tint-purple-border: #584a86;
+  --tone-purple: #a78bfa;
+  --tone-purple-deep: #c9a6ff;
+  --tint-amber-bg: #3a330f;
+  --tone-green: #3ad579;
+  --tone-green2: #2fc79a;
+  --tone-green-deep: #7ed184;
+  --tint-green-bg: #17301f;
+  --tint-green-border: #2f8f66;
+  --tone-amber: #f0b358;
+  --poe-modal-border: #32323e;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  height: 100svh; /* iOS Safari：用「最小视口」＝工具栏展开时的可视高度。dvh/visualViewport 在 iOS 给的是含工具栏的大值，会让底部内容被工具栏遮（输入框/末条消息看不全）；svh 卡在工具栏上方，不被遮 */
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%; /* 禁 iOS Safari 横屏/长文本时自动放大正文（修移动端"历史消息显示很大"）*/
+  text-size-adjust: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--poe-bg);
+}
+
+#root {
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--poe-bg); /* 兜底：任何高度差露出的区域跟随主题底色，不露浏览器深色底（修移动端底部灰/黑带）*/
+}

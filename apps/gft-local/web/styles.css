@@ -1,0 +1,105 @@
+/* Only the local host's auxiliary dialogs and menu. The workspace uses GFT CSS. */
+.gft-local-shell { height: 100%; color: var(--poe-gray-800); }
+/* The platform hides its secondary pane on small screens; here it is the main pane. */
+.gft-local-shell > div { display: flex; min-width: 0; }
+.gft-local-loading { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--poe-gray-500); font-size: 14px; }
+.gft-local-menu { position: relative; font-size: 13px; color: var(--poe-gray-500); }
+.gft-local-menu summary { cursor: pointer; list-style: none; padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
+.gft-local-menu summary::-webkit-details-marker { display: none; }
+.gft-local-menu summary:hover { background: var(--poe-gray-100); color: var(--poe-gray-800); }
+.gft-local-menu-items { position: absolute; z-index: 60; right: 0; top: calc(100% + 6px); min-width: 160px; padding: 5px; border: 1px solid var(--poe-gray-200); background: var(--poe-surface); border-radius: 8px; box-shadow: 0 5px 20px #0002; }
+.gft-local-menu-items button, .gft-local-menu-items a { display: block; width: 100%; padding: 8px 10px; text-align: left; border: 0; background: transparent; border-radius: 4px; font: inherit; color: var(--poe-gray-700); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.gft-local-menu-items button:hover, .gft-local-menu-items a:hover { background: var(--poe-gray-100); }
+.gft-local-menu-items button:disabled { opacity: .45; cursor: default; }
+.gft-local-menu summary { display: flex; align-items: center; gap: 5px; min-height: 28px; box-sizing: border-box; }
+.gft-local-task-count { font-size: 11px; color: var(--poe-purple); }
+.gft-local-appearance { padding: 7px 9px 10px; border-bottom: 1px solid var(--poe-gray-200); margin-bottom: 4px; }
+.gft-local-appearance > span { display: block; margin-bottom: 7px; font-size: 12px; }
+.gft-local-appearance > div { display: flex; padding: 3px; border-radius: 8px; background: var(--poe-gray-100); }
+.gft-local-appearance button { width: auto; font-size: 12px; padding: 4px 8px; text-align: center; border-radius: 6px; }
+.gft-local-appearance button[aria-pressed="true"] { background: var(--poe-surface); color: var(--poe-purple); box-shadow: 0 1px 3px #0001; }
+.gft-local-export { display: block; padding: 8px 12px; color: var(--poe-gray-700); text-decoration: none; font-size: 12px; white-space: nowrap; }
+.gft-local-export:hover { background: var(--poe-gray-100); }
+.gft-local-import-drop { padding: 20px 12px; border: 1px dashed var(--poe-gray-300); border-radius: 10px; text-align: center; }
+.gft-local-import-drop[data-dragging="true"] { border-color: var(--poe-purple); background: var(--tint-blue-bg); }
+.gft-local-import-drop p { margin: 0 0 10px; }
+.gft-local-import-drop small { display: block; margin-top: 10px; color: var(--poe-gray-500); }
+.gft-local-import-list { padding: 0; margin: 12px 0; list-style: none; max-height: 180px; overflow: auto; }
+.gft-local-import-list li { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--poe-gray-200); padding: 7px 0; }
+.gft-local-import-list li > div { flex: 1; min-width: 0; }
+.gft-local-import-list span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gft-local-import-list small { display: block; color: var(--poe-gray-500); }
+.gft-local-import-list small.gft-local-error { color: var(--poe-red-dark); }
+.gft-local-shade { position: fixed; inset: 0; z-index: 1000; background: #0005; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gft-local-modal { box-sizing: border-box; display: flex; flex-direction: column; width: min(460px, 100%); max-height: 88vh; overflow: hidden; border-radius: 10px; border: 1px solid var(--poe-modal-border); background: var(--poe-surface); color: var(--poe-gray-800); box-shadow: 0 15px 60px #0003; font-size: 14px; line-height: 1.65; }
+.gft-local-wide { width: min(760px, 100%); }
+.gft-local-modal-heading { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 22px 22px 16px; gap: 16px; }
+.gft-local-modal-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 22px 22px; }
+.gft-local-modal h2 { font-size: 16px; margin: 0; font-weight: 600; }
+.gft-local-modal button, .gft-local-loading button { min-height: 32px; padding: 5px 12px; border: 1px solid var(--poe-gray-200); border-radius: 8px; background: var(--poe-surface); color: var(--poe-gray-700); cursor: pointer; font: inherit; }
+.gft-local-modal button:hover, .gft-local-loading button:hover { background: var(--poe-gray-100); }
+.gft-local-modal button:disabled { opacity: .45; cursor: default; }
+.gft-local-modal-heading button { flex: none; padding: 0 7px; border: 0; font-size: 21px; color: var(--poe-gray-500); }
+.gft-local-modal label { display: block; margin: 12px 0; font-size: 13px; font-weight: 500; }
+.gft-local-modal input, .gft-local-modal textarea { display: block; width: 100%; margin-top: 6px; padding: 9px 10px; border: 1px solid var(--poe-gray-300); border-radius: 8px; background: var(--poe-bg); color: var(--poe-gray-800); font: inherit; font-weight: 400; box-sizing: border-box; }
+.gft-local-modal textarea { resize: vertical; min-height: 90px; }
+.gft-local-modal input:focus, .gft-local-modal textarea:focus { outline: 2px solid var(--tint-blue-border); border-color: var(--poe-blue); }
+.gft-local-note { margin: 12px 0; color: var(--poe-gray-500); font-size: 13px; line-height: 1.65; }
+.gft-local-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.gft-local-dialog-actions .gft-local-primary { background: var(--poe-blue-dark); color: var(--poe-on-accent); border-color: var(--poe-blue-dark); }
+.gft-local-dialog-actions .gft-local-primary:hover { background: var(--poe-blue); }
+.gft-local-history { font: 12px/1.8 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border: 1px solid var(--poe-gray-200); border-radius: 6px; background: var(--poe-gray-50); }
+.gft-local-raw { margin-top: 16px; }
+.gft-local-raw summary { cursor: pointer; margin-bottom: 8px; }
+.gft-local-error { color: var(--poe-red-dark); font-size: 13px; overflow-wrap: anywhere; }
+.gft-local-banner { position: fixed; z-index: 900; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: min(640px, 90vw); display: flex; align-items: center; gap: 16px; padding: 10px 14px; color: var(--tone-red-strong); background: var(--tint-red-bg); border: 1px solid var(--tint-red-border); border-radius: 8px; font-size: 13px; box-shadow: 0 5px 20px #0001; }
+.gft-local-banner button { border: 0; background: transparent; color: inherit; font-size: 20px; cursor: pointer; }
+.gft-local-tasks { list-style: none; padding: 0; margin: 0; }
+.gft-local-tasks li { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--poe-gray-200); font-size: 12px; }
+.gft-local-tasks li > div { flex: 1; min-width: 0; }
+.gft-local-tasks strong { margin-right: 10px; font-size: 13px; font-weight: 500; }
+.gft-local-tasks span { color: var(--poe-gray-500); }
+.gft-local-tasks p { margin: 5px 0 0; }
+@media (max-width: 560px) { .gft-local-shade { padding: 10px; } .gft-local-modal-heading { padding: 16px; } .gft-local-modal-body { padding: 0 16px 16px; } }
+.gft-local-connection-trigger { font: inherit; font-size: 12px; border: 0; border-radius: 8px; padding: 5px 8px; color: var(--poe-gray-500); background: transparent; cursor: pointer; white-space: nowrap; }
+.gft-local-connection-trigger:hover { color: var(--poe-gray-800); background: var(--poe-gray-100); }
+.gft-local-connection-trigger:disabled { opacity: .45; cursor: default; }
+.gft-local-update-status { position: fixed; z-index: 850; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: min(640px, 90vw); padding: 10px 14px; border: 1px solid var(--poe-gray-200); border-radius: 8px; background: var(--poe-surface); color: var(--poe-gray-700); box-shadow: 0 5px 20px #0001; font-size: 13px; }
+.gft-local-update-status button { border: 0; background: transparent; color: var(--poe-purple); cursor: pointer; white-space: nowrap; }
+.gft-local-update-status.gft-local-error { color: var(--poe-red-dark); }
+.gft-local-provider-tabs, .gft-local-connection-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.gft-local-provider-tabs button[aria-pressed="true"] { color: var(--poe-blue-dark); border-color: var(--tint-blue-border); background: var(--tint-blue-bg); }
+.gft-local-session-list { max-height: 230px; overflow: auto; border-block: 1px solid var(--poe-gray-200); padding: 5px 0; }
+.gft-local-modal .gft-local-session { display: block; width: 100%; padding: 10px 12px; text-align: left; margin: 3px 0; border-color: transparent; }
+.gft-local-session strong, .gft-local-session span, .gft-local-session small { display: block; overflow-wrap: anywhere; }
+.gft-local-session strong { font-weight: 500; }
+.gft-local-session span, .gft-local-session small { color: var(--poe-gray-500); font-size: 12px; }
+.gft-local-modal .gft-local-session[aria-pressed="true"] { border-color: var(--tint-blue-border); background: var(--tint-blue-bg); }
+.gft-local-connection-confirm { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--poe-gray-200); border-radius: 7px; background: var(--poe-gray-50); }
+.gft-local-connection-confirm p { margin: 0 0 9px; }
+.gft-local-connection-confirm fieldset { border: 0; padding: 0; margin: 12px 0 0; }
+.gft-local-connection-confirm legend { font-size: 12px; color: var(--poe-gray-500); margin-bottom: 4px; }
+.gft-local-modal .gft-local-option { display: flex; align-items: flex-start; gap: 8px; margin: 7px 0; font-weight: 400; }
+.gft-local-modal .gft-local-option input { display: inline-block; width: auto; margin: 5px 0 0; flex-shrink: 0; accent-color: var(--poe-blue-dark); }
+.gft-local-option small { color: var(--poe-gray-500); display: block; font-size: 12px; }
+.gft-local-connections { list-style: none; margin: 0; padding: 0; }
+.gft-local-connections li { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--poe-gray-200); }
+.gft-local-connections li > div { flex: 1; min-width: 0; }
+.gft-local-connections strong, .gft-local-connections span, .gft-local-connections small { display: block; overflow-wrap: anywhere; }
+.gft-local-connections strong { font-size: 13px; font-weight: 500; }
+.gft-local-session-title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gft-local-connections span, .gft-local-connections small { color: var(--poe-gray-500); font-size: 12px; }
+.gft-local-connections button { flex-shrink: 0; font-size: 12px; }
+.gft-local-dialog-actions .gft-local-quiet { margin-right: auto; border-color: transparent; color: var(--poe-gray-500); }
+@media (max-width: 560px) { .gft-local-dialog-actions { flex-wrap: wrap; } .gft-local-session-list { max-height: 180px; } }
+.gft-local-connection-chips { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+.gft-local-connection-chip { box-sizing: border-box; display: inline-flex; align-items: center; min-width: 0; height: 26px; overflow: hidden; border: 1px solid var(--poe-gray-200); border-radius: 999px; background: var(--poe-gray-100); }
+.gft-local-connection-chip button { border: 0; background: transparent; color: var(--poe-gray-500); font: inherit; font-size: 12px; line-height: 1.5; cursor: pointer; height: 100%; }
+.gft-local-connection-chip button:first-child { display: flex; align-items: center; gap: 6px; padding: 0 7px 0 9px; min-width: 0; }
+.gft-local-connection-chip button:last-child { width: 24px; flex-shrink: 0; color: var(--poe-gray-400); }
+.gft-local-connection-chip button:hover { background: var(--poe-gray-200); color: var(--poe-gray-700); }
+.gft-local-connection-chip button span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gft-local-connection-chip:has(button:focus-visible) { outline: 2px solid var(--poe-blue); outline-offset: 2px; }
+.gft-local-menu-help { display: block; font-size: 12px; color: var(--poe-gray-500); white-space: normal; max-width: 210px; line-height: 1.6; margin-top: 3px; }
+.gft-local-shell button:focus-visible, .gft-local-shell summary:focus-visible { outline: 2px solid var(--poe-blue); outline-offset: 2px; }
+@media (max-width: 560px) { .gft-local-connection-chip button span { max-width: 140px; } }
