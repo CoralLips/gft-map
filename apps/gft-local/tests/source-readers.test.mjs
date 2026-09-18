@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -305,7 +305,9 @@ test('official Claude SDK selects the active UUID branch and preserves stale-cur
 });
 
 test('official Claude SDK skips compaction/tail fragments, including an isolated standalone bundle', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'gft-source-fixture-'));
+  // The SDK resolves dir before encoding its project key. Windows runners can
+  // expose an 8.3 TEMP alias; seed the transcript under the canonical path too.
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'gft-source-fixture-')));
   try {
     const cwd = join(root, 'project');
     await mkdir(cwd, { recursive: true });

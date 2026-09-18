@@ -2,7 +2,7 @@
   "format": 1,
   "hashAlgorithm": "sha256-utf8-lf",
   "sourceProject": "GFT",
-  "sourceRevision": "4a2f97a46b9aef3f32fc5c0357a1f8dedb20ef44",
+  "sourceRevision": "58281f26a5a256ba560393cacc929f3458e079af",
   "sourceDirty": true,
   "version": "0.1.0",
   "files": [
@@ -294,7 +294,7 @@
     {
       "path": "apps/gft-local/tests/source-readers.test.mjs",
       "source": "apps/gft-local/tests/source-readers.test.mjs",
-      "sha256": "4dd74787f5e3794e9965a4b0e0848717cd908b5d4453b6bb8d93d2bd6e075ebc"
+      "sha256": "d4fa2a19057991cf8f22bd5df3d624aceab611add8f9f47cceae06c69db0bd0d"
     },
     {
       "path": "apps/gft-local/tests/store.test.mjs",
