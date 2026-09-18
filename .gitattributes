@@ -1,3 +1,6 @@
 * text=auto eol=lf
 # Preserve the exact generated runtime bytes (including fonts) across checkouts.
 skills/gft-map/** -text
+# Preserve screenshots and recorded example frames exactly.
+*.png -text
+*.gif -text

@@ -19,6 +19,8 @@ npm ci
 npm run check:source
 npm run typecheck
 npm run build
+npm run build:site
+npm run test:site
 npm test
 npm run pack:skill
 npm run test:skill -- skills/gft-map
@@ -36,6 +38,8 @@ npm run test:skill -- apps/gft-local/release/gft-map
 3. 原仓 `Export GFT Map` 工作流默认只验收并生成 Skill 附件。手动选择 `publish` 才同步公开 `main`。推送 `gft-map-v版本` 标签会在验收后同步，并给公开提交打 `v版本` 标签；版本必须与本地包配置一致。
 4. 同步步骤单独检出公开仓，只复制清单文件并删除上次清单中已撤出的文件。提交基于公开仓历史，推送不使用 force；远端并发变化或标签已存在会失败，需要检查后重试。
 5. 公开仓在 Linux 与 Windows 上独立安装、检查、构建和测试。`v版本` 标签通过后，由公开 CI 创建 Release 并上传 Skill 与校验值。普通源码同步不创建 Release。
+
+介绍页与三个可编辑样例同样从维护源导出，位于 `apps/gft-local/showcase/`。公开仓的 `Publish examples` 工作流单独构建 `site-dist` 并发布到 GitHub Pages；首次需在公开仓启用 Actions 作为 Pages 来源。这里使用人工编写的示例数据和实际图文组件，不包含聊天数据、不调用本机服务或模型，也不进入 GFT 平台部署。修改演示内容后应更新实际截图；导出器按原始字节保留 PNG/GIF。
 
 公开仓是同源发行快照；需要长期保留的修复先并回维护源，再重新导出。公开仓的手改会在来源校验中显现，不能当作原源提交已经包含的变更。
 

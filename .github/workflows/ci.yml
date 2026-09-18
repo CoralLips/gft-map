@@ -27,6 +27,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run build:site
+      - run: npm run test:site
       - run: npm test
       - run: npm run pack:skill
       - name: Check the GitHub-installable Skill

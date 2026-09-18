@@ -18,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["react", "react-dom"]
   },
-  "include": ["core.ts", "web/**/*.tsx", "web/**/*.ts"]
+  "include": ["core.ts", "web/**/*.tsx", "web/**/*.ts", "showcase/**/*.tsx", "showcase/**/*.ts"]
 }

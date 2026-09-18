@@ -14,7 +14,10 @@
     "check:source": "node apps/gft-local/release/verify-source.mjs",
     "build:skill": "node apps/gft-local/release/package-skill.mjs --directory-only",
     "pack:skill": "node apps/gft-local/release/package-skill.mjs",
-    "test:skill": "node apps/gft-local/release/smoke-skill.mjs"
+    "test:skill": "node apps/gft-local/release/smoke-skill.mjs",
+    "build:site": "node apps/gft-local/showcase/build.mjs",
+    "preview:site": "node apps/gft-local/showcase/build.mjs --serve",
+    "test:site": "node apps/gft-local/showcase/check.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
