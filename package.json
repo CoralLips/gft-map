@@ -1,6 +1,6 @@
 {
   "name": "gft-map",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,9 @@
     "test": "node apps/gft-local/release/run-tests.mjs",
     "typecheck": "tsc -p apps/gft-local/tsconfig.json",
     "check:source": "node apps/gft-local/release/verify-source.mjs",
-    "pack:skill": "node apps/gft-local/release/package-skill.mjs"
+    "build:skill": "node apps/gft-local/release/package-skill.mjs --directory-only",
+    "pack:skill": "node apps/gft-local/release/package-skill.mjs",
+    "test:skill": "node apps/gft-local/release/smoke-skill.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",

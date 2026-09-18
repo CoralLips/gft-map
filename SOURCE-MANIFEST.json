@@ -1,25 +1,25 @@
 {
-  "format": 1,
-  "hashAlgorithm": "sha256-utf8-lf",
+  "format": 2,
+  "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "b7bffd3332702cbe8ddef8dc801476ffa1c6b4aa",
+  "sourceRevision": "48a20529a6bb6fb80aab9647d50d906750f5866c",
   "sourceDirty": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "files": [
     {
       "path": ".gitattributes",
       "source": "apps/gft-local/release/public.gitattributes",
-      "sha256": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c"
+      "sha256": "f805e9e8b310e2085a5b6a67bfd06e362c9058dfa332e93896fa9525bf2b4812"
     },
     {
       "path": ".github/workflows/ci.yml",
       "source": "apps/gft-local/release/public-ci.yml",
-      "sha256": "72d3f25fae4129ca8e3cf5423df79c6e21d880214b7fc6b9af6eeeb791a03cea"
+      "sha256": "1bbfa7bac76d837aa8b1cbac03c8e863f857123fd3e9d0ba11ceb2b1b7cc15b9"
     },
     {
       "path": ".gitignore",
       "source": "apps/gft-local/release/public.gitignore",
-      "sha256": "769348a00e33c0744b6fa0cdae733fda5c87966449b88911b2f9eede4b85a448"
+      "sha256": "0ad73e855c9360fe6716e44abc9c531c9d8b2a78657a7bd560a15458372d2f9d"
     },
     {
       "path": "apps/gft-local/.gitignore",
@@ -39,7 +39,7 @@
     {
       "path": "apps/gft-local/ADVANCED.md",
       "source": "apps/gft-local/ADVANCED.md",
-      "sha256": "bbe030dbf910471639e35fd2904356efa4a0db3172a6de8e78efed1fd1cc0f6b"
+      "sha256": "4e787301fc0d2a37ba462f1aca67ce261d7589ed777a9136e60885f7d13bd5ed"
     },
     {
       "path": "apps/gft-local/build.mjs",
@@ -89,17 +89,17 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "a3c894b0baa36c3eae2246215f52d1fd0e4b882de48e927fc53727a7772e5fbf"
+      "sha256": "34a29df4b5a1661994e7a6e6f780867f08db1733fad052f10ebadc61eb3c7e7c"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "2c5bb792e8c4fd6749323840615d6be10bdb3aa1fc6f4f8e03f069f92160b6fd"
+      "sha256": "e297b8d12f53fbab61b12d02837d54ba22f77b86c44fa3263bed9402a7ab829a"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "95a23afb01ef761c7df9f246257e1c7836b70d41b170070dc7dd11f314482aae"
+      "sha256": "6e8ceae033ef6b497136c62531c58a19bd8a9050794167daccf1d759c084ae4d"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -109,32 +109,32 @@
     {
       "path": "apps/gft-local/release/notices.mjs",
       "source": "apps/gft-local/release/notices.mjs",
-      "sha256": "22a91a5751c74929415489f560ff0a1b9c93b5a7f9e261cbbc2ae4671abbc583"
+      "sha256": "ab47d5ae952b753c43eb2e3f6b3b2712bb805807b122bcea71f56bd4496f222e"
     },
     {
       "path": "apps/gft-local/release/package-skill.mjs",
       "source": "apps/gft-local/release/package-skill.mjs",
-      "sha256": "7b6e136435acfa391bbaba9783ccc1165633593939993c739fa0157a679e3131"
+      "sha256": "1efd38d8e52f9a9ccd1ac846d51a082864e9d9d73feaaf44ccc516cc7a54ef7b"
     },
     {
       "path": "apps/gft-local/release/public-ci.yml",
       "source": "apps/gft-local/release/public-ci.yml",
-      "sha256": "72d3f25fae4129ca8e3cf5423df79c6e21d880214b7fc6b9af6eeeb791a03cea"
+      "sha256": "1bbfa7bac76d837aa8b1cbac03c8e863f857123fd3e9d0ba11ceb2b1b7cc15b9"
     },
     {
       "path": "apps/gft-local/release/public.gitattributes",
       "source": "apps/gft-local/release/public.gitattributes",
-      "sha256": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c"
+      "sha256": "f805e9e8b310e2085a5b6a67bfd06e362c9058dfa332e93896fa9525bf2b4812"
     },
     {
       "path": "apps/gft-local/release/public.gitignore",
       "source": "apps/gft-local/release/public.gitignore",
-      "sha256": "769348a00e33c0744b6fa0cdae733fda5c87966449b88911b2f9eede4b85a448"
+      "sha256": "0ad73e855c9360fe6716e44abc9c531c9d8b2a78657a7bd560a15458372d2f9d"
     },
     {
       "path": "apps/gft-local/release/README.md",
       "source": "apps/gft-local/release/README.md",
-      "sha256": "6abd165aabc3d712095917aa70db5b6f8a66d46c5e3d1124b821c37a3b857db9"
+      "sha256": "3d24fd3dee3ec42b9e4053428229e36738fd734d643135f0485ded546007f518"
     },
     {
       "path": "apps/gft-local/release/run-tests.mjs",
@@ -142,14 +142,19 @@
       "sha256": "bece04454b67c1d76f37196c1af694cf1e9a87102df856c6a70657d1d40b7679"
     },
     {
+      "path": "apps/gft-local/release/smoke-skill.mjs",
+      "source": "apps/gft-local/release/smoke-skill.mjs",
+      "sha256": "b6aff92a817fb3790ac41cf6aca3a55904f25ab660bc531bd8409c8600e0a69e"
+    },
+    {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "199de9022b6e6d14382c240173bef0810158c87c7a5ad19ea529f062605d169f"
+      "sha256": "81bc6742cd2f6cb979759d504e0eaa89b3b661a40546e77de833e45eb955ded7"
     },
     {
       "path": "apps/gft-local/release/verify-source.mjs",
       "source": "apps/gft-local/release/verify-source.mjs",
-      "sha256": "578a12f634bd1904b9dac843cb5926fea0b67591c377f10f852f9979bfd04916"
+      "sha256": "83895fed5f5c9d35e253599639a2e6389bd8ae4089b4e24af90e6ebbf92e65bd"
     },
     {
       "path": "apps/gft-local/runner.mjs",
@@ -359,17 +364,437 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "170636e20904389758124d98f0dbaf156bd03654688ef125207ce0784874724c"
+      "sha256": "a6250e15096729387a15c7ddd2a390e9417ec0331278aa6ce3067b792100f293"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "3c76e0fb97f9fafdf8aa8817cf8da2324d06e698140714d95f5e149ef73508f1"
+      "sha256": "676f9d715b2a68f3fade6db4b3da0248615b21418afe6f895d41e544fd390f14"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "95a23afb01ef761c7df9f246257e1c7836b70d41b170070dc7dd11f314482aae"
+      "sha256": "6e8ceae033ef6b497136c62531c58a19bd8a9050794167daccf1d759c084ae4d"
+    },
+    {
+      "path": "skills/gft-map/LICENSE",
+      "source": "generated:apps/gft-local",
+      "sha256": "56c27f3784a05c2d836370323b2598fb6bb3d9917f4302b662cfde3466631941"
+    },
+    {
+      "path": "skills/gft-map/references/acp.md",
+      "source": "generated:apps/gft-local",
+      "sha256": "e5b935f8f737a048a6ae79044673ab75279168ae342e8152935045331c030a42"
+    },
+    {
+      "path": "skills/gft-map/references/connections.md",
+      "source": "generated:apps/gft-local",
+      "sha256": "5b5de7604d34a4c56f265a008f7f21eaa22a647138ad42b00a37250213ecc077"
+    },
+    {
+      "path": "skills/gft-map/references/notifications.md",
+      "source": "generated:apps/gft-local",
+      "sha256": "040ac453a2c0123e750b96b7b6669839465fe6b411ec230c36c699244fbad17d"
+    },
+    {
+      "path": "skills/gft-map/references/workflow.md",
+      "source": "generated:apps/gft-local",
+      "sha256": "bb75299d0b5dac97de3e5f4191c0e10fe1bc4bdf4cb375ce65fa6ffcca59f872"
+    },
+    {
+      "path": "skills/gft-map/scripts/account.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "5207ecbae7cf4105c321ec548d7be23c7bcb66f3829e87049b4fbbe5fb294409"
+    },
+    {
+      "path": "skills/gft-map/scripts/change-hook.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "27e1625573696b8a06de091b904fc06a5b5ae650f944a1c8ef9ec581b7f2e21b"
+    },
+    {
+      "path": "skills/gft-map/scripts/cli.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "789e7e75ef8785c96aadbeeaa4e028460b587a1391c3f564ad73854dbb8b9400"
+    },
+    {
+      "path": "skills/gft-map/scripts/connections.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "8a65e38c02c852db8f1f30b432eca7b97c8e5cc5728584c267489afe5be008b8"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/acp.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "a5a580c26be4ced85736c79f6d41e55da73d8e929c9934899fbd1b4e49618a7a"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/core.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "134eed048dd1390c043f0bb7301ade6b24afc86433247e37c5e64e32ac738bdc"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/mcp.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "8fa7506a6dd9839732cd182c45d5b6d93eee67b2f5def82d0aca046b9101e8f9"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/sources.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "7386011effa13b3c51c7296de382901dae3f377596d268f5944fce0005932036"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/app.css",
+      "source": "generated:apps/gft-local",
+      "sha256": "9072d5001af75b327088f2f382971a2bf74d96d9ae5f57f509f07390bb4647ca"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/app.js",
+      "source": "generated:apps/gft-local",
+      "sha256": "4f27705fc6cb786d25b7479aa8b65075db9c29929e690caf53bc0135be7d88b2"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-JKX5W2C4.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-U6PRYMIZ.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Bold-5QL5CMTE.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Bold-WZ3QSGD3.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "1ae6bd7475590e97e7f145a89e09ccde322f7a6bc0b91607b1c8b8ee28290fed"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Bold-ZTS3R3HK.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "07d8e303ce4fc12b4bb54f1004170dd190a1f3db45d400fe68060df3e0897268"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Regular-3LKEU76G.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "3398dd02302557a793f2863f88e02d96ce10df2abffa07c8e9fa90775116e65c"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Regular-A7XRTZ5Q.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "ed0b74372feefcbb9c0666b2e210da37b7e49fa7fbbf3eeb11db5f693dacfbb7"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Caligraphic-Regular-KX5MEWCF.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Bold-2QVFK6NQ.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "74444efd593c005e3f4573b44524704c0af0a937fe911cca9e94068d0d140d3f"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Bold-T4SWXBMT.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "9be7ceb88004ab8ad124082246fbfcca4091e36385d4ec6ed1df67375dad50fb"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Bold-WGHVTYOR.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "9163df9c7122432e6495b4229fa9071cf9ae86a758ae5efc4924ec2e1a6dbce1"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Regular-2PEIFJSJ.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "51814d270d06ff0255dba0799994fa4d8c84d11f09951d47595f4abb1f3602dc"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Regular-5U4OPH2X.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "1e6f9579e90e2cac37f8f60a597c436e075c114385652b7cbeb0dec0421291b3"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Fraktur-Regular-PQMHCIK6.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "5e28753be717dac97f559f49bc10be9cf3c124ddcabda6659d11cb68febc6463"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Bold-2GA4IZIN.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "c76c5d696297d51b9cb1639c7da4334f0e7dec81b42b11213b5e25ef671bb822"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Bold-W5FBVCZM.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "138ac28d1663b3037e9c5f52371fa5c63d8324f4a38d22cd573e6ea3a3fd0cf8"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Bold-YP5VVQRP.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "0f60d1b897938ec918c8ce073092411baf9438f6739465693ff18b0f9d20b021"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-BoldItalic-4P4C7HJH.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "a6f7ec0d846ac7ad975adb8959c37ed49b94acbc4ae436db9ce9e20287e4a64c"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-BoldItalic-N4V3DX7S.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "99cd42a3c072d918f2f44984a807cf7aa16e13545fd0875fc07c6c65f99e715b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-BoldItalic-ODMLBJJQ.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "70ee1f64a20f2048c21940ef46d0144fd215baa953ca69afd1e31e98544f708f"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Italic-I43T2HSR.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "0d85ae7cc30f23790a7f1a58c4a112fdca8aae769b6ba11429af1d98b1b6cb3a"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Italic-RELBIK7M.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "97479ca6cce906abc961ecac96faa5f9ca2e61b8e7670d475826bcdee9a7c267"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Italic-SASNQFN2.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "f1d6ef86f3b11a528bd5185199bd2443ecb2b0dead96d88674b5a2c12be24bdf"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Regular-ARRPAO67.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Regular-P5I74A2A.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "c6368d87e8a1a3a5d337623d83d8dc4b868f242a9ad476237d6f8d1e0f168cdc"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Main-Regular-W74P5G27.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-BoldItalic-6EBV3DK5.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "850c0af5c2238497febaf5e461d880bf458c341f42f4f330f1b1ab5698b1998e"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-BoldItalic-K4WTGH3J.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "dc47344dbb6cb5b655c8460d561f4df5f501b90c804ad3c6cec65fe322351ab1"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-BoldItalic-VB447A4D.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "f9377ab0271cda59af24bcffbd46a4d0c8a3572ffafdbb38de2ad5ea7b0d5ee5"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-Italic-6KGCHLFN.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "7af58c5ec8f132a2ddde9027c6d7814decce4d3b822a11192a42a20e2e973264"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-Italic-KKK3USB2.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "8a8d244581371912b8f3f5a23e2437cb2a59cd9bcaebb0346e722c05737a2571"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Math-Italic-SON4MRCA.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "08ce98e51b04d58945a301e639e02b6998af29fdfd61a7b8afdd07bbfc479d4a"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Bold-RRNVJFFW.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "e99ae51144bf1232efcc1bfe5add36262c6866b0faab24fa75740e1b98577a62"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Bold-STQ6RXC7.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "1ece03f79f95277d57dc7f6b435a74e1379b0d46104a8530286b60ff49369ea0"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Bold-X5M5EMOD.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "ece03cfd83e22c212cdef66feb8442d25a083beb988db3f1883f3f9738d750ba"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Italic-HMPFTM52.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "00b26ac825e2095056396e0553b8ac26d3f8ad158c3826e28b4c45b385c4714a"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Italic-PSN4QKYX.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "91ee67500cc0129aa0ace3ac5c61ff1692102f0f31d02b69347fba35dcb75bf2"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Italic-WTBAZBGY.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "3931dd81faed86ba021bb2bbdc36f5bed9a38d6b4f4077aca59b265aa1b02083"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Regular-2TL3USAE.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "f36ea897e19f4a2e571d1e900e4e3710e438deb05a842486045ba0a3e616a4ad"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Regular-OQCII6EP.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "11e4dc8a6471ff6d6ee561d53d10fde8f7489e798257ff449c5d37c197435605"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_SansSerif-Regular-XIQ62X4E.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "68e8c73ef42afd3ccec58bf0fba302cce448938e7fc020a5e31f8a952eee1342"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Script-Regular-72OLXYNA.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "1c67f068fea8bb09bf099c088b1cf64bd27516a6e07f4684344873564bb66a67"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Script-Regular-A5IFOEBS.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "d96cdf2b3bdd4d64a8fd5f74a4c467f123a8a73931cd435889f08ffaf9bf947a"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Script-Regular-APUWIHLP.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "036d4e95149b69ff9bcc0cd55771efeb25ffa3947293e69acd78d5ac328c684b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size1-Regular-4HRHTS65.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "c943cc986384f59e86bea5fd7dc50a9c4dfe567a7c05eb40d6790720dead97c9"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size1-Regular-5LRUTBFT.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "6b47c40166b6dbe21a5dfca7718413f2147fd2399be1ba605d8ad39cedf25dfe"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size1-Regular-7K6AASVL.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "95b6d2f1a50173bfedb8c63e1d1c99b10427d0a4df4201cb44513b226951a22b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size2-Regular-222HN3GT.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "a6b2099fb555c60e3a0db3a08842ebf1d732c6eb4e4bf44913613bed4fc4e39b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size2-Regular-K5ZHAIS6.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "2014c523c3210bcc166648c4d4cc57f05b747df07a24277bf71c51e67dc79e3d"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size2-Regular-LELKET5D.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "d04c54219f9eaec6d4d4fd42dfb28785975a4794d6b2fc71e566b9cd6db842dd"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size3-Regular-TLFPAHDE.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "6ab6b62e9b62dae2c00dd90f791bd10950be0ecc3490d7d6045f51c2e8fe0949"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size3-Regular-UFCO6WCA.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "500e04d54f0d51666332c9d2089aa803be22aa878eca539e59fa53c6e522b082"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size3-Regular-WQRQ47UD.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size4-Regular-7PGNVPQK.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size4-Regular-CDMV7U5C.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Size4-Regular-PKMWZHNC.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "99f9c6750b489c9462bf04900bd3f939df9b829339daaaaa99ef5495cdddea58"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Typewriter-Regular-3F5K6SQ6.ttf",
+      "source": "generated:apps/gft-local",
+      "sha256": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Typewriter-Regular-MJMFSK64.woff",
+      "source": "generated:apps/gft-local",
+      "sha256": "e14fed02b1aba7ce9f5afd5844b5d0321b22351febc720e0de8b8723527609f7"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_Typewriter-Regular-VBYJ4NRC.woff2",
+      "source": "generated:apps/gft-local",
+      "sha256": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b"
+    },
+    {
+      "path": "skills/gft-map/scripts/dist/web/index.html",
+      "source": "generated:apps/gft-local",
+      "sha256": "7610907b8b51e7f7ff9ac58c6e0a700b554bce141a0791170d0c260d1ba97ffe"
+    },
+    {
+      "path": "skills/gft-map/scripts/install-hooks.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "ca885ce9e1ac03e37a3a641587894c6ebf83e830a2b3f681a0d71f872d07e8e8"
+    },
+    {
+      "path": "skills/gft-map/scripts/memory.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "30855f58ff3b5622d3a83fbcc3d8eec3b798199a0b221efb29be2296db5e3a59"
+    },
+    {
+      "path": "skills/gft-map/scripts/notifications.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "546cddf1351f909d343c13ec49c3ca28e3d6529b696df41ce28938dfb5e071c4"
+    },
+    {
+      "path": "skills/gft-map/scripts/runner.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "1ea7f62ec9d0129acf0addceed062512ea30a90e8ea86d88e8fc21b78141b5fd"
+    },
+    {
+      "path": "skills/gft-map/scripts/server.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "410ec9efe2f4deb1fc46ebf71ca1f8cc484dc02ae87f2bebe1c7df10ecd0b958"
+    },
+    {
+      "path": "skills/gft-map/scripts/store.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "2a783cd23c19584b57781f5f483637c0449a3df63cf98c133ac1bf7c7d66fddb"
+    },
+    {
+      "path": "skills/gft-map/SKILL.md",
+      "source": "generated:apps/gft-local",
+      "sha256": "4ab465d616b516ea20ae5f4472cb4d7a6750dbb1a544229ca9e57f3c469f8679"
+    },
+    {
+      "path": "skills/gft-map/THIRD_PARTY_NOTICES.txt",
+      "source": "generated:apps/gft-local",
+      "sha256": "2a4595156e85537dc669bf4438b36a18b568fc586454173696aa1b0e3f8b2687"
     },
     {
       "path": "src/component/common/ConfirmDialog.module.css",

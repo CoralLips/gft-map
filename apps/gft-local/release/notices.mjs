@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 
 /** Include license text for actual browser and ACP runtime bundle dependencies. */
-export async function writeNotices() {
+export async function writeNotices({ output = path.join(root, 'THIRD_PARTY_NOTICES.txt') } = {}) {
   const inputs = (await Promise.all(['browser-inputs.json', 'acp-inputs.json', 'mcp-inputs.json', 'sources-inputs.json'].map(file => readFile(path.join(root, 'apps/gft-local/dist', file), 'utf8').then(JSON.parse)))).flat();
   const directories = new Set();
   for (const input of inputs) {
@@ -26,8 +26,7 @@ export async function writeNotices() {
     for (const file of files.sort()) texts.push(`${file}\n${await readFile(path.join(directory, file), 'utf8')}`);
     sections.push(`${metadata.name}@${metadata.version}\nLicense: ${metadata.license || 'See text below'}\n\n${texts.join('\n\n')}`);
   }
-  const heading = 'GFT Local — bundled third-party notices\n\nThese packages are included in the browser or ACP runtime distribution. Their original license terms follow. Build-only dependencies are recorded with versions and license identifiers in package-lock.json and are not shipped in the Skill.\n';
-  const output = path.join(root, 'THIRD_PARTY_NOTICES.txt');
+  const heading = 'GFT Map — bundled third-party notices\n\nThese packages are included in the browser or ACP runtime distribution. Their original license terms follow. Build-only dependencies are recorded with versions and license identifiers in package-lock.json and are not shipped in the Skill.\n';
   await writeFile(output, `${heading}\n${sections.join('\n\n' + '='.repeat(72) + '\n\n')}\n`);
   return { output, packages: directories.size };
 }

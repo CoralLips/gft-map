@@ -25,6 +25,7 @@
     "apps/gft-local/release/public.gitignore",
     "apps/gft-local/release/README.md",
     "apps/gft-local/release/run-tests.mjs",
+    "apps/gft-local/release/smoke-skill.mjs",
     "apps/gft-local/release/source-files.json",
     "apps/gft-local/release/verify-source.mjs",
     "apps/gft-local/runner.mjs",

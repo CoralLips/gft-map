@@ -25,11 +25,26 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run check:source
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
       - run: npm run pack:skill
+      - name: Check the GitHub-installable Skill
+        run: npm run test:skill -- skills/gft-map
+      - name: Check the Skill built from this checkout
+        run: npm run test:skill -- apps/gft-local/release/gft-map
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.20.0'
+      - name: Prepare an isolated Agent project
+        run: node -e "require('node:fs').mkdirSync('.data/skill-install', {recursive:true})"
+      - name: Install with the real skills CLI
+        working-directory: .data/skill-install
+        run: npx --yes skills@1.7.0 add ../.. --skill gft-map --agent codex --agent claude-code --copy --yes
+      - name: Check both installed Agent skills
+        run: |
+          npm run test:skill -- .data/skill-install/.agents/skills/gft-map
+          npm run test:skill -- .data/skill-install/.claude/skills/gft-map
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Linux'
         with:

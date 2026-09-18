@@ -27,13 +27,23 @@ flowchart LR
 
 ## 第一次使用：Codex
 
-准备 **Node.js 20+** 和已经登录的 **Codex CLI**。仅安装聊天客户端，不一定已具备可用的 CLI；下面的检查命令会说明缺少什么。模型操作使用执行器现有账号的额度和配置。
+准备已经登录的 **Codex CLI**。GitHub 一键安装建议使用 **Node.js 22.20+**，满足当前 `skills` 安装工具的要求；手动安装 Release 时，GFT Map 本身支持 **Node.js 20+**。仅安装聊天客户端，不一定已具备可用的 CLI；下面的检查命令会说明缺少什么。模型操作使用执行器现有账号的额度和配置。
 
 ### 1. 安装完整 Skill
 
-从 [Releases](https://github.com/CoralLips/gft-map/releases/latest) 下载 `gft-map-<版本号>.tar.gz`，解压。选择这个安装包即可，GitHub 自动附带的 **Source code** 留给源码开发使用。保留整个 `gft-map` 文件夹，不能只复制 `SKILL.md`；包中已包含运行依赖，无需再执行 `npm install`。
+通过 [skills 安装工具](https://github.com/vercel-labs/skills) 从 GitHub 安装到 Codex：
 
-将文件夹放到你使用的 Agent 技能目录：
+```sh
+npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
+```
+
+Claude Code 将 `--agent codex` 换成 `--agent claude-code`。安装工具会显示实际安装路径；`--global` 表示当前用户的各个项目都能使用。安装后，重新打开 Agent 或刷新技能列表。
+
+仓库的 `skills/gft-map/` 是完整安装目录，包含说明、脚本和已经构建的界面；安装工具复制这个目录，无需编译应用或访问 GFT 私有仓。Node.js 和所用 Agent CLI 仍需事先安装。
+
+也可以从 [Releases](https://github.com/CoralLips/gft-map/releases/latest) 下载 `gft-map-<版本号>.tar.gz`，解压后手动安装。GitHub 自动附带的 **Source code** 留给源码开发使用。保留整个 `gft-map` 文件夹，不能只复制 `SKILL.md`；包中已包含应用运行依赖，无需再执行 `npm install`。
+
+手动安装时，将文件夹放到你使用的 Agent 技能目录：
 
 | Agent | 用户级安装位置 |
 |---|---|
@@ -127,13 +137,17 @@ npm start -- --agent codex
 检查与打包：
 
 ```sh
-npm run check:source
 npm run typecheck
 npm test
 npm run pack:skill
+npm run test:skill -- apps/gft-local/release/gft-map
 ```
 
-`pack:skill` 生成安装包及 `SHA256SUMS`，需要系统 `tar`。源码来自 GFT 的同源导出，公开仓可独立构建，不依赖私有仓。`SOURCE-MANIFEST.json` 记录原始快照；修改导出源码后，`check:source` 会报告差异，正常构建与测试仍可执行。贡献请提交 PR，涉及共享功能的修改会合回维护源，再统一导出。
+`pack:skill` 根据你当前修改后的源码生成安装包及 `SHA256SUMS`，需要系统 `tar`；不要求源码保持官方导出时的样子。只需要完整技能目录时，可运行 `npm run build:skill`，结果在 `apps/gft-local/release/gft-map/`。`test:skill` 在临时目录验证启动、页面资源、保存和读取，不使用真实聊天或调用模型。
+
+公开仓可独立构建、修改，不依赖私有仓。`src/` 是共享组件与逻辑，`apps/gft-local/` 是本地应用，`skills/gft-map/` 是随正式版本生成的安装目录。开发请修改源码，重新构建自己的安装包；不要手改生成目录。贡献请提交 PR，涉及共享功能的修改会合回维护源，再统一导出。
+
+`SOURCE-MANIFEST.json` 仅记录官方导出的来源，不参与普通构建、PR 检查或打包；`check:source` 是维护者可选的原始快照核对工具，修改源码后不需要运行或更新它。下载附件的 `SHA256SUMS` 用来核对安装包是否完整，与限制源码修改无关。
 
 ## 常见问题
 

@@ -127,6 +127,8 @@ npm test
 npm start
 ```
 
-`npm run pack:skill` 生成 `apps/gft-local/release/gft-map-版本.tar.gz` 和 `SHA256SUMS`；打包需要系统 `tar`。`npm run check:source` 核对导出清单的文件校验值。改过源码后可继续构建和测试，但来源校验会明确报告变化。
+`npm run pack:skill` 根据当前源码生成 `apps/gft-local/release/gft-map-版本.tar.gz` 和 `SHA256SUMS`；打包需要系统 `tar`。`npm run build:skill` 只生成完整技能目录。修改源码后可以直接构建、测试和打包，无需修改来源清单。`npm run check:source` 仅供维护者自愿核对原始导出快照，不在普通打包和公开仓 CI 中执行。
+
+GitHub 直装使用仓库的 `skills/gft-map/`；它包含完整运行程序，由同源发行流程生成。贡献者修改 `apps/gft-local/` 或 `src/` 后，用自己新构建的目录或压缩包验收，不直接编辑此生成目录。安装工具复制 Skill，不负责执行源码构建。
 
 源码按 MIT 许可开放。安装包附带实际打包依赖的完整许可文本；构建依赖的版本与许可证记录在锁文件中。来源清单只记录源提交及导出文件，不包含原仓库历史。

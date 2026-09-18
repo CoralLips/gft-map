@@ -1,6 +1,8 @@
-# 同源发行维护
+# 同源发行维护（供 GFT 维护者）
 
-原 GFT 仓库维护源码，独立发行仓接收白名单快照；公开名称为 GFT Map，目标仓库为 CoralLips/gft-map。公开仓保留 `apps/gft-local` 与共享 `src` 的相对路径，文件直接复制；只有公开仓根包配置与来源清单由导出器生成。不要在发行阶段删除或改写云端逻辑，应先修正纯模块与宿主的依赖边界。
+本文件的导出和同步命令在 GFT 维护仓运行，对应脚本不随公开仓提供。公开仓使用者直接在根目录运行 `npm ci`、`npm run build`、`npm test`、`npm run pack:skill`，即可修改和打包；不需要访问维护仓或通过来源校验。
+
+原 GFT 仓库维护源码，独立发行仓接收白名单快照；公开名称为 GFT Map，目标仓库为 CoralLips/gft-map。公开仓保留 `apps/gft-local` 与共享 `src` 的相对路径。导出器另外构建完整的 `skills/gft-map/`，供 GitHub 安装工具直接复制。源码与技能产物共用一个维护源，不手工维护两份。不要在发行阶段删除或改写云端逻辑，应先修正纯模块与宿主的依赖边界。
 
 ## 本地验收
 
@@ -19,11 +21,13 @@ npm run typecheck
 npm run build
 npm test
 npm run pack:skill
+npm run test:skill -- skills/gft-map
+npm run test:skill -- apps/gft-local/release/gft-map
 ```
 
 导出器只复制 `source-files.json` 中列明的文件，并检查 TypeScript 类型依赖及构建资源依赖。新增依赖不在白名单时导出失败，需检查后明确加入。它拒绝环境文件、运行数据、云服务入口及可识别的私钥或令牌格式；固定白名单与人工审核共同负责发布范围，字符串检查不等于完整保密审计。
 
-`SOURCE-MANIFEST.json` 记录源提交、是否含未提交变更、每个文件的来源与 SHA-256。文本校验统一换行符，避免 Windows checkout 导致误报；源码复制时不改写内容。常规发行推荐从干净提交导出，CI 使用 `--require-clean` 检查。首次发行可保留真实的 `sourceDirty: true`：以已审核的文件校验值固定快照，不能为清空该标记擅自提交其他任务的修改。生成的 Skill 带源码清单、MIT 许可和实际浏览器依赖的完整许可文本，不包含 `node_modules`、构建路径元数据、个人数据或源仓库 Git 历史。
+`SOURCE-MANIFEST.json` 记录源提交、是否含未提交变更、每个文件的来源与 SHA-256。v2 按实际字节校验，源码统一 LF，生成目录由 `.gitattributes` 保留原始字节；同步工具仍能读取旧 v1。该校验仅在维护源导出、同步时使用，不阻止贡献者修改或打包。常规发行从干净提交导出，CI 使用 `--require-clean` 检查；本机导出如有其他未提交工作，保留真实的 `sourceDirty`。生成的 Skill 带 MIT 许可和实际运行依赖的完整许可文本，不包含 `node_modules`、构建路径元数据、个人数据或源仓库 Git 历史。
 
 ## 双仓流程
 
