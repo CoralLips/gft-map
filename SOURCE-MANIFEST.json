@@ -2,9 +2,9 @@
   "format": 1,
   "hashAlgorithm": "sha256-utf8-lf",
   "sourceProject": "GFT",
-  "sourceRevision": "58281f26a5a256ba560393cacc929f3458e079af",
+  "sourceRevision": "b7bffd3332702cbe8ddef8dc801476ffa1c6b4aa",
   "sourceDirty": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "files": [
     {
       "path": ".gitattributes",
@@ -89,17 +89,17 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "9c1d84b5e754ca3dc29a8e43101bb3c978c88284c64d8646e0df9cfd6fb6bdd4"
+      "sha256": "a3c894b0baa36c3eae2246215f52d1fd0e4b882de48e927fc53727a7772e5fbf"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "02159f4167a375b64b367e98ebfc81532c0ca0584f1a432a2a3d9980995f9a11"
+      "sha256": "2c5bb792e8c4fd6749323840615d6be10bdb3aa1fc6f4f8e03f069f92160b6fd"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "3f439883f10849d11338a734cb3721245ebdb9e93a6d00b0e7631f39955a37dc"
+      "sha256": "95a23afb01ef761c7df9f246257e1c7836b70d41b170070dc7dd11f314482aae"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -319,7 +319,7 @@
     {
       "path": "apps/gft-local/web/ConnectionManager.tsx",
       "source": "apps/gft-local/web/ConnectionManager.tsx",
-      "sha256": "5654bcf3ec30af3032675f768050c5238052d193668d354fd47bb547c76e234b"
+      "sha256": "e65628ac48552f198f6d3355bcadaee19b17d27a45cc836826019df961115ec1"
     },
     {
       "path": "apps/gft-local/web/env.d.ts",
@@ -349,7 +349,7 @@
     {
       "path": "apps/gft-local/web/styles.css",
       "source": "apps/gft-local/web/styles.css",
-      "sha256": "7f9fbbcda994ff4b28b9dbc9312f90fecfc667ba4adaa1ebdc99cb9f6a12b0fc"
+      "sha256": "33a90a82047dab53e3dc286967e709cdb9d788882a8b1b8ca33c1a2a6076f33b"
     },
     {
       "path": "LICENSE",
@@ -359,17 +359,17 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "167c76623057b24e54ac5a56ad1a068e067900fd978c0b5a0a2f5ea34fc91929"
+      "sha256": "170636e20904389758124d98f0dbaf156bd03654688ef125207ce0784874724c"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "8a4bae6bf9ac480b5e885e6dc701a9603aceda50e4268686c92338fb39b7011f"
+      "sha256": "3c76e0fb97f9fafdf8aa8817cf8da2324d06e698140714d95f5e149ef73508f1"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "3f439883f10849d11338a734cb3721245ebdb9e93a6d00b0e7631f39955a37dc"
+      "sha256": "95a23afb01ef761c7df9f246257e1c7836b70d41b170070dc7dd11f314482aae"
     },
     {
       "path": "src/component/common/ConfirmDialog.module.css",

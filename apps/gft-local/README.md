@@ -6,6 +6,8 @@
 
 GFT Map 在本机运行，复用 [Git for Thought](https://gitforthought.com) 的图文编辑与整理能力。这个仓库包含完整本地应用源码；Skill 是它的一种安装方式。
 
+适合已经在 Codex 或 Claude Code 里持续推进一件事的人：讨论分散在不同会话，隔天回来或换个 Agent 时，又要解释一遍已有决定。GFT Map 把这份理解放在你能查看和纠正的地方，让后续对话按需取用。
+
 [下载安装包](https://github.com/CoralLips/gft-map/releases/latest) · [高级配置与原理](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [反馈问题](https://github.com/CoralLips/gft-map/issues)
 
 ## 它能做什么
@@ -29,7 +31,7 @@ flowchart LR
 
 ### 1. 安装完整 Skill
 
-从 [Releases](https://github.com/CoralLips/gft-map/releases/latest) 下载 `gft-map-0.1.0.tar.gz`，解压。保留整个 `gft-map` 文件夹，不能只复制 `SKILL.md`；包中已包含运行依赖，无需再执行 `npm install`。
+从 [Releases](https://github.com/CoralLips/gft-map/releases/latest) 下载 `gft-map-<版本号>.tar.gz`，解压。选择这个安装包即可，GitHub 自动附带的 **Source code** 留给源码开发使用。保留整个 `gft-map` 文件夹，不能只复制 `SKILL.md`；包中已包含运行依赖，无需再执行 `npm install`。
 
 将文件夹放到你使用的 Agent 技能目录：
 
@@ -54,11 +56,13 @@ node scripts/cli.mjs serve --port 4317 --agent codex
 ### 3. 得到第一份主题上下文
 
 1. 在页面新建脉络，点 **更新**。
-2. 选择一场真实聊天，确认从现在开始，或包含已有聊天。第一次建议用一场较短的对话体验。
+2. 选择一场已有几轮讨论的短对话，选 **包含已有内容** 并确认。这样第一次就有材料可生成。若选 **从现在开始**，需先在那场聊天完成新一轮，再回来更新；没有新材料时不会生成内容。
 3. 等任务完成，在 Doc 阅读，在 Map 查看；首次会自动生成主题范围和名称。
 4. 有不准确的地方，直接修改。之后点击更新，只接收尚未收录的消息；没有新增就不调用模型。
 
 想调整方向，可以改 Doc 顶部的主题范围，再点重画。长历史会分批提炼，最终汇总成图文；进度可见，支持取消，处理时间和额度用量取决于材料与执行器。
+
+工具栏以圆角标签显示已连接会话，保持单行；超出显示宽度时可横向滚动查看。点标签管理连接，点对应的 × 单独断开。多场会话连接到同一主题时，点击更新会让你选择这次的来源。
 
 ### 4. 让 Agent 读回去
 
@@ -71,6 +75,8 @@ node scripts/cli.mjs serve --port 4317 --agent codex
 > 使用 gft-map，连接「产品发布计划」这份主题，然后读取当前理解。
 
 将示例名称换成自己的主题。Skill 通过 CLI 操作同一个本地服务；**网页连接成功不等于记忆已经进入聊天**。右侧修改后，Agent 下一次读取才会得到新版，不会自动唤醒聊天或每轮塞入全文。客户端未发现新 Skill 时，刷新技能列表或重新打开会话。
+
+可以做一次简单检查：把 Doc 中一项“已确定”的判断改为“待验证”，保存后让 Agent 重新读取这个主题并说明当前结论。它应保留你的修正。再开一场对话连接同一主题，检查能否接着工作。若结果不符，请记录复现步骤并反馈；仅显示“已连接”不代表这轮记忆复用已完成。
 
 ## 三个按钮的区别
 
@@ -134,6 +140,7 @@ npm run pack:skill
 - **页面打不开：**确认终端中的服务仍在运行，且端口是 4317。查看启动错误，不重复启动多个服务抢同一端口。
 - **按钮提示执行器不可用：**用 `doctor --agent codex` 检查 Codex CLI 和登录；启动时加 `--agent codex`。路径检测失败时见高级配置的 `GFT_CODEX_BIN`。
 - **已经连接，但 Agent 不知道内容：**连接只保存关系。让 Agent 使用 `gft-map` 查看索引并读取所需主题。
+- **第一次更新提示没有新增：**如果连接时选了“从现在开始”，先完成一轮新对话再更新；如果已有内容都已收录，则无需重复处理。
 - **原来的主题不见了：**先核对页面、CLI 的 `GFT_LOCAL_HOME`，不要删除数据或重建来覆盖问题。
 - **使用 Claude：**Skill 与聊天来源已适配；网页执行还需 Claude ACP 适配器与有效登录，详见高级配置。首版优先提供已验收的 Codex 路径。
 

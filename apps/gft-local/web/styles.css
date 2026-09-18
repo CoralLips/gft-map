@@ -92,8 +92,9 @@
 .gft-local-connections button { flex-shrink: 0; font-size: 12px; }
 .gft-local-dialog-actions .gft-local-quiet { margin-right: auto; border-color: transparent; color: var(--poe-gray-500); }
 @media (max-width: 560px) { .gft-local-dialog-actions { flex-wrap: wrap; } .gft-local-session-list { max-height: 180px; } }
-.gft-local-connection-chips { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 100%; }
-.gft-local-connection-chip { box-sizing: border-box; display: inline-flex; align-items: center; min-width: 0; height: 26px; overflow: hidden; border: 1px solid var(--poe-gray-200); border-radius: 999px; background: var(--poe-gray-100); }
+.gft-local-connection-chips { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; max-width: min(420px, 45vw); overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--poe-gray-300) transparent; }
+.gft-local-connection-chips:focus-visible { outline: 2px solid var(--poe-blue); outline-offset: 2px; border-radius: 8px; }
+.gft-local-connection-chip { box-sizing: border-box; display: inline-flex; align-items: center; flex: 0 0 auto; min-width: 0; height: 26px; overflow: hidden; border: 1px solid var(--poe-gray-200); border-radius: 999px; background: var(--poe-gray-100); }
 .gft-local-connection-chip button { border: 0; background: transparent; color: var(--poe-gray-500); font: inherit; font-size: 12px; line-height: 1.5; cursor: pointer; height: 100%; }
 .gft-local-connection-chip button:first-child { display: flex; align-items: center; gap: 6px; padding: 0 7px 0 9px; min-width: 0; }
 .gft-local-connection-chip button:last-child { width: 24px; flex-shrink: 0; color: var(--poe-gray-400); }

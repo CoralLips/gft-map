@@ -139,17 +139,17 @@ export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
   const [disconnectError, setDisconnectError] = useState('');
   useEffect(() => { setDialogTopic(null); }, [topicId]);
   const current = snapshot.topicId === topicId ? snapshot : null;
+  const connections = current?.connections ?? [];
   const operation = current?.operation;
   const busy = operation && ['reading', 'running', 'cancelling'].includes(operation.phase);
   return <>
-    <span className="gft-local-connection-chips" aria-label="已连接的会话">
-      {current?.connections.slice(0, 1).map(connection => <span className="gft-local-connection-chip" key={connection.id}>
+    <span className="gft-local-connection-chips" role="group" aria-label="已连接的会话，可横向滚动" tabIndex={0}>
+      {connections.map(connection => <span className="gft-local-connection-chip" key={connection.id}>
         <button aria-haspopup="dialog" title={`${providerName(connection.source.provider)} · ${connection.source.title}\n管理连接`} onClick={() => setDialogTopic(topicId)}>
           <span>{providerName(connection.source.provider)} · {connection.source.title}</span>
         </button>
         <button aria-label={`断开 ${connection.source.title}`} onClick={() => { setDisconnectError(''); void runtime.connections.disconnect(connection.id).catch(error => setDisconnectError(messageOf(error))); }}>×</button>
       </span>)}
-      {current && current.connections.length > 1 && <button className="gft-local-connection-trigger" onClick={() => setDialogTopic(topicId)} aria-label={`查看全部 ${current.connections.length} 个连接`}>另 {current.connections.length - 1} 个</button>}
       {!current?.connections.length && <button className="gft-local-connection-trigger" aria-haspopup="dialog" disabled={!topicId} onClick={() => { if (topicId) { setDialogTopic(topicId); void runtime.connections.refresh(topicId).catch(() => {}); } }}>{current?.status === 'loading' ? '读取连接…' : '＋连接'}</button>}
     </span>
     {disconnectError && <div className="gft-local-banner" role="alert">{disconnectError}<button aria-label="关闭提示" onClick={() => setDisconnectError('')}>×</button></div>}
