@@ -5,7 +5,7 @@
 import type { LedgerMark, LedgerProse, LedgerState } from './types';
 import { LEDGER_MARKS } from './types';
 import { literalLine } from './text';
-import { sourceRecord } from '../sourceLog';
+import { isSourceLogControlLine } from '../sourceLog';
 
 const SESSION_RE = /^\[场次\s+(\S+)(?:\s*·\s*([^\]·]*?))?(?:\s*·\s*([^\]]*?))?\s*\]\s*$/;
 const PROSE_RE = /^走向(?:\s+(p\d+))?\s*\[([^\]]*)\]\s*$/;
@@ -18,7 +18,7 @@ const ID_RE = /^([jcp]\d+)\b/;
 
 /** 与折算器一致的正文边界；转义行不是操作，非法语法仍按原规则作为自由文字。 */
 export function isLedgerBoundary(line: string): boolean {
-  return !!sourceRecord(line) || SESSION_RE.test(line) || PROSE_RE.test(line) || JUDGMENT_RE.test(line) || COVER_RE.test(line)
+  return isSourceLogControlLine(line) || SESSION_RE.test(line) || PROSE_RE.test(line) || JUDGMENT_RE.test(line) || COVER_RE.test(line)
     || REL_RE.test(line) || DECISION_RE.test(line) || REDRAW_RE.test(line);
 }
 
@@ -84,7 +84,7 @@ export function parseLedger(text: string): LedgerState {
     seq++;
     const literal = literalLine(line);
     if (literal !== undefined) { appendBody(literal, i); continue; }
-    if (sourceRecord(line)) { flushRewrite(); sink = null; continue; }
+    if (isSourceLogControlLine(line)) { flushRewrite(); sink = null; continue; }
 
     const sm = SESSION_RE.exec(line);
     if (sm) {

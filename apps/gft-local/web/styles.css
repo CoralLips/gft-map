@@ -15,7 +15,7 @@
 .gft-local-task-count { font-size: 11px; color: var(--poe-purple); }
 .gft-local-appearance { padding: 7px 9px 10px; border-bottom: 1px solid var(--poe-gray-200); margin-bottom: 4px; }
 .gft-local-appearance > span { display: block; margin-bottom: 7px; font-size: 12px; }
-.gft-local-appearance > div { display: flex; padding: 3px; border-radius: 8px; background: var(--poe-gray-100); }
+.gft-local-appearance > div { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--poe-gray-100); }
 .gft-local-appearance button { width: auto; font-size: 12px; padding: 4px 8px; text-align: center; border-radius: 6px; }
 .gft-local-appearance button[aria-pressed="true"] { background: var(--poe-surface); color: var(--poe-purple); box-shadow: 0 1px 3px #0001; }
 .gft-local-export { display: block; padding: 8px 12px; color: var(--poe-gray-700); text-decoration: none; font-size: 12px; white-space: nowrap; }

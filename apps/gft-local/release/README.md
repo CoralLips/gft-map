@@ -33,6 +33,8 @@ npm run test:skill -- apps/gft-local/release/gft-map
 
 ## 双仓流程
 
+自动云同步版本的发布顺序：先验证并部署平台 `071_map_sync.sql` 和新版 Log 读写，再发行本地安装包。数据库验证可运行 `node scripts/test-map-sync-db.mjs`：它仅使用隔离 schema，结束全部回滚。同步模块 `sync.mjs` 必须同时进入源码白名单和 Skill 的 scripts 目录；本地包不携带数据库连接串、用户数据或服务端密钥。公开 README 来自 `apps/gft-local/README.md`，关于登录自动上传、双向删除、离线重试的说明须随版本一起更新。
+
 1. 名称已确定；发布前创建公开仓、建立 `main`。尚未正式发布时只做本地导出，不启用同步工作流。不要把原仓设为公开仓的 Git 远端。
 2. 在原仓配置 `GFT_LOCAL_RELEASE_TOKEN`，仅授予目标公开仓 Contents 与 Workflows 写入权限。密钥通过仓库设置保存，不写入源码。
 3. 原仓 `Export GFT Map` 工作流默认只验收并生成 Skill 附件。手动选择 `publish` 才同步公开 `main`。推送 `gft-map-v版本` 标签会在验收后同步，并给公开提交打 `v版本` 标签；版本必须与本地包配置一致。

@@ -10,6 +10,8 @@ import { create } from 'zustand';
 import { EN } from './en';
 
 export type Lang = 'zh' | 'en';
+type Values = Record<string, string | number>;
+type Translate = (zh: string, values?: Values) => string;
 
 const KEY = 'gft_lang';
 
@@ -21,26 +23,39 @@ function readPref(): Lang {
   }
 }
 
+function applyDocumentLanguage(lang: Lang): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+}
+
+function translate(lang: Lang, zh: string, values?: Values): string {
+  const text = lang === 'en' ? EN[zh] ?? zh : zh;
+  return values ? text.replace(/\{(\w+)\}/g, (placeholder, key: string) => values[key] === undefined ? placeholder : String(values[key])) : text;
+}
+
+const initialLang = readPref();
+applyDocumentLanguage(initialLang);
+
 interface LangState {
   lang: Lang;
   setLang: (l: Lang) => void;
 }
 
 export const useLangStore = create<LangState>((set) => ({
-  lang: readPref(),
+  lang: initialLang,
   setLang: (l) => {
     try { localStorage.setItem(KEY, l); } catch { /* 隐私模式等存不了就只活当次 */ }
+    applyDocumentLanguage(l);
     set({ lang: l });
   },
 }));
 
 /** 组件内取翻译函数（订阅语言变化，切换即重渲染） */
-export function useT(): (zh: string) => string {
+export function useT(): Translate {
   const lang = useLangStore((s) => s.lang);
-  return lang === 'en' ? (zh) => EN[zh] ?? zh : (zh) => zh;
+  return (zh, values) => translate(lang, zh, values);
 }
 
 /** 非组件场景（confirmDialog 文案等）：读当前语言直翻，不订阅 */
-export function t(zh: string): string {
-  return useLangStore.getState().lang === 'en' ? (EN[zh] ?? zh) : zh;
+export function t(zh: string, values?: Values): string {
+  return translate(useLangStore.getState().lang, zh, values);
 }

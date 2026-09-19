@@ -5,13 +5,12 @@ interface ThinkingMapContextValue {
   store: ThinkingMapStore;
   host: ThinkingMapHost;
   memoryControl?: ReactNode;
-  exportExtras?: ReactNode;
 }
 
 const ThinkingMapContext = createContext<ThinkingMapContextValue | null>(null);
 
-export function ThinkingMapRuntimeProvider({ store, host, memoryControl, exportExtras, children }: ThinkingMapContextValue & { children: ReactNode }) {
-  const value = useMemo(() => ({ store, host, memoryControl, exportExtras }), [store, host, memoryControl, exportExtras]);
+export function ThinkingMapRuntimeProvider({ store, host, memoryControl, children }: ThinkingMapContextValue & { children: ReactNode }) {
+  const value = useMemo(() => ({ store, host, memoryControl }), [store, host, memoryControl]);
   return <ThinkingMapContext.Provider value={value}>{children}</ThinkingMapContext.Provider>;
 }
 

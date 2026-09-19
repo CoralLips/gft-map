@@ -1,8 +1,8 @@
 import { IMPORT_COMPACT_THRESHOLD, sourceChunks, prepareSourceSummary } from '../../src/service/sourceCompaction';
 export { createTopicBundle, parseTopicBundle, bundleToMap, mapToBundle, topicSummary } from '../../src/service/topicBundle';
 import { recordDocumentInput } from '../../src/service/ledger/docEdit';
-import { appendSourceLog, renderSourceLog, hasSourceLog, sourceRecordsFromEvents, type SourceEvent } from '../../src/service/sourceLog';
-export { appendSourceLog, renderSourceLog, readSourceLog, sourceRecord, sourceRecordsFromEvents } from '../../src/service/sourceLog';
+import { appendSourceLog, renderSourceLog, hasSourceLog, isEditedSourceLog, sourceRecordsFromEvents, type SourceEvent } from '../../src/service/sourceLog';
+export { appendSourceLog, renderSourceLog, readSourceLog, sourceRecord, sourceRecordsFromEvents, editSourceLog, isEditedSourceLog, mergeSourceLogs, hasSourceLog } from '../../src/service/sourceLog';
 import {
   parseLedger, renderDoc, renderSourceDoc, renderGraph, themeOf,
   sessionLine, proseLines, judgmentLines, appendLines, decision, isMark,
@@ -39,7 +39,7 @@ export function prepareImport(topic: Topic, input: string, summary = '', publish
 /** Re-read only sources already saved with this topic, including previously filtered messages. */
 export function prepareSourceRedraw(topic: Topic, events: SourceEvent[] = []) {
   // events are only a compatibility import of previously saved snapshots, never a live chat read.
-  const raw = appendSourceLog(topic.raw, sourceRecordsFromEvents(events));
+  const raw = isEditedSourceLog(topic.raw) ? topic.raw : appendSourceLog(topic.raw, sourceRecordsFromEvents(events));
   const request = prepareTask({...topic, raw}, 'redraw');
   if (request.user.length <= IMPORT_COMPACT_THRESHOLD) return request;
   const historyChunks = sourceChunks(request.user);

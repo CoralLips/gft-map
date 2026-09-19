@@ -20,7 +20,7 @@ test('旧 v1 来源快照纳入 Log；范围以真实账为准；拒绝未知版
   const upgraded = parseTopicBundle(old);
   assert.equal(upgraded.topic.scope, '当前范围'); assert.equal(readSourceLog(upgraded.topic.raw).length, 1);
   assert.equal(upgraded.topic.sourceCursors, undefined);
-  assert.throws(() => parseTopicBundle({ ...old, version: 3 }));
+  assert.throws(() => parseTopicBundle({ ...old, version: 4 }));
   assert.throws(() => parseTopicBundle({ ...old, sources: [{ layer: 'bad' }] }));
 });
 

@@ -13,11 +13,13 @@ import { UpdateMapButton, RedrawButton, TidyButton, MapStats, AiMemoryToggle, Ex
 import type { LiveEditorHandle } from '../LiveEditor';
 import { splitDocTheme, joinDocTheme } from '../../../service/ledger/docEdit';
 import styles from './WhiteboxDocPanel.module.css';
+import { useT } from '../../../i18n';
 
 // 与 FocusLab 同款懒加载：codemirror 478KB 不进首屏
 const LiveEditor = React.lazy(() => import('../LiveEditor'));
 
 export function WhiteboxDocPanel(): JSX.Element {
+  const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
   const doc = useThinkingMapStore(s => s.doc);
@@ -88,7 +90,7 @@ export function WhiteboxDocPanel(): JSX.Element {
     return (
       <div className={styles.panel}>
         <div className={styles.emptyGuide}>
-          先在左上角选择或创建一个脉络，<br />它的白盒文档就在这里。
+          {tr('先在左上角选择或创建一个脉络，它的白盒文档就在这里。')}
         </div>
       </div>
     );
@@ -111,7 +113,7 @@ export function WhiteboxDocPanel(): JSX.Element {
 
       {warningCount > 0 && (
         <div className={styles.warn}>
-          工作账里有 {warningCount} 行没被认出来（已按自由文本保留）
+          {tr('工作账里有 {count} 行没被认出来（已按自由文本保留）', {count:warningCount})}
         </div>
       )}
 
@@ -124,11 +126,11 @@ export function WhiteboxDocPanel(): JSX.Element {
             event.preventDefault(); event.stopPropagation(); flushDocEdits(); flushDoc(); setThemeEdit(null); setBodyEdit(null);
           }
         }}>
-        <section className={styles.themeSection} aria-label="主题范围">
-          <div className={styles.themeHeading}><h2>主题</h2><span>收录范围</span></div>
+        <section className={styles.themeSection} aria-label={tr('主题范围')}>
+          <div className={styles.themeHeading}><h2>{tr('主题')}</h2><span>{tr('收录范围')}</span></div>
           {activeTheme ?
-            <textarea ref={themeInputRef} className={styles.themeInput} aria-label="编辑主题范围" rows={1}
-              title="失焦或 Ctrl+S 保存；修改范围后，点重画重新筛选已保存的材料。"
+            <textarea ref={themeInputRef} className={styles.themeInput} aria-label={tr('编辑主题范围')} rows={1}
+              title={tr('失焦或 Ctrl+S 保存；修改范围后，点重画重新筛选已保存的材料。')}
               value={activeTheme.text}
               onChange={event => {
                 const state = useThinkingMapStore.getState();
@@ -145,14 +147,14 @@ export function WhiteboxDocPanel(): JSX.Element {
                   saveEdits(); setThemeEdit(null);
                 }
               }} />
-          : <button className={styles.themeText} aria-label="编辑主题" onClick={beginThemeEdit}>
-            {parts.theme || <span className={styles.themePlaceholder}>首次更新时自动生成，也可以在这里填写。</span>}
+          : <button className={styles.themeText} aria-label={tr('编辑主题')} onClick={beginThemeEdit}>
+            {parts.theme || <span className={styles.themePlaceholder}>{tr('首次更新时自动生成，也可以在这里填写。')}</span>}
           </button>}
         </section>
         <div className={styles.editorArea} onBlur={event => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { saveEdits(); setBodyEdit(null); }
         }}>
-        <React.Suspense fallback={<div className={styles.loading}>加载编辑器…</div>}>
+        <React.Suspense fallback={<div className={styles.loading}>{tr('加载编辑器…')}</div>}>
           <LiveEditor
             key={currentProjectId}
             ref={editorRef}
@@ -168,9 +170,9 @@ export function WhiteboxDocPanel(): JSX.Element {
             isGenerating={isGenerating}
             docKey={currentProjectId}
             compact
-            placeholder={host.requestUpdate
+            placeholder={tr(host.requestUpdate
               ? '点「更新」从聊天或材料生成文档，也可以在这里直接书写。'
-              : '点「更新」从左边对话生成文档，也可以在这里直接书写。'}
+              : '点「更新」从左边对话生成文档，也可以在这里直接书写。')}
           />
         </React.Suspense>
         </div>

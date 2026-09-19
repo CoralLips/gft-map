@@ -47,7 +47,7 @@ if (process.argv.includes('--skill')) {
   const target = path.join(root, 'release/gft-map');
   await cp(path.join(root, 'skill'), target, { recursive: true });
   await mkdir(path.join(target, 'scripts/dist'), { recursive: true });
-  for (const f of ['cli.mjs', 'store.mjs', 'server.mjs', 'account.mjs', 'runner.mjs', 'connections.mjs', 'memory.mjs', 'notifications.mjs', 'change-hook.mjs', 'install-hooks.mjs']) await copyFile(path.join(root, f), path.join(target, 'scripts', f));
+  for (const f of ['cli.mjs', 'store.mjs', 'server.mjs', 'account.mjs', 'sync.mjs', 'runner.mjs', 'connections.mjs', 'memory.mjs', 'notifications.mjs', 'change-hook.mjs', 'install-hooks.mjs']) await copyFile(path.join(root, f), path.join(target, 'scripts', f));
   await cp(path.join(root, 'dist'), path.join(target, 'scripts/dist'), { recursive: true });
   for (const file of ['browser-inputs.json', 'acp-inputs.json', 'mcp-inputs.json', 'sources-inputs.json']) {
     // Metadata is retained for source packaging, not needed by an installed Skill.

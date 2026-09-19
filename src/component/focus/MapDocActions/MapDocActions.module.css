@@ -7,7 +7,7 @@
   z-index: 30;
   display: flex;
   flex-direction: column;
-  min-width: 168px;
+  min-width: 112px;
   padding: 4px;
   background: var(--poe-surface);
   border: 1px solid var(--poe-gray-200);

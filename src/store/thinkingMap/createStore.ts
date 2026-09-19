@@ -74,13 +74,14 @@ export interface ThinkingMapState {
   docJumpId: string | null;
   /** Doc 编辑缓冲：null＝没有未落账的改动；切走视图/失焦/关页/换图/AI 动作前 flushDocEdits 算一遍写进账 */
   docDraft: string | null;
+  sourceDraftActive: boolean;
   /** 整理进行到第几轮（按钮文案用）；非整理期 null */
   tidyRound: number | null;
   /** 正在跑的生成是「更新」还是「重画」：各自的按钮显示自己的中止 */
   generateMode: 'update' | 'redraw' | null;
   /** 工作账：Doc/Map 从它算；人改、整理、重画都写这里（按时间只追加）；nodes/edges/doc/groupMap 全是它的折算缓存 */
   ledger: string;
-  /** 原始记录（Log 页签）：只有「更新」写，视图改动/整理/重画一律不碰；重画从它重建工作账 */
+  /** 当前来源（Log）：更新追加新材料，用户可整篇编辑；整理/重画不反写来源。 */
   raw: string;
   ledgerState: LedgerState;
   /** 未读红点集合（视图态，不进账；随 nodes 缓存落库） */
@@ -397,15 +398,17 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
   }
 
   /** 远端来的一份图并入本地：账按只追加合并；远端仍走旧路写的节点/文档条目（MCP 服务端过渡期）转成账行并入。返回是否变了 */
-  function ingestRemoteMap(remote: PersistedThinkingMap): boolean | null {
+  function ingestRemoteMap(remote: PersistedThinkingMap, replaceClean = false): boolean | null {
     const s = store.getState();
     // Remote refresh/save echoes must never submit or normalize an active draft.
     // The next refresh merges it after an explicit editing boundary.
-    if (s.docDraft !== null) return null;
+    if (s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null) return null;
     let absorbed: ReturnType<typeof absorbLegacyRow>;
     let raw: string;
     try {
-      const merged = mergeLedgerPair(s, remote);
+      // A clean replica follows the current cloud document, including undo and
+      // redraw. Unioning old blocks here would resurrect discarded content.
+      const merged = replaceClean ? {ledger:remote.ledger ?? '',raw:remote.raw ?? ''} : mergeLedgerPair(s, remote);
       absorbed = absorbLegacyRow(merged.ledger, remote);
       raw = merged.raw;
     } catch (err) {
@@ -454,6 +457,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     focusNodeId: null,
     docJumpId: null,
     docDraft: null,
+    sourceDraftActive: false,
     tidyRound: null,
     generateMode: null,
     ledger: '',
@@ -472,7 +476,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const epoch = projectEpoch;
       if (!pid) return false;
       // 在途保存和待上传修改均算脏；保存时会检查远端版本并合入这次通知。
-      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.isGenerating || s.isTidying || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
+      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.isRefining || s.isGenerating || s.isTidying || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
       if (busy(get())) return false;
       const remote = await loadThinkingMap(pid); // 读取不确认版本，实际接受之后才记。
       if (!remote) return false;
@@ -480,7 +484,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (epoch !== projectEpoch || st.boundProjectId !== pid || busy(st)) return false;
       // 账只追加：合并后与本地相同＝回声，不动；不同＝远端有新行（含旧路写入并入）→ 折算替换
       const before = st.ledger;
-      const changed = ingestRemoteMap(remote);
+      const changed = ingestRemoteMap(remote, true);
       if (!changed) return false;
       clearUndo(); // 跨版本撤销＝灾难（同"切换脉络清栈"定式）
       set({ newIds: [], editingNodeId: null, selectedNodeIds: new Set<string>(), lastDeleted: null, lastCondensedL2Ids: null });
@@ -524,6 +528,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           lastDeleted: null,
           lastCondensedL2Ids: null,
           docDraft: null,
+          sourceDraftActive: false,
           sourceJumpId: null,
           focusNodeId: null,
           docJumpId: null,
@@ -579,7 +584,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
 
     updateRaw: (text: string) => {
       if (!get().boundProjectId || get().raw === text) return;
-      set({ raw: text });
+      set({ raw: text, error: null });
       schedulePersist(get);
     },
 
@@ -695,7 +700,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       refineAbort = null;
       projectEpoch++;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } // 丢弃挂起的落库（项目已删/已退出）
-      set({ docDraft: null, raw: '' });
+      set({ docDraft: null, sourceDraftActive: false, raw: '' });
       clearUndo();
       set(s => ({
         nodes: [],

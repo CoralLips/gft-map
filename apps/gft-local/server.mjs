@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import * as store from './store.mjs';
 import { createAccount } from './account.mjs';
+import { createCloudSync } from './sync.mjs';
 import {pendingNotices,acknowledgeNotices} from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
 import { prepareImport, parseImportSummary, redrawSummaryInput } from './dist/core.mjs';
@@ -23,14 +24,15 @@ async function body(req) {
   for await (const chunk of req) { length += chunk.length; if(length > 4 * 1024 * 1024) throw store.fail('内容过大',413); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw store.fail('JSON 无法解析'); }
 }
-export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService } = {}) {
+export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs } = {}) {
   if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
   const runner = agent && !execute ? await createRunner(agent, runnerOptions) : null;
   if (runner) await runner.check();
   const readers = sourceReaders || await import('./dist/sources.mjs');
   const { createConnections } = await import('./connections.mjs');
   const connections = connectionService || createConnections({ readers });
-  const account = createAccount({ home: store.homeDir() });
+  const account = accountService || createAccount({ home: store.homeDir() });
+  const sync = createCloudSync({ account, intervalMs:syncIntervalMs });
   let busy = false, closed = false, activeTaskId = null, activeController = null, lastError = null, shutdownPromise = null;
   async function saveExecution(id, execution) {
     // Cancellation may be committing its task state as the child closes. Keep
@@ -65,7 +67,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
       let value;
       if(req.method === 'GET') {
         if(group === 'runtime') value = runtime();
-        else if(group === 'account') value = await account.status();
+        else if(group === 'account') value = {...await account.status(),sync:sync.snapshot()};
         else if(group === 'chat-sessions') {
           let cursor;
           const encoded = url.searchParams.get('cursor');
@@ -117,6 +119,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else throw store.fail('接口不存在',404);
       } else throw store.fail('不支持的请求',405);
       send(200,value);
+      if(req.method === 'POST') void sync.run();
     } catch(e) { send(e.status || 500,{error:e.message}); }
   });
   async function tick() {
@@ -170,13 +173,16 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
   }
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
   const timer = setInterval(()=>void tick(),800);
+  sync.start();
   async function stopExecution() {
     account.close();
+    await sync.close();
     closed=true;clearInterval(timer);activeController?.abort('shutdown');
     if (activeTaskId) await store.setTaskStatus(activeTaskId,'failed','本地服务已停止，当前内容保留；可重新发起任务。').catch(()=>{});
     if (runner) await runner.waitForIdle();
   }
   server.runtime = runtime;
+  server.sync = sync;
   server.shutdown = () => shutdownPromise ||= (async () => { await stopExecution(); await new Promise(resolve=>server.close(resolve)); })();
   server.on('close',()=>{void stopExecution();});
   return server;

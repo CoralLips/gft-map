@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { startServer } from '../server.mjs';
 import * as backend from '../store.mjs';
+import { appendSourceLog, editSourceLog, renderSourceLog } from '../dist/core.mjs';
 
 const entry = fileURLToPath(new URL('../web/localRuntime.ts',import.meta.url));
 const nodePath = fileURLToPath(new URL('../node_modules',import.meta.url));
@@ -42,7 +43,7 @@ async function fixture(execute,run,options = {}) {
     const errors=[];
     local=createLocalRuntime({onRequestUpdate:options.manual || (async()=>null),onError:message=>errors.push(message)});
     await local.start();
-    await run({local,server,a,b,browserCache,errors,origin,fetch:previousFetch});
+    await run({local,server,a,b,browserCache,errors,origin,directory,fetch:previousFetch});
   } finally {
     local?.dispose();
     if(server)await server.shutdown();
@@ -162,6 +163,112 @@ test('改主题后重画读取被旧范围过滤的源消息，不扫描其他�
     local.store.getState().undo();
     assert.deepEqual(local.store.getState().nodes.map(node=>node.title),old);
     assert.equal(calls,1);assert.deepEqual(errors,[]);
+  });
+});
+
+test('整篇编辑 Log 通过真实面板保存：图文和水位保留，旧快照不复活，重画只读取修订版及当前主题',async()=>{
+  let calls=0;
+  const text='第二段移到前面：试办需要三名志愿者。\n\n删掉旧规则后，只在三人到齐时开展。\n';
+  await fixture(async prompt=>{
+    calls++;
+    assert.equal(prompt.action,'redraw');
+    assert.match(prompt.system,/社区图书角的当前人员规则/);
+    assert.match(prompt.user,/三名志愿者/);
+    assert.match(prompt.user,/第二段移到前面/);
+    assert.doesNotMatch(prompt.user,/旧规则只需一名|后来补存的过期快照/);
+    return '<doc>\n## 主线\n按人工修订后的人员规则试办。\n## 人员\n### ◆ 三名志愿者到齐才试办\n不足三人时暂停。\n</doc>';
+  },async({local,a,b,errors,directory,browserCache})=>{
+    await backend.saveSourceEvent(a.id,{id:'old-original',layer:'L0->L1',
+      inputs:[{id:'old-message',role:'user',name:null,content:'旧规则只需一名志愿者。',ts:1}],
+      outputs:['j1'],sourceMeta:{provider:'codex',sessionId:'old-chat',sessionTitle:'合成会话'}});
+    const view=await backend.getView(a.id);
+    await backend.saveDoc(a.id,view.revision,view.doc.replace('只处理合成验证材料。','社区图书角的当前人员规则。'));
+    const filename=path.join(directory,'topics',`${a.id}.json`);
+    const sourceCursors={'connection:1':{cursor:{offset:42},taskId:'completed-before-edit'}};
+    const persisted=JSON.parse(await readFile(filename,'utf8'));
+    await writeFile(filename,JSON.stringify({...persisted,sourceCursors}));
+    await local.store.getState().syncFromRemote();
+    assert.match(renderSourceLog(local.store.getState().raw),/旧规则只需一名/);
+    const before=local.store.getState();
+    const doc=before.doc, nodes=structuredClone(before.nodes), edges=structuredClone(before.edges);
+    const watermarks=[...before.sourceWatermarks];
+    local.store.getState().updateRaw(editSourceLog(before.raw,text));
+    assert.equal(local.store.getState().doc,doc);
+    assert.deepEqual(local.store.getState().nodes,nodes);
+    assert.deepEqual(local.store.getState().edges,edges);
+    assert.equal(calls,0,'保存 Log 本身不得触发模型');
+    local.store.getState().flushDoc();
+    await waitFor(()=>backend.getTopic(a.id),topic=>renderSourceLog(topic.raw)===text);
+    await waitFor(()=>JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),entry=>entry.pending===false);
+    assert.deepEqual((await backend.getTopic(a.id)).sourceCursors,sourceCursors);
+    assert.deepEqual([...local.store.getState().sourceWatermarks],watermarks);
+    await backend.saveSourceEvent(a.id,{id:'late-old',layer:'L0->L1',inputs:[{id:'late-message',role:'user',content:'后来补存的过期快照'}],outputs:['j1']});
+    await local.store.getState().syncFromRemote();
+    assert.equal(renderSourceLog(local.store.getState().raw),text);
+    assert.equal((await backend.readSources(a.id)).text,text);
+    await local.host.switchProject(b.id);
+    await local.host.switchProject(a.id);
+    assert.equal(renderSourceLog(local.store.getState().raw),text,'切换离开后重载仍使用全文编辑版');
+    assert.equal(local.store.getState().doc,doc);
+    await local.store.getState().redrawFromLedger();
+    assert.equal(calls,1);assert.equal(local.store.getState().error,null);
+    assert.equal(local.store.getState().nodes.length,1);
+    assert.equal(local.store.getState().nodes[0].title,'三名志愿者到齐才试办');
+    local.store.getState().flushDoc();
+    await waitFor(()=>backend.getView(a.id),saved=>saved.graph.nodes.length===1&&saved.graph.nodes[0].title==='三名志愿者到齐才试办');
+    assert.equal(renderSourceLog((await backend.getTopic(a.id)).raw),text);
+    assert.deepEqual((await backend.getTopic(a.id)).sourceCursors,sourceCursors);
+    assert.deepEqual([...local.store.getState().sourceWatermarks],watermarks);
+    assert.deepEqual(errors,[]);
+  });
+});
+
+test('面板清空 Log 后同步与重载保留显式空来源，重画不回填工作账也不调用模型',async()=>{
+  let calls=0;
+  await fixture(async()=>{calls++;return output;},async({local,a,b,browserCache,errors})=>{
+    const before=local.store.getState();
+    const doc=before.doc,nodes=structuredClone(before.nodes);
+    local.store.getState().updateRaw(editSourceLog(before.raw,''));
+    local.store.getState().flushDoc();
+    await waitFor(()=>backend.history(a.id),history=>history.sourceText==='');
+    await waitFor(()=>JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),entry=>entry.pending===false);
+    await local.store.getState().syncFromRemote();
+    await local.host.switchProject(b.id);await local.host.switchProject(a.id);
+    assert.equal(renderSourceLog(local.store.getState().raw),'');
+    assert.equal(local.store.getState().doc,doc);assert.deepEqual(local.store.getState().nodes,nodes);
+    await local.store.getState().redrawFromLedger();
+    assert.equal(calls,0);
+    assert.equal((await backend.readSources(a.id)).text,'');
+    assert.deepEqual(await backend.sourceEvents(a.id),[]);
+    assert.deepEqual(errors,[]);
+  });
+});
+
+test('最后一次轮询后后台追加来源：Log 保存遇到409仅合入新来源，保存成功并清除pending',async()=>{
+  let calls=0;
+  await fixture(async()=>{calls++;return output;},async({local,a,errors,browserCache})=>{
+    const baseRaw=local.store.getState().raw;
+    const doc=local.store.getState().doc;
+    const topic=await backend.getTopic(a.id),view=await backend.getView(a.id);
+    const newRecord={v:1,provider:'codex',sessionId:'independent',id:'fresh-receipt',role:'user',content:'后台在编辑期间新增的有效来源'};
+    const remote=await backend.saveState(a.id,topic.revision,{ledger:topic.ledger,raw:appendSourceLog(topic.raw,[newRecord]),
+      nodes:view.graph.nodes,edges:view.graph.edges,doc:view.doc,watermarks:{}});
+    assert.equal(remote.revision,topic.revision+1);
+    assert.equal(local.store.getState().raw,baseRaw,'尚未轮询到后台新增来源');
+    local.store.getState().updateRaw(editSourceLog(baseRaw,'用户整篇修改后的来源\n'));
+    local.store.getState().flushDoc();
+    const saved=await waitFor(()=>backend.getTopic(a.id),topic=>topic.revision>remote.revision);
+    await waitFor(()=>JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),entry=>entry.pending===false);
+    const text=renderSourceLog(saved.raw);
+    assert.match(text,/用户整篇修改后的来源/);
+    assert.match(text,/后台在编辑期间新增的有效来源/);
+    assert.doesNotMatch(text,/原判断|先保留原文/);
+    assert.equal((await backend.getView(a.id)).doc,doc);
+    assert.equal(local.store.getState().doc,doc);
+    assert.equal(local.store.getState().error,null);
+    await local.store.getState().syncFromRemote();
+    assert.equal(renderSourceLog(local.store.getState().raw),text);
+    assert.equal(calls,0);assert.deepEqual(errors,[]);
   });
 });
 

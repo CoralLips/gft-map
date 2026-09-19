@@ -1,9 +1,10 @@
-import { renderSourceLog } from '../../../src/service/sourceLog';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConfirmDialog } from '../../../src/component/common/ConfirmDialog';
 import { ThinkingMapWorkspace } from '../../../src/component/focus/ThinkingMapWorkspace';
 import { ThinkingMapRuntimeProvider, useThinkingMapHost } from '../../../src/component/focus/ThinkingMapRuntime';
+import { SourceLogEditor, type SourceLogEditorHandle } from '../../../src/component/focus/SourceLogEditor';
+import { useLangStore, useT } from '../../../src/i18n';
 import { initTheme, getThemePref, setThemePref, type ThemePref } from '../../../src/util/theme';
 import { ImportDialog } from './ImportDialog';
 import { AccountDialog } from './AccountDialog';
@@ -24,25 +25,17 @@ const isActive = (task: Task) => task.status === 'pending' || task.status === 'q
 const Workspace = memo(ThinkingMapWorkspace);
 
 function HistoryDialog({ projectId, onClose }: { projectId: string; onClose(): void }) {
-  const [history, setHistory] = useState<{ ledger: string; raw: string } | null>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    const controller = new AbortController();
-    void localRequest<{ ledger: string; raw: string }>(`/api/topics/${encodeURIComponent(projectId)}/history`, undefined, controller.signal)
-      .then(setHistory).catch(error => { if (!controller.signal.aborted) setError(messageOf(error)); });
-    return () => controller.abort();
-  }, [projectId]);
-  return <Modal title="Log · 来源记录" wide onClose={onClose}>
-    <p className="gft-local-note">已接收的来源材料，不按主题删减。重画保留当前主题，从这里重新生成图文。旧版提取记录不等于完整原文。</p>
-    {error ? <p role="alert" className="gft-local-error">{error}</p> : !history ? <p className="gft-local-note">正在读取…</p> : <>
-      <pre className="gft-local-history">{renderSourceLog(history.raw) || '尚无来源材料。'}</pre>
-      <details className="gft-local-raw"><summary>图文变更记录</summary><pre className="gft-local-history">{history.ledger || '尚无变更记录。'}</pre></details>
-    </>}
+  const editor = useRef<SourceLogEditorHandle>(null);
+  return <Modal title="Log" wide onClose={() => { if (editor.current?.save()) onClose(); }}>
+    <SourceLogEditor ref={editor} projectId={projectId} />
   </Modal>;
 }
 
 // Polling stays outside the shared Doc and canvas to preserve editor selections.
 const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRuntime }) {
+  const tr = useT();
+  const lang = useLangStore(s => s.lang);
+  const setLang = useLangStore(s => s.setLang);
   const projectId = useThinkingMapHost(snapshot => snapshot.currentProjectId);
   const projects = useThinkingMapHost(snapshot => snapshot.projects);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -90,37 +83,41 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   };
   return <>
     <details className="gft-local-menu" ref={menuRef}>
-      <summary aria-label="设置" title="设置" onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) menuRef.current.open=false;}}>
+      <summary aria-label={tr('设置')} title={tr('设置')} onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) menuRef.current.open=false;}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9.5 3-.5 2a8 8 0 0 0-2 1.2L5 5.6 3 9l1.5 1.4a8 8 0 0 0 0 2.4L3 14.2l2 3.4 2-.6a8 8 0 0 0 2 1.2l.5 2h4l.5-2a8 8 0 0 0 2-1.2l2 .6 2-3.4-1.5-1.4a8 8 0 0 0 0-2.4L20 9l-2-3.4-2 .6a8 8 0 0 0-2-1.2l-.5-2Z"/><circle cx="11.5" cy="11.6" r="3.1"/></svg>
         {active>0 && <span className="gft-local-task-count">{active}</span>}
       </summary>
       <div className="gft-local-menu-items" onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) {menuRef.current.open=false;menuRef.current.querySelector('summary')?.focus();}}}>
-        <div className="gft-local-appearance"><span>外观</span><div role="group" aria-label="外观">{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label])=><button key={value} aria-pressed={theme===value} onClick={()=>{setTheme(value);setThemePref(value);}}>{label}</button>)}</div></div>
-        <button onClick={() => open('tasks')}>任务{active > 0 ? ` · ${active} 项处理中` : ''}</button>
-        <button disabled={!projectId} onClick={() => open('history')}>Log · 来源记录</button>
-        <button onClick={() => open('import')}>导入脉络</button>
-        <button onClick={() => open('account')}>GFT 账号</button>
+        <div className="gft-local-appearance"><span>{tr('语言')}</span><div role="group" aria-label={tr('语言')}>{([['zh','中文'],['en','EN']] as const).map(([value,label])=><button key={value} aria-pressed={lang===value} onClick={()=>setLang(value)}>{label}</button>)}</div></div>
+        <div className="gft-local-appearance"><span>{tr('外观')}</span><div role="group" aria-label={tr('外观')}>{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label])=><button key={value} aria-pressed={theme===value} onClick={()=>{setTheme(value);setThemePref(value);}}>{tr(label)}</button>)}</div></div>
+        <button onClick={() => open('tasks')}>{tr('任务')}{active > 0 ? ` · ${active} ${tr('处理中')}` : ''}</button>
+        <button disabled={!projectId} onClick={() => open('history')}>Log</button>
+        <button onClick={() => open('import')}>{tr('导入脉络')}</button>
+        <button onClick={() => open('account')}>{tr('GFT 账号')}</button>
       </div>
     </details>
     {dialog === 'import' && <ImportDialog importTopic={runtime.importTopic} onClose={()=>setDialog(null)} />}
     {dialog === 'account' && <AccountDialog onClose={() => setDialog(null)} />}
-    {error && !dialog && <div className="gft-local-banner" role="alert">{error}<button aria-label="关闭提示" onClick={() => setError('')}>×</button></div>}
+    {error && !dialog && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {dialog === 'history' && projectId && <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />}
-    {dialog === 'tasks' && <Modal title="任务" wide onClose={() => setDialog(null)}>
-      <p className="gft-local-note">{!status ? '正在读取执行状态…' : status.agent ? `当前由本机 ${status.agent} 处理页面任务。` : '未启用自动 Agent。排队任务需由当前 Agent 对话通过 Skill 读取并处理。'}</p>
-      {error && <p role="alert" className="gft-local-error">{error}</p>}
-      {status?.executor?.model && <p className="gft-local-note">执行模型：{status.executor.model} · 思考强度：{status.executor.effort || '执行器默认'}（自动）</p>}
+    {dialog === 'tasks' && <Modal title={tr('任务')} wide onClose={() => setDialog(null)}>
+      <p className="gft-local-note">{!status ? tr('正在读取执行状态…') : status.agent ? tr('当前由本机 {agent} 处理页面任务。', {agent:status.agent}) : tr('未启用自动 Agent。排队任务需由当前 Agent 对话通过 Skill 读取并处理。')}</p>
+      {error && <p role="alert" className="gft-local-error">{tr(error)}</p>}
+      {status?.executor?.model && <p className="gft-local-note">{tr('执行模型：{model} · 思考强度：{effort}（自动）', {model:status.executor.model, effort:status.executor.effort || tr('执行器默认')})}</p>}
       {status?.executor?.lastError && <p className="gft-local-error">{typeof status.executor.lastError === 'string' ? status.executor.lastError : status.executor.lastError.message}</p>}
-      {tasks.length === 0 ? <p className="gft-local-note">还没有任务。</p> : <ul className="gft-local-tasks">{tasks.map(task => <li key={task.id}>
-        <div><strong>{actionNames[task.action] || task.action}</strong><span>{projects.find(project => project.id === task.topicId)?.name || '已归档脉络'}</span>{task.error && <p className="gft-local-error">{task.error}</p>}</div>
-        <span>{cancelling === task.id ? '正在取消…' : task.mode === 'compute' && task.status === 'completed' ? '模型已返回' : statusNames[task.status] || task.status}</span>
-        {isActive(task) && <button disabled={cancelling === task.id} onClick={() => { void cancel(task); }}>取消</button>}
+      {tasks.length === 0 ? <p className="gft-local-note">{tr('还没有任务。')}</p> : <ul className="gft-local-tasks">{tasks.map(task => <li key={task.id}>
+        <div><strong>{tr(actionNames[task.action] || task.action)}</strong><span>{projects.find(project => project.id === task.topicId)?.name || tr('已归档脉络')}</span>{task.error && <p className="gft-local-error">{tr(task.error)}</p>}</div>
+        <span>{tr(cancelling === task.id ? '正在取消…' : task.mode === 'compute' && task.status === 'completed' ? '模型已返回' : statusNames[task.status] || task.status)}</span>
+        {isActive(task) && <button disabled={cancelling === task.id} onClick={() => { void cancel(task); }}>{tr('取消')}</button>}
       </li>)}</ul>}
     </Modal>}
   </>;
 });
 
 function App() {
+  const tr = useT();
+  const lang = useLangStore(s => s.lang);
+  useEffect(() => { document.title = lang === 'en' ? 'GFT Map · Local' : 'GFT Map · 本地脉络'; }, [lang]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [updateRequest, setUpdateRequest] = useState<UpdateRequest | null>(null);
@@ -147,20 +144,22 @@ function App() {
   useEffect(() => {
     let alive = true;
     void runtime.start().then(() => { if (alive) setReady(true); }).catch(error => { if (alive) setError(messageOf(error)); });
+    const flush = () => { runtime.store.getState().flushDocEdits(); runtime.store.getState().flushDoc(); };
     const dispose = () => runtime.dispose();
-    window.addEventListener('beforeunload', dispose);
+    // A cancelled navigation must leave the live runtime intact.
+    window.addEventListener('beforeunload', flush);
     window.addEventListener('pagehide', dispose);
-    return () => { alive = false; window.removeEventListener('beforeunload', dispose); window.removeEventListener('pagehide', dispose); runtime.dispose(); };
+    return () => { alive = false; window.removeEventListener('beforeunload', flush); window.removeEventListener('pagehide', dispose); runtime.dispose(); };
   }, [runtime]);
   const closeUpdate = (input: string | null) => { updateRequest?.resolve(input); setUpdateRequest(null); };
   return <ThinkingMapRuntimeProvider store={runtime.store} host={runtime.host} memoryControl={memoryControl}>
-    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} secondaryActions={actions} /> : <div className="gft-local-loading">{error || '正在打开本地脉络…'}{error && <button onClick={() => window.location.reload()}>重新打开</button>}</div>}</main>
-    {ready && error && <div className="gft-local-banner" role="alert">{error}<button aria-label="关闭提示" onClick={() => setError('')}>×</button></div>}
+    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} secondaryActions={actions} /> : <div className="gft-local-loading">{tr(error || '正在打开本地脉络…')}{error && <button onClick={() => window.location.reload()}>{tr('重新打开')}</button>}</div>}</main>
+    {ready && error && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {sourceRequest && sourceRequest.topicId === runtime.host.getSnapshot().currentProjectId && <ConnectionManager key={sourceRequest.topicId} runtime={runtime} topicId={sourceRequest.topicId} projects={runtime.host.getSnapshot().projects} purpose="update" onClose={source => { sourceRequest.resolve(source); setSourceRequest(null); }} />}
-    {updateRequest && <Modal title="更新脉络" wide onClose={() => closeUpdate(null)}><form onSubmit={event => { event.preventDefault(); if (updateDraft.trim()) closeUpdate(updateDraft.trim()); }}>
-      <p className="gft-local-note">粘贴当前对话或要收录的材料。Agent 将按这条脉络的主题范围提取判断。</p>
-      <label>材料<textarea autoFocus rows={12} required value={updateDraft} onChange={event => setUpdateDraft(event.target.value)} placeholder="把要记下来的对话或材料放在这里…" /></label>
-      <div className="gft-local-dialog-actions"><button type="button" onClick={() => closeUpdate(null)}>取消</button><button className="gft-local-primary" disabled={!updateDraft.trim()}>交给 Agent</button></div>
+    {updateRequest && <Modal title={tr('更新脉络')} wide onClose={() => closeUpdate(null)}><form onSubmit={event => { event.preventDefault(); if (updateDraft.trim()) closeUpdate(updateDraft.trim()); }}>
+      <p className="gft-local-note">{tr('粘贴当前对话或要收录的材料。Agent 将按这条脉络的主题范围提取判断。')}</p>
+      <label>{tr('材料')}<textarea autoFocus rows={12} required value={updateDraft} onChange={event => setUpdateDraft(event.target.value)} placeholder={tr('把要记下来的对话或材料放在这里…')} /></label>
+      <div className="gft-local-dialog-actions"><button type="button" onClick={() => closeUpdate(null)}>{tr('取消')}</button><button className="gft-local-primary" disabled={!updateDraft.trim()}>{tr('交给 Agent')}</button></div>
     </form></Modal>}
     <ConfirmDialog />
   </ThinkingMapRuntimeProvider>;

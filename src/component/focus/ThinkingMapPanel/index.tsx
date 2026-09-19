@@ -12,8 +12,10 @@ import styles from './ThinkingMapPanel.module.css';
 // 喂图数据流（useMapFeed）一并共享，本组件的「重画」也从它取参
 import { UpdateMapButton, AiMemoryToggle, ExportMenu, RedrawButton, TidyButton, MapStats } from '../MapDocActions';
 import { themeOf } from '../../../service/ledger';
+import { useT } from '../../../i18n';
 
 export function ThinkingMapPanel(): JSX.Element {
+  const tr = useT();
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const error = useThinkingMapStore(s => s.error);
   const theme = useThinkingMapStore(s => themeOf(s.ledgerState));
@@ -49,18 +51,21 @@ export function ThinkingMapPanel(): JSX.Element {
       </div>
       {error && (
         <div className={styles.error}>
-          ⚠ {error}
+          ⚠ {tr(error)}
           <button
             className={styles.errorClose}
             onClick={() => useThinkingMapStore.setState({ error: null })}
-            title="关闭" aria-label="关闭提示"
+            title={tr('关闭')} aria-label={tr('关闭提示')}
           >×</button>
         </div>
       )}
       {theme && (
-        <div className={styles.theme} title={theme}>
-          <span className={styles.themeText}>记：{theme}</span>
-        </div>
+        <details className={styles.theme} key={theme}>
+          <summary className={styles.themeSummary} title={tr('展开或收起完整主题范围')}>
+            <span className={styles.themeText}>{tr('主题：')}{theme}</span>
+            <span className={styles.themeToggle} aria-hidden="true" data-expand={tr('展开')} data-collapse={tr('收起')} />
+          </summary>
+        </details>
       )}
       <div className={styles.mapArea}>
         <ThinkingMapView />

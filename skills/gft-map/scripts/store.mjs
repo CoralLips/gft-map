@@ -3,8 +3,9 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { memoryDocument, sourcePage } from './memory.mjs';
+import { localAccountIdentity } from './account.mjs';
 import { createTopicBundle, parseTopicBundle, topicSummary } from './dist/core.mjs';
-import { createLedger, viewTopic, editDocument, editGraph, prepareTask, applyTask, prepareImport, parseImportSummary, prepareSourceRedraw, appendSourceLog, readSourceLog, sourceRecordsFromEvents, renderSourceLog } from './dist/core.mjs';
+import { createLedger, viewTopic, editDocument, editGraph, prepareTask, applyTask, prepareImport, parseImportSummary, prepareSourceRedraw, appendSourceLog, readSourceLog, sourceRecordsFromEvents, renderSourceLog, isEditedSourceLog, mergeSourceLogs } from './dist/core.mjs';
 
 export const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const idPattern = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -47,6 +48,7 @@ const meta = ({ id, name, scope, revision, updatedAt, archived }) => ({ id, name
 export async function listTopics() { return (await list('topics')).filter(t => !t.archived).map(meta).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); }
 export const getTopic = async id => {
   const topic = await jsonRead(file('topics', id));
+  if (isEditedSourceLog(topic.raw)) return topic;
   // Adopt old saved source snapshots without changing the document, revision or cursors.
   const events = [...await storedSourceEvents(id), ...Object.values(topic.sourceUpdates || {})];
   return {...topic, raw: appendSourceLog(topic.raw, sourceRecordsFromEvents(events))};
@@ -84,6 +86,7 @@ export async function createTopic(name, scope = '', data, requestedId) {
 async function mutateTopic(id, baseRevision, change, taskId, advanceRevision = true) {
   return locked('topics', id, async () => {
     const current = await getTopic(id);
+    if (current.archived) throw fail('这条脉络已删除，当前编辑未覆盖删除记录。请复制或下载保留的内容。', 409);
     if (taskId && current.appliedTasks?.[taskId]) return { view: viewTopic(current), resultRevision: current.appliedTasks[taskId] };
     if (current.revision !== baseRevision) throw fail('主题已被另一处修改。请重新读取后再保存，当前内容未被覆盖。', 409);
     const delta = await change(current);
@@ -106,23 +109,85 @@ export const saveDoc = (id, revision, doc) => {
 export const saveGraph = (id, revision, op) => mutateTopic(id, revision, topic => editGraph(topic, op));
 // The shared panel owns all graph/Doc actions. Persist its resulting ledger once,
 // rather than applying the model response a second time on the server.
-export const saveState = (id, revision, map) => {
+export const saveState = async (id, revision, map) => {
   if (!map || typeof map.ledger !== 'string' || typeof map.raw !== 'string'
     || !Array.isArray(map.nodes) || !Array.isArray(map.edges)
     || !map.watermarks || typeof map.watermarks !== 'object') throw fail('面板状态无效');
-  return mutateTopic(id, revision, topic => ({ ledger: map.ledger, raw: appendSourceLog(map.raw, readSourceLog(topic.raw)),
-    panel: { nodes: map.nodes, edges: map.edges, watermarks: map.watermarks, doc: typeof map.doc === 'string' ? map.doc : '' } }));
+  const panel = { nodes: map.nodes, edges: map.edges, watermarks: map.watermarks, doc: typeof map.doc === 'string' ? map.doc : '' };
+  try {
+    return await mutateTopic(id, revision, topic => ({ ledger: map.ledger, raw: isEditedSourceLog(map.raw) || isEditedSourceLog(topic.raw)
+      ? mergeSourceLogs(map.raw, topic.raw) : appendSourceLog(map.raw, readSourceLog(topic.raw)), panel }));
+  } catch (error) {
+    if (error.status !== 409) throw error;
+    // A cloud download can finish while a browser has an unfinished draft.
+    // Preserve that downloaded branch before accepting the person's saved draft.
+    return locked('topics',id,async () => {
+      const current=await getTopic(id);
+      if(current.archived || current.cloud?.receivedRevision!==current.revision || revision>=current.revision)throw error;
+      await keepSyncConflict(syncConflictId(id,current.revision,'browser-draft'),current,current.cloud.account);
+      const next={...current,ledger:map.ledger,raw:map.raw,panel,revision:current.revision+1,updatedAt:new Date().toISOString()};
+      next.scope=viewTopic(next).scope;
+      await atomic(file('topics',id),next);return viewTopic(next);
+    });
+  }
 };
 export const renameTopic = (id, revision, name) => {
   if (typeof name !== 'string' || !name.trim()) throw fail('名称不能为空');
   return mutateTopic(id, revision, () => ({ name: name.trim() }));
 };
-export const archiveTopic = (id, revision) => mutateTopic(id, revision, () => ({ archived: true }));
+export const archiveTopic = (id, revision) => mutateTopic(id, revision, async () => ({ archived: true, deletionAccount: (await localAccountIdentity(homeDir()))?.key ?? null }));
+
+// Only cloud content moves; source cursors, bindings and task receipts stay local.
+export async function listSyncTopics() { return Promise.all((await list('topics')).map(topic => getTopic(topic.id))); }
+export async function commitCloudState(id, revision, cloud, content) {
+  return locked('topics',id,async () => {
+    let current;
+    try { current = await getTopic(id); } catch (error) { if (error.status !== 404) throw error; }
+    if (content && (current?.revision ?? null) !== revision) throw fail('本地内容有新修改，下次继续同步。',409);
+    if (current?.cloud && current.cloud.account !== cloud.account) throw fail('脉络属于另一个账号，未同步。',409);
+    const next = {...current, cloud};
+    if (content) {
+      Object.assign(next, {id, name:content.name, ledger:content.ledger, raw:content.raw,
+        archived:!!content.deleted, deletionAccount:null,
+        revision:(current?.revision ?? 0)+1, updatedAt:new Date().toISOString()});
+      next.scope = viewTopic(next).scope;
+      next.cloud = {...cloud,receivedRevision:next.revision};
+      // Rebuild content caches while keeping this device's import watermarks.
+      next.panel = {...current?.panel, nodes:[], edges:[], doc:viewTopic(next).doc, watermarks:current?.panel?.watermarks || {}};
+    }
+    if (!next.id) throw fail('缺少同步内容');
+    await atomic(file('topics',id),next);
+    return next;
+  });
+}
+export async function keepSyncConflict(id, content, account) {
+  try { return await getTopic(id); } catch (error) { if (error.status !== 404) throw error; }
+  await createTopic(`${content.name.slice(0,180)}（冲突副本）`,'',content,id);
+  const topic = await getTopic(id);
+  return commitCloudState(id,topic.revision,{account,id,version:null,base:null});
+}
+export const syncConflictId = (...parts) => {
+  const hash=createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+  return `${hash.slice(0,8)}-${hash.slice(8,12)}-4${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`;
+};
+export async function withCloudSync(run) {
+  const lock = `${file('sync','worker')}.lock`;
+  try { const pid = Number(await readFile(lock,'utf8')); if (processExited(pid)) await unlink(lock); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  return locked('sync','worker',run);
+}
 async function storedSourceEvents(id) {
   try { return await jsonRead(file('sources',id)); } catch (error) { if(error.status !== 404) throw error; return []; }
 }
 export async function sourceEvents(id) {
   const topic = await getTopic(id);
+  if (isEditedSourceLog(topic.raw)) {
+    const content = renderSourceLog(topic.raw);
+    return content.trim() ? [{id:`edited-log-${topic.revision}`,layer:'L0->L1',
+      inputs:[{id:`edited-log-${topic.revision}`,role:'user',name:'Log',content,ts:0}],
+      outputs:viewTopic(topic).graph.nodes.map(node=>node.id),
+      sourceMeta:{provider:'human',sessionId:'edited-log',sessionTitle:'Log',fromId:'edited-log',toId:'edited-log',count:1}}] : [];
+  }
   return [...await storedSourceEvents(id), ...Object.values(topic.sourceUpdates || {})];
 }
 async function changeSources(id, update) {
@@ -347,7 +412,7 @@ function processExited(pid) {
 // are never reclaimed; normal reads/writes do not run a background repair loop.
 export async function recover() {
   const recovered = [];
-  for (const kind of ['topics','sessions','tasks','sources','connections']) {
+  for (const kind of ['topics','sessions','tasks','sources','connections','sync']) {
     const dir = path.join(homeDir(),kind);
     await mkdir(dir,{recursive:true});
     for (const name of await readdir(dir)) {

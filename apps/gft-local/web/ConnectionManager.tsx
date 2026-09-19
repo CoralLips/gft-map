@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom';
 import { useThinkingMapHost } from '../../../src/component/focus/ThinkingMapRuntime';
 import { localRequest, type ChatConnection, type ChatProvider, type ChatSession, type UpdateSource, type createLocalRuntime } from './localRuntime';
+import { t, useT } from '../../../src/i18n';
 
 type LocalRuntime = ReturnType<typeof createLocalRuntime>;
 type Project = { id: string; name: string; status: 'active' | 'archived' };
@@ -9,6 +10,7 @@ const messageOf = (error: unknown) => error instanceof Error ? error.message : S
 const providerName = (provider: ChatProvider) => provider === 'codex' ? 'Codex' : 'Claude';
 
 export function LocalDialog({ title, children, onClose, wide = false, closeDisabled = false }: { title: string; children: React.ReactNode; onClose(): void; wide?: boolean; closeDisabled?: boolean }) {
+  const tr = useT();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -22,18 +24,20 @@ export function LocalDialog({ title, children, onClose, wide = false, closeDisab
     const first = items[0], last = items[items.length - 1];
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-  }}><div className="gft-local-modal-heading"><h2>{title}</h2><button aria-label="关闭" disabled={closeDisabled} onClick={onClose}>×</button></div><div className="gft-local-modal-body">{children}</div></div></div>, document.body);
+  }}><div className="gft-local-modal-heading"><h2>{title}</h2><button aria-label={tr('关闭')} disabled={closeDisabled} onClick={onClose}>×</button></div><div className="gft-local-modal-body">{children}</div></div></div>, document.body);
 }
 
 export function connectionLoadLabel(connection: ChatConnection, revision: number | null) {
-  if (connection.loadedRevision === null) return '待读取';
-  if (revision === null || connection.loadedRevision >= revision) return `聊天最近读取 · 版本 ${connection.loadedRevision}`;
-  return `聊天最近读取 · 版本 ${connection.loadedRevision} · 脉络有更新`;
+  if (connection.loadedRevision === null) return t('待读取');
+  const label = t('聊天最近读取 · 版本 {version}', { version: connection.loadedRevision });
+  if (revision === null || connection.loadedRevision >= revision) return label;
+  return `${label} · ${t('脉络有更新')}`;
 }
 
 export function ConnectionManager({ runtime, topicId, projects, purpose = 'manage', onClose }: {
   runtime: LocalRuntime; topicId: string; projects: Project[]; purpose?: 'manage' | 'update'; onClose(source: UpdateSource): void;
 }) {
+  const tr = useT();
   const snapshot = useSyncExternalStore(runtime.connections.subscribe, runtime.connections.getSnapshot);
   const connections = snapshot.topicId === topicId ? snapshot.connections : [];
   const revision = snapshot.topicId === topicId ? snapshot.revision : null;
@@ -95,43 +99,44 @@ export function ConnectionManager({ runtime, topicId, projects, purpose = 'manag
     catch (error) { if (alive.current) setError(messageOf(error)); }
     finally { if (alive.current) setBusy(''); }
   };
-  return <LocalDialog title={purpose === 'update' ? '选择更新来源' : '管理会话连接'} wide closeDisabled={!!busy} onClose={() => { if (!busy) onClose(null); }}>
-    <p className="gft-local-note">{projects.find(project => project.id === topicId)?.name || '当前脉络'} · 连接不会自动把脉络送进聊天。读取记录表示最近通过 Skill 或 MCP 取回的版本。</p>
+  return <LocalDialog title={tr(purpose === 'update' ? '选择更新来源' : '管理会话连接')} wide closeDisabled={!!busy} onClose={() => { if (!busy) onClose(null); }}>
+    <p className="gft-local-note">{projects.find(project => project.id === topicId)?.name || tr('当前脉络')} · {tr('连接不会自动把脉络送进聊天。读取记录表示最近通过 Skill 或 MCP 取回的版本。')}</p>
     {!browse && <>
-      {snapshot.status === 'loading' ? <p role="status">正在读取连接…</p> : connections.length === 0 ? <p className="gft-local-note">这条脉络还没有连接会话。</p> : <ul className="gft-local-connections">{connections.map(connection => <li key={connection.id}>
-        <div><strong className="gft-local-session-title">{connection.source.title || connection.source.id}</strong><span>{providerName(connection.source.provider)} · {connection.source.cwd || '未记录目录'}</span><small>已连接 · {connectionLoadLabel(connection, revision)}</small></div>
-        {purpose === 'update' ? <button disabled={!!busy} onClick={() => onClose({ connectionId: connection.id })}>用此会话更新</button> : <button disabled={!!busy} onClick={() => { void disconnect(connection.id); }}>断开</button>}
+      {snapshot.status === 'loading' ? <p role="status">{tr('正在读取连接…')}</p> : connections.length === 0 ? <p className="gft-local-note">{tr('这条脉络还没有连接会话。')}</p> : <ul className="gft-local-connections">{connections.map(connection => <li key={connection.id}>
+        <div><strong className="gft-local-session-title">{connection.source.title || connection.source.id}</strong><span>{providerName(connection.source.provider)} · {connection.source.cwd || tr('未记录目录')}</span><small>{tr('已连接')} · {connectionLoadLabel(connection, revision)}</small></div>
+        {purpose === 'update' ? <button disabled={!!busy} onClick={() => onClose({ connectionId: connection.id })}>{tr('用此会话更新')}</button> : <button disabled={!!busy} onClick={() => { void disconnect(connection.id); }}>{tr('断开')}</button>}
       </li>)}</ul>}
-      <div className="gft-local-connection-controls"><button disabled={!!busy} onClick={() => { setBrowse(true); setDisconnectAll(false); }}>连接另一个会话</button>
-        {purpose === 'manage' && connections.length > 0 && <button disabled={!!busy} onClick={() => setDisconnectAll(true)}>断开此脉络的全部连接</button>}
+      <div className="gft-local-connection-controls"><button disabled={!!busy} onClick={() => { setBrowse(true); setDisconnectAll(false); }}>{tr('连接另一个会话')}</button>
+        {purpose === 'manage' && connections.length > 0 && <button disabled={!!busy} onClick={() => setDisconnectAll(true)}>{tr('断开此脉络的全部连接')}</button>}
       </div>
-      {disconnectAll && <div className="gft-local-connection-confirm"><p>断开此脉络的 {connections.length} 个连接？已保存的脉络内容会保留。</p><button disabled={!!busy} onClick={() => setDisconnectAll(false)}>取消</button><button disabled={!!busy} onClick={() => { void disconnect(); }}>确认断开全部</button></div>}
+      {disconnectAll && <div className="gft-local-connection-confirm"><p>{tr('断开此脉络的 {count} 个连接？已保存的脉络内容会保留。', { count: connections.length })}</p><button disabled={!!busy} onClick={() => setDisconnectAll(false)}>{tr('取消')}</button><button disabled={!!busy} onClick={() => { void disconnect(); }}>{tr('确认断开全部')}</button></div>}
     </>}
     {browse && <>
-      <div className="gft-local-provider-tabs" aria-label="会话来源">{(['codex', 'claude'] as const).map(item => <button key={item} disabled={!!busy} aria-pressed={provider === item} onClick={() => { setProvider(item); setSelected(null); setError(''); }}>{providerName(item)}</button>)}</div>
-      <label>搜索会话<input type="search" disabled={!!busy} value={query} placeholder="按标题或目录搜索，不读取聊天正文" onChange={event => { setQuery(event.target.value); setSelected(null); setError(''); }} /></label>
-      <div className="gft-local-session-list" aria-label="会话列表">{loading ? <p role="status" className="gft-local-note">正在查找会话…</p> : result.error ? <p role="alert" className="gft-local-error">{result.error}</p> : !result.sessions.length ? <p className="gft-local-note">没有找到会话。可切换来源或修改搜索。</p> : result.sessions.map(session => <button key={`${session.provider}:${session.id}`} className="gft-local-session" disabled={!!busy} aria-pressed={selected?.id === session.id && selected.provider === session.provider} onClick={() => choose(session)}>
-        <strong className="gft-local-session-title">{session.title || session.id}</strong><span>{session.cwd || '未记录目录'}</span><small>{session.updatedAt ? new Date(session.updatedAt).toLocaleString() : ''} · {session.id}</small>
+      <div className="gft-local-provider-tabs" aria-label={tr('会话来源')}>{(['codex', 'claude'] as const).map(item => <button key={item} disabled={!!busy} aria-pressed={provider === item} onClick={() => { setProvider(item); setSelected(null); setError(''); }}>{providerName(item)}</button>)}</div>
+      <label>{tr('搜索会话')}<input type="search" disabled={!!busy} value={query} placeholder={tr('按标题或目录搜索，不读取聊天正文')} onChange={event => { setQuery(event.target.value); setSelected(null); setError(''); }} /></label>
+      <div className="gft-local-session-list" aria-label={tr('会话列表')}>{loading ? <p role="status" className="gft-local-note">{tr('正在查找会话…')}</p> : result.error ? <p role="alert" className="gft-local-error">{tr(result.error)}</p> : !result.sessions.length ? <p className="gft-local-note">{tr('没有找到会话。可切换来源或修改搜索。')}</p> : result.sessions.map(session => <button key={`${session.provider}:${session.id}`} className="gft-local-session" disabled={!!busy} aria-pressed={selected?.id === session.id && selected.provider === session.provider} onClick={() => choose(session)}>
+        <strong className="gft-local-session-title">{session.title || session.id}</strong><span>{session.cwd || tr('未记录目录')}</span><small>{session.updatedAt ? new Date(session.updatedAt).toLocaleString() : ''} · {session.id}</small>
       </button>)}</div>
-      {!loading && result.nextCursor && <button disabled={loadingMore || !!busy} onClick={() => { void loadMore(); }}>{loadingMore ? '正在读取…' : '更多会话'}</button>}
+      {!loading && result.nextCursor && <button disabled={loadingMore || !!busy} onClick={() => { void loadMore(); }}>{tr(loadingMore ? '正在读取…' : '更多会话')}</button>}
       {selected && <div className="gft-local-connection-confirm">
-        <p><strong className="gft-local-session-title">将连接：{providerName(selected.provider)} · {selected.title || selected.id}</strong></p>
-        <fieldset disabled={!!busy}><legend>连接到哪些脉络</legend>{projects.filter(project => project.status !== 'archived').map(project => <label className="gft-local-option" key={project.id}><input type="checkbox" checked={topicIds.includes(project.id)} disabled={purpose === 'update' && project.id === topicId} onChange={event => setTopicIds(ids => event.target.checked ? [...ids, project.id] : ids.filter(id => id !== project.id))} /><span>{project.name}{project.id === topicId ? '（当前）' : ''}</span></label>)}</fieldset>
-        <fieldset disabled={!!busy}><legend>收录起点</legend><label className="gft-local-option"><input type="radio" name="connection-history" checked={history === 'now'} onChange={() => setHistory('now')} /><span>从现在开始 <small>跳过已结束的历史；当前轮结束后可更新</small></span></label><label className="gft-local-option"><input type="radio" name="connection-history" checked={history === 'all'} onChange={() => setHistory('all')} /><span>包含已有内容 <small>按脉络主题筛选已有会话；较长时分批更新</small></span></label></fieldset>
-        {purpose === 'update' && history === 'now' && <p className="gft-local-note">若当前还没有结束的新一轮对话，确认后会显示暂无新增材料。</p>}
+        <p><strong className="gft-local-session-title">{tr('将连接：')}{providerName(selected.provider)} · {selected.title || selected.id}</strong></p>
+        <fieldset disabled={!!busy}><legend>{tr('连接到哪些脉络')}</legend>{projects.filter(project => project.status !== 'archived').map(project => <label className="gft-local-option" key={project.id}><input type="checkbox" checked={topicIds.includes(project.id)} disabled={purpose === 'update' && project.id === topicId} onChange={event => setTopicIds(ids => event.target.checked ? [...ids, project.id] : ids.filter(id => id !== project.id))} /><span>{project.name}{project.id === topicId ? tr('（当前）') : ''}</span></label>)}</fieldset>
+        <fieldset disabled={!!busy}><legend>{tr('收录起点')}</legend><label className="gft-local-option"><input type="radio" name="connection-history" checked={history === 'now'} onChange={() => setHistory('now')} /><span>{tr('从现在开始')} <small>{tr('跳过已结束的历史；当前轮结束后可更新')}</small></span></label><label className="gft-local-option"><input type="radio" name="connection-history" checked={history === 'all'} onChange={() => setHistory('all')} /><span>{tr('包含已有内容')} <small>{tr('已有会话进入 Log，再按主题生成图文；较长时分批处理')}</small></span></label></fieldset>
+        {purpose === 'update' && history === 'now' && <p className="gft-local-note">{tr('若当前还没有结束的新一轮对话，确认后会显示暂无新增材料。')}</p>}
       </div>}
     </>}
-    {(error || (snapshot.topicId === topicId && snapshot.error)) && <p className="gft-local-error" role="alert">{error || snapshot.error}</p>}
-    {busy && <p role="status">{busy}</p>}
+    {(error || (snapshot.topicId === topicId && snapshot.error)) && <p className="gft-local-error" role="alert">{tr(error || snapshot.error)}</p>}
+    {busy && <p role="status">{tr(busy)}</p>}
     <div className="gft-local-dialog-actions">
-      {browse && connections.length > 0 && <button disabled={!!busy} onClick={() => { setBrowse(false); setSelected(null); }}>返回已连接</button>}
-      <button disabled={!!busy} onClick={() => onClose(null)}>取消</button>
-      {browse && <button className="gft-local-primary" disabled={!!busy || !selected || !topicIds.length} onClick={() => { void connect(); }}>{purpose === 'update' ? '确认连接并更新' : '确认连接'}</button>}
+      {browse && connections.length > 0 && <button disabled={!!busy} onClick={() => { setBrowse(false); setSelected(null); }}>{tr('返回已连接')}</button>}
+      <button disabled={!!busy} onClick={() => onClose(null)}>{tr('取消')}</button>
+      {browse && <button className="gft-local-primary" disabled={!!busy || !selected || !topicIds.length} onClick={() => { void connect(); }}>{tr(purpose === 'update' ? '确认连接并更新' : '确认连接')}</button>}
     </div>
   </LocalDialog>;
 }
 
 export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
+  const tr = useT();
   const topicId = useThinkingMapHost(snapshot => snapshot.currentProjectId);
   const projects = useThinkingMapHost(snapshot => snapshot.projects);
   const snapshot = useSyncExternalStore(runtime.connections.subscribe, runtime.connections.getSnapshot);
@@ -143,17 +148,17 @@ export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
   const operation = current?.operation;
   const busy = operation && ['reading', 'running', 'cancelling'].includes(operation.phase);
   return <>
-    <span className="gft-local-connection-chips" role="group" aria-label="已连接的会话，可横向滚动" tabIndex={0}>
+    <span className="gft-local-connection-chips" role="group" aria-label={tr('已连接的会话，可横向滚动')} tabIndex={0}>
       {connections.map(connection => <span className="gft-local-connection-chip" key={connection.id}>
-        <button aria-haspopup="dialog" title={`${providerName(connection.source.provider)} · ${connection.source.title}\n管理连接`} onClick={() => setDialogTopic(topicId)}>
+        <button aria-haspopup="dialog" title={`${providerName(connection.source.provider)} · ${connection.source.title}\n${tr('管理连接')}`} onClick={() => setDialogTopic(topicId)}>
           <span>{providerName(connection.source.provider)} · {connection.source.title}</span>
         </button>
-        <button aria-label={`断开 ${connection.source.title}`} onClick={() => { setDisconnectError(''); void runtime.connections.disconnect(connection.id).catch(error => setDisconnectError(messageOf(error))); }}>×</button>
+        <button aria-label={`${tr('断开')} ${connection.source.title}`} onClick={() => { setDisconnectError(''); void runtime.connections.disconnect(connection.id).catch(error => setDisconnectError(messageOf(error))); }}>×</button>
       </span>)}
-      {!current?.connections.length && <button className="gft-local-connection-trigger" aria-haspopup="dialog" disabled={!topicId} onClick={() => { if (topicId) { setDialogTopic(topicId); void runtime.connections.refresh(topicId).catch(() => {}); } }}>{current?.status === 'loading' ? '读取连接…' : '＋连接'}</button>}
+      {!current?.connections.length && <button className="gft-local-connection-trigger" aria-haspopup="dialog" disabled={!topicId} onClick={() => { if (topicId) { setDialogTopic(topicId); void runtime.connections.refresh(topicId).catch(() => {}); } }}>{tr(current?.status === 'loading' ? '读取连接…' : '＋连接')}</button>}
     </span>
-    {disconnectError && <div className="gft-local-banner" role="alert">{disconnectError}<button aria-label="关闭提示" onClick={() => setDisconnectError('')}>×</button></div>}
-    {operation && <div className={`gft-local-update-status${operation.phase === 'failed' ? ' gft-local-error' : ''}`} role={operation.phase === 'failed' ? 'alert' : 'status'}><span>{operation.message}</span>{busy ? <button disabled={operation.phase === 'cancelling'} onClick={runtime.connections.cancel}>取消</button> : operation.phase !== 'choosing' && <button aria-label="关闭更新提示" onClick={runtime.connections.dismiss}>×</button>}</div>}
+    {disconnectError && <div className="gft-local-banner" role="alert">{tr(disconnectError)}<button aria-label={tr('关闭提示')} onClick={() => setDisconnectError('')}>×</button></div>}
+    {operation && <div className={`gft-local-update-status${operation.phase === 'failed' ? ' gft-local-error' : ''}`} role={operation.phase === 'failed' ? 'alert' : 'status'}><span>{tr(operation.message)}</span>{busy ? <button disabled={operation.phase === 'cancelling'} onClick={runtime.connections.cancel}>{tr('取消')}</button> : operation.phase !== 'choosing' && <button aria-label={tr('关闭更新提示')} onClick={runtime.connections.dismiss}>×</button>}</div>}
     {dialogTopic && dialogTopic === topicId && <ConnectionManager key={dialogTopic} runtime={runtime} topicId={dialogTopic} projects={projects} onClose={() => setDialogTopic(null)} />}
   </>;
 }

@@ -1,4 +1,4 @@
-import { readSourceLog, renderSourceLog } from '../../../service/sourceLog';
+import { isEditedSourceLog, readSourceLog, renderSourceLog } from '../../../service/sourceLog';
 /**
  * Log 展示已接收原文与人工输入，不受主题过滤，整理/重画不写回模型结果。
  * 新来源只读；旧版提取账保留原编辑器作为兼容入口，不冒充完整原文。
@@ -22,7 +22,7 @@ export function LedgerSourcePanel(): JSX.Element {
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
   const raw = useThinkingMapStore(s => s.raw);
-  const hasReceivedSources = useMemo(() => readSourceLog(raw).length > 0, [raw]);
+  const hasReceivedSources = useMemo(() => isEditedSourceLog(raw) || readSourceLog(raw).length > 0, [raw]);
   const sourceText = useMemo(() => renderSourceLog(raw), [raw]);
   const warnings = useMemo(() => parseLedger(raw).warnings, [raw]);
   const isGenerating = useThinkingMapStore(s => s.isGenerating);

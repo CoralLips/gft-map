@@ -3,12 +3,21 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-/** Login is optional. It never reads/uploads topics or borrows another app's refresh token. */
+export const accountKey = record => `${record.webUrl}|${record.account.id}`;
+/** Read identity without networking, including while the device is offline. */
+export async function localAccountIdentity(home) {
+  try {
+    const record = JSON.parse(await readFile(path.join(home, 'account.json'), 'utf8'));
+    return record.account?.id && record.webUrl ? { key: accountKey(record), id: record.account.id, webUrl: record.webUrl } : null;
+  } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+}
+/** Optional, independent login session; tokens stay behind this server-side API. */
 export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https://gitforthought.com', fetchImpl = fetch, timeoutMs = 180000 } = {}) {
   const base = new URL(webUrl);
   if (base.username || base.password || base.pathname !== '/' || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname)))) throw new Error('GFT 登录地址必须是 HTTPS，或本机开发地址');
   const file = path.join(home, 'account.json');
   let pending = null, error = '', refresh = null, generation = 0;
+  let requests = new AbortController();
   let writes = Promise.resolve();
   const serialize = work => { const next = writes.then(work, work); writes = next.catch(() => {}); return next; };
   async function read() { try { const value = JSON.parse(await readFile(file, 'utf8')); return value.webUrl === base.origin ? value : null; } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
@@ -16,7 +25,7 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     return serialize(async () => {
     if (epoch !== generation) throw new Error('登录已取消');
     if (!session?.refresh_token || !session.user?.id || !session.user?.email) throw new Error('登录服务没有返回有效账号');
-    const record = { webUrl: base.origin, config, refreshToken: session.refresh_token, account: { id: session.user.id, email: session.user.email }, expiresAt: session.expires_at || Math.floor(Date.now() / 1000) + (session.expires_in || 3600) };
+    const record = { webUrl: base.origin, config, accessToken: session.access_token, refreshToken: session.refresh_token, account: { id: session.user.id, email: session.user.email }, expiresAt: session.expires_at || Math.floor(Date.now() / 1000) + (session.expires_in || 3600) };
     await mkdir(home, { recursive: true });
     const temporary = `${file}.${randomUUID()}.tmp`;
     await writeFile(temporary, JSON.stringify(record), { mode: 0o600 });
@@ -48,7 +57,35 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     }
     return { connected: !!record, account: record?.account || null, pending: !!pending, error, webUrl: base.origin };
   }
-  function cancel() { generation++; if (pending) { clearTimeout(pending.timer); pending.server.close(); pending = null; } }
+  function cancel() { generation++; requests.abort(); requests = new AbortController(); if (pending) { clearTimeout(pending.timer); pending.server.close(); pending = null; } }
+  async function session() {
+    if (pending) return null;
+    const epoch = generation;
+    let record = await read();
+    if (!record || epoch !== generation) return null;
+    if (!record.accessToken || record.expiresAt < Date.now() / 1000 + 60) {
+      refresh ||= auth(record.config, 'token?grant_type=refresh_token', { refresh_token: record.refreshToken }).then(value => save(value, record.config, epoch)).finally(() => { refresh = null; });
+      record = await refresh;
+    }
+    if (epoch !== generation || !record.accessToken) throw new Error('登录已变化，请稍后重试同步');
+    const target = new URL(record.config.url);
+    if (target.protocol !== 'https:' || !target.hostname.endsWith('.supabase.co') || target.pathname !== '/') throw new Error('GFT 登录配置无效');
+    const alive = () => epoch === generation;
+    const signal = requests.signal;
+    return { key: accountKey(record), id: record.account.id, alive,
+      async rpc(name, body, query = '') {
+        if (!alive()) throw new Error('登录已变化，已停止同步');
+        if (!['gft_sync_index','gft_sync_read','gft_sync_write'].includes(name)) throw new Error('未知同步接口');
+        const response = await fetchImpl(`${target.origin}/rest/v1/rpc/${name}${query}`, {
+          method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]),
+          headers: { apikey: record.config.anonKey, Authorization: `Bearer ${record.accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (!alive()) throw new Error('登录已变化，已停止同步');
+        if (!response.ok) throw new Error(response.status === 404 ? '云端同步接口尚未部署，本地内容已保留。' : `同步暂未完成（${response.status}），本地内容已保留，将自动重试。`);
+        return response.json();
+      },
+    };
+  }
   async function begin() {
     cancel(); error = '';
     const epoch = generation, state = randomBytes(32).toString('hex');
@@ -80,11 +117,11 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     attempt.server = server;
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     if (epoch !== generation) { server.close(); throw new Error('登录已取消'); }
-    attempt.url = `${base.origin}/connect-agent?port=${server.address().port}&state=${state}&client=gft-map`;
+    attempt.url = `${base.origin}/connect-agent?port=${server.address().port}&state=${state}&client=gft-map&sync=1`;
     attempt.timer = setTimeout(() => { if (pending === attempt) { error = '登录等待超时，请重新发起'; cancel(); } }, timeoutMs);
     attempt.timer.unref(); pending = attempt;
     return { url: attempt.url };
   }
   async function logout() { cancel(); if (refresh) await refresh.catch(() => {}); await serialize(() => unlink(file).catch(e => { if (e.code !== 'ENOENT') throw e; })); error = ''; return { connected: false, account: null, pending: false, error: '', webUrl: base.origin }; }
-  return { status, begin, cancel: async () => { cancel(); return status(); }, logout, close: cancel };
+  return { status, session, begin, cancel: async () => { cancel(); return status(); }, logout, close: cancel };
 }

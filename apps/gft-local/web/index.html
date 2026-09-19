@@ -6,6 +6,12 @@
     <title>GFT Map · 本地脉络</title>
     <script>
       try {
+        if (localStorage.getItem('gft_lang') === 'en') {
+          document.documentElement.lang = 'en';
+          document.title = 'GFT Map · Local';
+        }
+      } catch (e) {}
+      try {
         var t = localStorage.getItem('gft_theme');
         if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.dataset.theme = 'dark';
       } catch (e) {}

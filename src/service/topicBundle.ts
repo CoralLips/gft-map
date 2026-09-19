@@ -1,23 +1,23 @@
 import { parseLedger, themeOf, liveProse } from './ledger';
 import { deriveCaches, absorbLegacyRow } from './ledger/bridge';
-import { appendSourceLog, sourceRecordsFromEvents } from './sourceLog';
+import { appendSourceLog, sourceRecordsFromEvents, isEditedSourceLog } from './sourceLog';
 import type { PersistedThinkingMap } from '../type/thinkingMap';
 
 /** Content only: no credentials, active connections or import cursors. */
 export interface TopicBundle {
   format: 'gft-theme';
-  version: 2;
+  version: 2 | 3;
   topic: { name: string; scope: string; ledger: string; raw: string };
 }
 
 export function createTopicBundle(name: string, map: Pick<PersistedThinkingMap, 'ledger' | 'raw'>): TopicBundle {
-  return parseTopicBundle({ format: 'gft-theme', version: 2, topic: { name, ledger: map.ledger ?? '', raw: map.raw ?? '' } });
+  return parseTopicBundle({ format: 'gft-theme', version: isEditedSourceLog(map.raw ?? '') ? 3 : 2, topic: { name, ledger: map.ledger ?? '', raw: map.raw ?? '' } });
 }
 
 export function parseTopicBundle(input: unknown): TopicBundle {
   if (!input || typeof input !== 'object') throw new Error('不是受支持的 GFT 脉络包');
   const value = input as Record<string, unknown>;
-  if (value.format !== 'gft-theme' || (value.version !== 1 && value.version !== 2)) throw new Error('不支持此脉络包版本');
+  if (value.format !== 'gft-theme' || ![1, 2, 3].includes(value.version as number)) throw new Error('不支持此脉络包版本');
   const topic = value.topic as Record<string, unknown> | undefined;
   if (!topic || typeof topic.name !== 'string' || !topic.name.trim() || topic.name.length > 200
     || typeof topic.ledger !== 'string' || typeof topic.raw !== 'string') throw new Error('脉络包缺少有效名称、图文记录或 Log');
@@ -25,8 +25,10 @@ export function parseTopicBundle(input: unknown): TopicBundle {
   if (new TextEncoder().encode(JSON.stringify(input)).byteLength > maxBytes) throw new Error('脉络包过大（上限 4 MB）');
   if (value.sources !== undefined && (!Array.isArray(value.sources) || value.sources.some(event => !event || !['L0->L1', 'L1->L2'].includes(event.layer) || !Array.isArray(event.outputs)))) throw new Error('脉络包的来源记录无效');
   const ledger = topic.ledger;
-  const raw = appendSourceLog(topic.raw, sourceRecordsFromEvents((value.sources || []) as Parameters<typeof sourceRecordsFromEvents>[0]));
-  const bundle: TopicBundle = { format: 'gft-theme', version: 2, topic: { name: topic.name.trim(), scope: themeOf(parseLedger(ledger)), ledger, raw } };
+  const edited = isEditedSourceLog(topic.raw);
+  const raw = edited ? topic.raw : appendSourceLog(topic.raw, sourceRecordsFromEvents((value.sources || []) as Parameters<typeof sourceRecordsFromEvents>[0]));
+  // Older consumers reject v3 instead of treating the editable envelope as legacy text.
+  const bundle: TopicBundle = { format: 'gft-theme', version: edited ? 3 : 2, topic: { name: topic.name.trim(), scope: themeOf(parseLedger(ledger)), ledger, raw } };
   // Check the exact formatted export, so an accepted export fits both importers.
   if (new TextEncoder().encode(JSON.stringify(bundle, null, 2)).byteLength > maxBytes) throw new Error('脉络包过大（上限 4 MB）');
   return bundle;

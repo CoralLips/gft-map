@@ -65,6 +65,23 @@ function markdownLines(lines, boundary) {
 
 // src/service/sourceLog.ts
 var PREFIX = "\u6765\u6E90\u539F\u6587 ";
+var EDIT_PREFIX = "\u6765\u6E90\u6B63\u6587 ";
+function editedSourceLog(raw) {
+  const line = raw.split("\n", 1)[0];
+  if (!line.startsWith(EDIT_PREFIX)) return;
+  let value;
+  try {
+    value = JSON.parse(line.slice(EDIT_PREFIX.length));
+  } catch {
+    throw new Error("Log \u6570\u636E\u683C\u5F0F\u635F\u574F\uFF0C\u5DF2\u4FDD\u7559\u539F\u5185\u5BB9\u3002");
+  }
+  if (value?.v !== 2 || typeof value.text !== "string" || typeof value.editId !== "string" || typeof value.legacyHash !== "string" || !Array.isArray(value.seen) || !value.seen.every((key) => typeof key === "string") || !Array.isArray(value.ancestors) || !value.ancestors.every((key) => typeof key === "string")) {
+    throw new Error("\u4E0D\u652F\u6301\u6B64 Log \u6570\u636E\u7248\u672C\uFF0C\u8BF7\u5347\u7EA7\u540E\u518D\u8BFB\u53D6\u3002");
+  }
+  return value;
+}
+var isEditedSourceLog = (raw) => !!editedSourceLog(raw);
+var isSourceLogControlLine = (line) => !!sourceRecord(line) || !!editedSourceLog(line);
 function sourceRecord(line) {
   if (!line.startsWith(PREFIX)) return;
   try {
@@ -79,7 +96,11 @@ function fingerprint(text) {
   for (const char of text) n = BigInt.asUintN(64, (n ^ BigInt(char.codePointAt(0))) * 1099511628211n);
   return n.toString(16);
 }
+function legacySourceText(raw) {
+  return raw.split("\n").filter((line) => !sourceRecord(line) && !/^\[场次 .* · 来源 · [a-f0-9]+\]$/.test(line)).join("\n").trim();
+}
 function readSourceLog(raw) {
+  editedSourceLog(raw);
   const seen = /* @__PURE__ */ new Set();
   return raw.split("\n").flatMap((line) => {
     const record = sourceRecord(line);
@@ -89,16 +110,43 @@ function readSourceLog(raw) {
   });
 }
 function appendSourceLog(raw, records) {
-  const seen = new Set(readSourceLog(raw).map(identity));
+  const seen = /* @__PURE__ */ new Set([...editedSourceLog(raw)?.seen ?? [], ...readSourceLog(raw).map((r) => fingerprint(identity(r)))]);
   const lines = [];
   for (const record of records) {
-    if (!record.content.trim() || seen.has(identity(record))) continue;
-    const key = identity(record);
-    seen.add(key);
+    const key = identity(record), sourceKey = fingerprint(key);
+    if (!record.content.trim() || seen.has(sourceKey)) continue;
+    seen.add(sourceKey);
     const stamp = new Date(Number.isFinite(new Date(record.ts ?? 0).getTime()) ? record.ts ?? 0 : 0).toISOString();
     lines.push(`[\u573A\u6B21 ${stamp} \xB7 \u6765\u6E90 \xB7 ${fingerprint(key)}]`, PREFIX + JSON.stringify(record));
   }
   return lines.length ? [raw.trimEnd(), ...lines].filter(Boolean).join("\n") : raw;
+}
+function editSourceLog(raw, text) {
+  if (text === renderSourceLog(raw)) return raw;
+  const previous2 = editedSourceLog(raw);
+  const seen = [.../* @__PURE__ */ new Set([...previous2?.seen ?? [], ...readSourceLog(raw).map((r) => fingerprint(identity(r)))])];
+  const ancestors = previous2 ? [.../* @__PURE__ */ new Set([...previous2.ancestors, previous2.editId])] : [];
+  const editId = fingerprint(JSON.stringify([previous2?.editId ?? fingerprint(raw), text, seen]));
+  const legacyHash = previous2?.legacyHash ?? fingerprint(legacySourceText(raw));
+  return EDIT_PREFIX + JSON.stringify({ v: 2, text, seen, editId, ancestors, legacyHash });
+}
+function mergeSourceLogs(local, remote) {
+  if (local === remote) return local;
+  const a = editedSourceLog(local), b = editedSourceLog(remote);
+  if (!a && !b) throw new Error("\u666E\u901A Log \u5E94\u4F7F\u7528\u573A\u6B21\u5408\u5E76\u3002");
+  if (!a || !b) {
+    const legacy = legacySourceText(a ? remote : local);
+    if (legacy && fingerprint(legacy) !== (a ?? b).legacyHash) {
+      throw new Error("\u65E7\u7248 Log \u6709\u4E0D\u540C\u4FEE\u6539\uFF0C\u5DF2\u4FDD\u7559\u5F53\u524D\u7F16\u8F91\uFF0C\u8BF7\u6838\u5BF9\u540E\u518D\u4FDD\u5B58\u3002");
+    }
+  }
+  if (a && b && a.editId !== b.editId) {
+    if (a.ancestors.includes(b.editId)) return appendSourceLog(local, readSourceLog(remote));
+    if (b.ancestors.includes(a.editId)) return appendSourceLog(remote, readSourceLog(local));
+    throw new Error("Log \u5728\u4E24\u5904\u6709\u4E0D\u540C\u4FEE\u6539\uFF0C\u5DF2\u4FDD\u7559\u672C\u5730\u5185\u5BB9\uFF0C\u8BF7\u6838\u5BF9\u540E\u518D\u4FDD\u5B58\u3002");
+  }
+  if (a) return appendSourceLog(local, readSourceLog(remote));
+  return appendSourceLog(remote, readSourceLog(local));
 }
 function sourceRecordsFromEvents(events) {
   return events.flatMap((event) => event.layer === "L0->L1" && Array.isArray(event.inputs) ? event.inputs.flatMap((m) => typeof m?.content === "string" && m.content.trim() ? [{
@@ -116,17 +164,20 @@ function sourceRecordsFromEvents(events) {
   }] : []) : []);
 }
 function hasSourceLog(raw) {
+  if (editedSourceLog(raw)) return !!renderSourceLog(raw).trim();
   return readSourceLog(raw).length > 0 || /^[◆◇？?✗⏸] j\d+ /m.test(raw);
 }
 function renderSourceLog(raw) {
+  const edited = editedSourceLog(raw);
   const records = readSourceLog(raw);
-  const legacy = raw.split("\n").filter((line) => !sourceRecord(line) && !/^\[场次 .* · 来源 · [a-f0-9]+\]$/.test(line)).join("\n").trim();
+  const legacy = edited ? "" : legacySourceText(raw);
   const parts = records.map((r) => {
     const notes = [r.phase === "commentary" ? "\u8FC7\u7A0B\u8BF4\u660E" : "", r.turnStatus && r.turnStatus !== "completed" ? "\u672C\u8F6E\u672A\u5B8C\u6210\uFF1A" + r.turnStatus : ""].filter(Boolean);
     return `## ${r.title || r.sessionId || "\u6750\u6599"} \xB7 ${r.name || r.role}${notes.length ? "\uFF08" + notes.join("\uFF1B") + "\uFF09" : ""}
 ${r.ts ? new Date(r.ts).toISOString() + "\n" : ""}
 ${r.content}`;
   });
+  if (edited) return parts.length ? [edited.text, ...parts].filter(Boolean).join("\n\n") : edited.text;
   if (legacy) parts.unshift(`## \u65E7\u7248\u63D0\u53D6\u8BB0\u5F55\uFF08\u4E0D\u662F\u5B8C\u6574\u539F\u6587\uFF09
 
 ${legacy}`);
@@ -221,7 +272,7 @@ ${line}` : line;
       appendBody(literal, i);
       continue;
     }
-    if (sourceRecord(line)) {
+    if (isSourceLogControlLine(line)) {
       flushRewrite();
       sink = null;
       continue;
@@ -1382,20 +1433,21 @@ function absorbLegacyRow(ledger, row, at = Date.now()) {
 
 // src/service/topicBundle.ts
 function createTopicBundle(name, map) {
-  return parseTopicBundle({ format: "gft-theme", version: 2, topic: { name, ledger: map.ledger ?? "", raw: map.raw ?? "" } });
+  return parseTopicBundle({ format: "gft-theme", version: isEditedSourceLog(map.raw ?? "") ? 3 : 2, topic: { name, ledger: map.ledger ?? "", raw: map.raw ?? "" } });
 }
 function parseTopicBundle(input) {
   if (!input || typeof input !== "object") throw new Error("\u4E0D\u662F\u53D7\u652F\u6301\u7684 GFT \u8109\u7EDC\u5305");
   const value = input;
-  if (value.format !== "gft-theme" || value.version !== 1 && value.version !== 2) throw new Error("\u4E0D\u652F\u6301\u6B64\u8109\u7EDC\u5305\u7248\u672C");
+  if (value.format !== "gft-theme" || ![1, 2, 3].includes(value.version)) throw new Error("\u4E0D\u652F\u6301\u6B64\u8109\u7EDC\u5305\u7248\u672C");
   const topic = value.topic;
   if (!topic || typeof topic.name !== "string" || !topic.name.trim() || topic.name.length > 200 || typeof topic.ledger !== "string" || typeof topic.raw !== "string") throw new Error("\u8109\u7EDC\u5305\u7F3A\u5C11\u6709\u6548\u540D\u79F0\u3001\u56FE\u6587\u8BB0\u5F55\u6216 Log");
   const maxBytes = 4 * 1024 * 1024;
   if (new TextEncoder().encode(JSON.stringify(input)).byteLength > maxBytes) throw new Error("\u8109\u7EDC\u5305\u8FC7\u5927\uFF08\u4E0A\u9650 4 MB\uFF09");
   if (value.sources !== void 0 && (!Array.isArray(value.sources) || value.sources.some((event) => !event || !["L0->L1", "L1->L2"].includes(event.layer) || !Array.isArray(event.outputs)))) throw new Error("\u8109\u7EDC\u5305\u7684\u6765\u6E90\u8BB0\u5F55\u65E0\u6548");
   const ledger = topic.ledger;
-  const raw = appendSourceLog(topic.raw, sourceRecordsFromEvents(value.sources || []));
-  const bundle = { format: "gft-theme", version: 2, topic: { name: topic.name.trim(), scope: themeOf(parseLedger(ledger)), ledger, raw } };
+  const edited = isEditedSourceLog(topic.raw);
+  const raw = edited ? topic.raw : appendSourceLog(topic.raw, sourceRecordsFromEvents(value.sources || []));
+  const bundle = { format: "gft-theme", version: edited ? 3 : 2, topic: { name: topic.name.trim(), scope: themeOf(parseLedger(ledger)), ledger, raw } };
   if (new TextEncoder().encode(JSON.stringify(bundle, null, 2)).byteLength > maxBytes) throw new Error("\u8109\u7EDC\u5305\u8FC7\u5927\uFF08\u4E0A\u9650 4 MB\uFF09");
   return bundle;
 }
@@ -2239,7 +2291,7 @@ function prepareImport(topic, input, summary = "", publish = false) {
   return publish ? prepareTask(topic, "update", input, true) : prepareSourceSummary(themeOf(stateOf(topic)), input, summary);
 }
 function prepareSourceRedraw(topic, events = []) {
-  const raw = appendSourceLog(topic.raw, sourceRecordsFromEvents(events));
+  const raw = isEditedSourceLog(topic.raw) ? topic.raw : appendSourceLog(topic.raw, sourceRecordsFromEvents(events));
   const request = prepareTask({ ...topic, raw }, "redraw");
   if (request.user.length <= IMPORT_COMPACT_THRESHOLD) return request;
   const historyChunks = sourceChunks(request.user);
@@ -2431,7 +2483,11 @@ export {
   createTopicBundle,
   editDocument,
   editGraph,
+  editSourceLog,
+  hasSourceLog,
+  isEditedSourceLog,
   mapToBundle,
+  mergeSourceLogs,
   parseImportSummary,
   parseTopicBundle,
   prepareImport,

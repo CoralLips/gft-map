@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { LocalDialog } from './ConnectionManager';
 import { parseTopicBundle } from '../../../src/service/topicBundle';
+import { t, useT } from '../../../src/i18n';
 
 type Item = { id:number; name:string; payload:unknown; state:'ready'|'done'|'error'; error?:string };
 export function parseImport(text:string, filename?:string):unknown {
@@ -14,10 +15,11 @@ export function parseImport(text:string, filename?:string):unknown {
     }
   }
   if(clean.length>1000000) throw new Error('文稿最多 100 万字符');
-  return {format:'gft-document',version:1,name:filename?.replace(/\.(md|txt)$/i,'') || '导入的脉络',text:clean};
+  return {format:'gft-document',version:1,name:filename?.replace(/\.(md|txt)$/i,'') || t('导入的脉络'),text:clean};
 }
 
 export function ImportDialog({importTopic,onClose}:{importTopic:(bundle:unknown)=>Promise<string>;onClose:()=>void}) {
+  const tr = useT();
   const [tab,setTab]=useState<'files'|'text'>('files');
   const [items,setItems]=useState<Item[]>([]);
   const [text,setText]=useState('');
@@ -27,6 +29,7 @@ export function ImportDialog({importTopic,onClose}:{importTopic:(bundle:unknown)
   const [dragging,setDragging]=useState(false);
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
+  const [messageValues,setMessageValues]=useState<Record<string,string | number>>({});
   const ref=useRef<HTMLInputElement>(null);
   const nextId=useRef(0);
   const add=async(files:File[])=>{
@@ -50,12 +53,12 @@ export function ImportDialog({importTopic,onClose}:{importTopic:(bundle:unknown)
     try {
       if(tab==='text') {
         const payload=parseImport(text) as {format:string;name?:string};
-        if(payload.format==='gft-document') payload.name=name.trim() || '导入的脉络';
+        if(payload.format==='gft-document') payload.name=name.trim() || t('导入的脉络');
         await importTopic(payload);setText('');setName('');setMessage('已导入并打开新脉络。');
       } else {
         let done=0,failed=0;
         for(const item of items.filter(item=>item.payload && item.state!=='done')) {
-          setMessage(`正在导入 ${item.name}…`);
+          setMessage('正在导入 {name}…'); setMessageValues({name:item.name});
           try {
             await importTopic(item.payload); done++;
             setItems(current=>current.map(row=>row.id===item.id?{...row,state:'done',error:undefined}:row));
@@ -64,30 +67,30 @@ export function ImportDialog({importTopic,onClose}:{importTopic:(bundle:unknown)
             setItems(current=>current.map(row=>row.id===item.id?{...row,state:'error',error:e instanceof Error?e.message:String(e)}:row));
           }
         }
-        setMessage(`已导入 ${done} 份${failed?`，${failed} 份失败，可重试`:''}。`);
+        setMessage(failed ? '已导入 {done} 份，{failed} 份失败，可重试。' : '已导入 {done} 份。'); setMessageValues({done,failed});
       }
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
     finally {setBusy(false);}
   };
-  return <LocalDialog title="导入脉络" onClose={onClose} closeDisabled={busy || reading}>
-    <div className="gft-local-provider-tabs" role="group" aria-label="导入方式">
-      <button disabled={busy || reading} aria-pressed={tab==='files'} onClick={()=>{setTab('files');setError('');setMessage('');}}>文件</button>
-      <button disabled={busy || reading} aria-pressed={tab==='text'} onClick={()=>{setTab('text');setError('');setMessage('');}}>粘贴内容</button>
+  return <LocalDialog title={tr('导入脉络')} onClose={onClose} closeDisabled={busy || reading}>
+    <div className="gft-local-provider-tabs" role="group" aria-label={tr('导入方式')}>
+      <button disabled={busy || reading} aria-pressed={tab==='files'} onClick={()=>{setTab('files');setError('');setMessage('');}}>{tr('文件')}</button>
+      <button disabled={busy || reading} aria-pressed={tab==='text'} onClick={()=>{setTab('text');setError('');setMessage('');}}>{tr('粘贴内容')}</button>
     </div>
-    <p className="gft-local-note">每份文件会成为一条新脉络。GFT 脉络包保留图文与来源；文本进入文稿，可再点击「整理」。</p>
+    <p className="gft-local-note">{tr('每份文件会成为一条新脉络。GFT 脉络包保留图文与来源；文本进入文稿，可再点击「整理」。')}</p>
     {tab==='files'?<>
       <div className="gft-local-import-drop" data-dragging={dragging} onDragOver={e=>{e.preventDefault();if(!busy && !reading) setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);void add([...e.dataTransfer.files]);}}>
-        <p>把文件拖到这里</p><button disabled={busy || reading} onClick={()=>ref.current?.click()}>{reading?'正在读取…':'选择文件'}</button>
-        <small>支持多选 · GFT .json / .md / .txt</small>
+        <p>{tr('把文件拖到这里')}</p><button disabled={busy || reading} onClick={()=>ref.current?.click()}>{tr(reading?'正在读取…':'选择文件')}</button>
+        <small>{tr('支持多选 · GFT .json / .md / .txt')}</small>
       </div>
       <input ref={ref} hidden style={{display:'none'}} type="file" multiple accept=".json,.md,.txt" onChange={e=>{const files=[...(e.target.files || [])];e.target.value='';void add(files);}} />
-      {!!items.length && <ul className="gft-local-import-list">{items.map(item=><li key={item.id}><div><span>{item.name}</span><small className={item.error?'gft-local-error':''}>{item.error || (item.state==='done'?'已导入':'待导入')}</small></div><button disabled={busy} aria-label={`移除 ${item.name}`} onClick={()=>setItems(current=>current.filter(row=>row.id!==item.id))}>×</button></li>)}</ul>}
+      {!!items.length && <ul className="gft-local-import-list">{items.map(item=><li key={item.id}><div><span>{item.name}</span><small className={item.error?'gft-local-error':''}>{tr(item.error || (item.state==='done'?'已导入':'待导入'))}</small></div><button disabled={busy} aria-label={tr('移除 {name}', {name:item.name})} onClick={()=>setItems(current=>current.filter(row=>row.id!==item.id))}>×</button></li>)}</ul>}
     </>:<>
-      <label>名称（可选）<input value={name} disabled={busy} onChange={e=>setName(e.target.value)} placeholder="导入的脉络" /></label>
-      <label>内容<textarea rows={8} value={text} disabled={busy} onChange={e=>setText(e.target.value)} placeholder="粘贴文稿、Markdown，或完整的 GFT 脉络包…" /></label>
+      <label>{tr('名称（可选）')}<input value={name} disabled={busy} onChange={e=>setName(e.target.value)} placeholder={tr('导入的脉络')} /></label>
+      <label>{tr('内容')}<textarea rows={8} value={text} disabled={busy} onChange={e=>setText(e.target.value)} placeholder={tr('粘贴文稿、Markdown，或完整的 GFT 脉络包…')} /></label>
     </>}
-    {error && <p role="alert" className="gft-local-error">{error}</p>}
-    {message && <p role="status" className="gft-local-note">{message}</p>}
-    <div className="gft-local-dialog-actions"><button disabled={busy || reading} onClick={onClose}>关闭</button><button className="gft-local-primary" disabled={busy || reading || (tab==='text'?!text.trim():!items.some(item=>item.payload && item.state!=='done'))} onClick={()=>void run()}>{busy?'正在导入…':'导入为新脉络'}</button></div>
+    {error && <p role="alert" className="gft-local-error">{tr(error)}</p>}
+    {message && <p role="status" className="gft-local-note">{tr(message,messageValues)}</p>}
+    <div className="gft-local-dialog-actions"><button disabled={busy || reading} onClick={onClose}>{tr('关闭')}</button><button className="gft-local-primary" disabled={busy || reading || (tab==='text'?!text.trim():!items.some(item=>item.payload && item.state!=='done'))} onClick={()=>void run()}>{tr(busy?'正在导入…':'导入为新脉络')}</button></div>
   </LocalDialog>;
 }

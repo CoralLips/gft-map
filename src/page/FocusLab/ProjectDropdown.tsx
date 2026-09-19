@@ -9,6 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { confirmDialog } from '../../component/common/ConfirmDialog';
 import type { MapProject } from '../../store/thinkingMap/runtime';
 import styles from '../FocusLab.module.css';
+import { useT, t } from '../../i18n';
 
 interface ProjectDropdownProps {
   projects: MapProject[];
@@ -31,6 +32,7 @@ export function ProjectDropdown({
   onRenameProject,
   onImport,
 }: ProjectDropdownProps) {
+  const tr = useT();
   const [isOpen, setIsOpen] = useState(false);
   // 行内改名：哪条脉络正在改名 + 草稿
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -59,8 +61,8 @@ export function ProjectDropdown({
   const handleDelete = useCallback(async (e: React.MouseEvent, project: MapProject) => {
     e.stopPropagation();
     const ok = await confirmDialog({
-      title: '删除脉络',
-      message: `确定要删除「${project.name || '未命名脉络'}」吗？\n\n这条脉络下所有节点会一起删除`,
+      title: t('删除脉络'),
+      message: t('确定要删除「{name}」吗？\n\n这条脉络下所有节点会一起删除', {name:project.name || t('未命名脉络')}),
       danger: true,
     });
     if (ok) {
@@ -74,7 +76,7 @@ export function ProjectDropdown({
   // 刷新首帧：列表未到但已有选中 id → 用缓存名占位，不闪"选择项目"
   const displayName = currentProject?.name
     ?? (currentProjectId ? (fallbackName ?? '…') : null)
-    ?? '选择脉络';
+    ?? tr('选择脉络');
 
   return (
     <div className={styles.projectDropdown} ref={dropdownRef}>
@@ -122,11 +124,11 @@ export function ProjectDropdown({
                       setIsOpen(false);
                     }}
                   >
-                    {p.name || '未命名脉络'}
+                    {p.name || tr('未命名脉络')}
                   </button>
                   <button
                     className={styles.projectDropdownDeleteBtn}
-                    title="重命名"
+                    title={tr('重命名')}
                     onClick={(e) => {
                       e.stopPropagation();
                       setRenameDraft(p.name || '');
@@ -154,9 +156,9 @@ export function ProjectDropdown({
               setIsOpen(false);
             }}
           >
-            + 新建脉络
+            + {tr('新建脉络')}
           </button>
-          {onImport && <button className={styles.projectDropdownCreate} onClick={() => { setIsOpen(false); onImport(); }}>导入脉络包…</button>}
+          {onImport && <button className={styles.projectDropdownCreate} onClick={() => { setIsOpen(false); onImport(); }}>{tr('导入脉络包…')}</button>}
         </div>
       )}
     </div>

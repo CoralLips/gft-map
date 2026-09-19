@@ -160,10 +160,11 @@
 .stopOnHover:hover .runLabel { visibility: hidden; }
 .stopOnHover:hover .stopLabel { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; }
 
-/* 普通主题文字，最多两行，悬停看全文；与 Doc 共用同一份。 */
+/* 范围默认单行；原生展开只改变显示，不改动整理规则。 */
 .theme {
   display: block;
   flex-shrink: 0;
+  box-sizing: border-box;
   width: 100%;
   padding: 4px 14px;
   font-size: 12px;
@@ -174,14 +175,34 @@
   border: none;
   border-bottom: 1px solid var(--poe-gray-100);
 }
+.themeSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.themeSummary::-webkit-details-marker { display: none; }
+.themeSummary:focus-visible {
+  outline: 2px solid var(--poe-blue-dark);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .themeText {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   overflow: hidden;
 }
+.themeToggle { flex-shrink: 0; }
+.themeToggle::after { content: attr(data-expand); }
+.theme[open] .themeText {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.theme[open] .themeToggle::after { content: attr(data-collapse); }
 
 /* Narrow panels wrap actions without squeezing labels. */
 .toolbar .btnGroup { min-width: 0; max-width: 100%; flex-wrap: wrap; }
