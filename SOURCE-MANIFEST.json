@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "55fb6bfc01c41093518a3abd64652a764dad53ae",
+  "sourceRevision": "a7324089fed4698179d19b2d4d1481ebc68b783b",
   "sourceDirty": true,
   "version": "0.1.2",
   "files": [
@@ -104,7 +104,7 @@
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "5b865b8f59ac673cb5a77d886f5b9e84aca38e35b48239f65120cb99993b5498"
+      "sha256": "882816855384bf0c0e8c80fe987c560d8e0f8d0ce2fea9a2d1022fa17abf1cd8"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -234,7 +234,7 @@
     {
       "path": "apps/gft-local/showcase/index.html",
       "source": "apps/gft-local/showcase/index.html",
-      "sha256": "be95de4de4d89ffcbb4497deb3dfb009892de6f12b2e8a3bd0871a812a7e7f4b"
+      "sha256": "05fc7a7dbb987191d01a74f883e7918709a90da40d3424864213339c4d49d24b"
     },
     {
       "path": "apps/gft-local/showcase/runtime.ts",
@@ -459,7 +459,7 @@
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "5b865b8f59ac673cb5a77d886f5b9e84aca38e35b48239f65120cb99993b5498"
+      "sha256": "882816855384bf0c0e8c80fe987c560d8e0f8d0ce2fea9a2d1022fa17abf1cd8"
     },
     {
       "path": "skills/gft-map/LICENSE",
