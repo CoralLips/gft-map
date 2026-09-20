@@ -2,3 +2,10 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 @media(max-width:1000px){.hero{gap:25px;padding:50px 0 65px}.hero h1{font-size:42px}.hero-lead{font-size:16px}.hero-lead br{display:none}.story-layout{gap:30px;grid-template-columns:300px minmax(0,1fr)}.portable{gap:45px}.start-layout{gap:35px}.example-copy{padding:20px 17px}.example-copy h3{font-size:17px}footer{padding:35px 32px;flex-wrap:wrap}footer p{display:none}}
 @media(max-width:700px){.site-nav{padding:20px}.site-nav nav{gap:16px}.site-nav nav a{font-size:12px}.site-nav nav a:nth-child(2){display:none}.brand{font-size:19px}main{padding:0 20px}.hero{grid-template-columns:1fr;gap:32px;padding:38px 0 60px}.hero h1{font-size:43px}.hero-preview{transform:none}.hero-lead{font-size:17px}.section{padding:44px 0 50px}.section h2{font-size:27px}.section-heading>p{font-size:14px}.example-grid{grid-template-columns:1fr;gap:25px}.example-copy{padding:21px}.example-copy h3{font-size:21px}.story-layout,.portable,.start-layout{grid-template-columns:1fr;gap:30px}.story-visual{order:-1}.story-text article{padding-bottom:26px}.portable>div:first-child>p{font-size:15px}.portable h2 br{display:none}.install-box{padding:22px}.first-use{padding-top:0}footer{padding:30px 20px;gap:25px;display:block}footer>div{margin-top:22px;gap:25px}}
+
+.site-nav { gap: 20px; } .site-nav nav { margin-left: auto; align-items: center; }
+.site-language { display: inline-flex; flex: none; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 9px; background: #f2f3f8; }
+.site-language a { padding: 5px 10px; border-radius: 6px; font-size: 12px; line-height: 20px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.site-language a:hover { background: var(--white); }
+.site-language a[aria-current="page"] { background: var(--white); color: var(--purple); font-weight: 600; box-shadow: 0 1px 3px #0001; }
+@media(max-width:700px) { .site-nav { flex-wrap: wrap; gap: 14px; } .site-nav nav { order: 3; width: 100%; justify-content: space-between; } .site-language { margin-left: auto; } }

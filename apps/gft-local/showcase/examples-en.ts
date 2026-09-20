@@ -1,0 +1,92 @@
+import type { Example } from './examples';
+
+// Translations of the same authored scenarios, not new user evidence.
+export const englishExamples: readonly Example[] = [
+  {
+    id: 'product', name: 'Product launch: get the first person using it', category: 'Product decisions',
+    headline: 'Continue the discussion without reopening every decision.',
+    situation: 'Positioning yesterday, features today, a release next week. Keep the decisions, reasons, and open questions together.',
+    scope: 'Track the first users, core workflow, and release tradeoffs for a personal bookkeeping app. Exclude branding and long-term fundraising.',
+    summary: 'Start with freelancers who struggle to keep recording expenses. Complete the flow from manual entry to a monthly overview; postpone bank sync. Next, let three target users record a transaction independently and observe where they get stuck.',
+    sections: [
+      ['Who it serves', 'The recurring concern in this fictional discussion is not knowing where the money went at month end. Focus on freelancers with irregular income and scattered expenses.'],
+      ['First release', 'Check whether people keep recording before adding automation. Help someone enter and understand one transaction before building every bookkeeping feature.'],
+      ['Next validation', 'A smooth demonstration does not prove continued use. Ask users to record a real transaction independently and return a few days later; note where they still need help.'],
+    ],
+    nodes: [
+      ['◆', 'Who it serves', 'Start with freelancers', 'Irregular income and scattered expenses define the initial audience. Look for recurring problems within that group.'],
+      ['◆', 'First release', 'Complete one manual entry', 'Enter an amount, choose a category, save, and immediately see the change in monthly totals.'],
+      ['⏸', 'First release', 'Postpone bank sync', 'Integration and permissions would expand the first release. Test whether the manual workflow has lasting value first.'],
+      ['◇', 'Next validation', 'Let three users try it independently', 'Do not operate it for them. Record difficulties during entry and review.'],
+      ['？', 'Next validation', 'Will they return in a few days?', 'This remains untested. Judge the first session separately from continued use.'],
+      ['◆', 'Next validation', 'Fix observed obstacles next', 'Prioritize problems that prevent task completion, rather than adding features to lengthen a checklist.'],
+    ],
+    edges: [[0,1],[1,2],[1,3],[3,4],[4,5]],
+    messages: [
+      ['user', 'I want to build a bookkeeping app for freelancers. Their income is irregular, and some cannot tell where the money went. Is automatic bank import essential?'],
+      ['assistant', 'Start with manual entry and a monthly review. Bank integration and permissions could delay release. First check whether the target users will keep recording.'],
+      ['user', 'Then focus on freelancers: enter a transaction and see this month. Bank sync comes later. Let three people try independently, without me clicking for them. Check whether they return after a few days.'],
+      ['user', 'Colors can wait; fundraising is out of scope. Base the next version on where they actually get stuck.'],
+    ],
+    editTip: 'In Doc, replace “three target users” with your own plan. Open “Continue in another chat” and check that the reading preview includes your edit.',
+    nextPrompt: 'read “Product launch: get the first person using it” and help me prepare a user trial within the current release scope. Do not bring bank sync back into the first release.',
+  },
+  {
+    id: 'writing', name: 'Article: why remote teams keep meeting', category: 'Writing',
+    headline: 'Keep your position and material when you change chats.',
+    situation: 'You discussed an opening, cut an argument, and collected a few stories. Tomorrow, you want to continue those choices instead of receiving another generic outline.',
+    scope: 'Write an experience-based article about meeting overload in remote teams. Keep the author’s position, concrete situations, limits of the argument, and missing material.',
+    summary: 'Use meetings for decisions that need joint discussion; move status updates beforehand. Open with three consecutive Monday meetings. Explain how missing written context causes repeated discussion without claiming all meetings are wasteful.',
+    sections: [
+      ['Author’s position', 'Meetings themselves are not the problem. Without written context, everyone spends time catching up. Joint discussion still matters when there is a real disagreement.'],
+      ['Story and evidence', 'Open with three Monday meetings that delayed actual work until afternoon. Follow with an example of sharing a decision document in advance; do not turn one person’s experience into a universal claim.'],
+      ['What to write next', 'Add details of that decision meeting: what was shared, which disagreements remained, and who decided. End with a small action readers can try.'],
+    ],
+    nodes: [
+      ['◆', 'Author’s position', 'Write the context before the meeting', 'Put status, constraints, and open decisions on one page so participants can read ahead.'],
+      ['◆', 'Author’s position', 'Use meetings for joint decisions', 'Discuss real disagreements together; reading together is not the same as deciding together.'],
+      ['◆', 'Story and evidence', 'Open with three back-to-back meetings', 'Describe what happened and why work began only in the afternoon, rather than complaining abstractly about efficiency.'],
+      ['✗', 'Author’s position', 'Cut “all meetings are a waste”', 'The material does not support that claim, and it obscures cases that need a live discussion.'],
+      ['？', 'Story and evidence', 'Add the before-and-after details', 'Show what the written document changed rather than saying the meeting felt more productive.'],
+      ['◇', 'What to write next', 'Try one page before the next meeting', 'Write down context and questions in advance; use the meeting for remaining disagreements.'],
+    ],
+    edges: [[2,0],[0,1],[1,5],[3,1],[4,5]],
+    messages: [
+      ['user', 'I want to write about remote teamwork. Three meetings on Monday morning meant I only started work in the afternoon. Everyone kept filling in background information.'],
+      ['assistant', 'You could open with that situation and ask whether all meetings should be canceled.'],
+      ['user', 'No, I am not saying all meetings are wasteful. We still need to discuss disagreements. Write the context first and keep meetings for joint decisions.'],
+      ['user', 'We once shared a decision document beforehand and the meeting was more focused, but I need to add the details. End with one suggestion: write a page of context and questions before the next meeting.'],
+    ],
+    editTip: 'Open Doc and add your own experience to the before-and-after details. Your edit stays in this tab and will be included in the downloaded map.',
+    nextPrompt: 'read “Article: why remote teams keep meeting” and continue the opening. Keep the position that meetings serve joint decisions; do not restore the rejected blanket claim.',
+  },
+  {
+    id: 'engineering', name: 'Technical plan: resume interrupted uploads', category: 'Technical planning',
+    headline: 'Keep the tradeoffs and reasons, not just a diagram.',
+    situation: 'You have discussed constraints, postponed alternatives, and the next tests. Take those decisions into the next coding conversation.',
+    scope: 'Track resumable large-file uploads, their constraints, and validation plan. Exclude unrelated colors and routine tasks.',
+    summary: 'Keep the current storage provider and implement chunked uploads with retries. The server records upload sessions and acknowledged chunks; clients query that state before resuming. Completion must be idempotent. Test interrupted connections, repeated completion, and expiry cleanup before any storage migration.',
+    sections: [
+      ['Recovery flow', 'Only chunks acknowledged by the server count as complete. On reopening the page, query the upload session and send only missing chunks. Local progress is not authoritative.'],
+      ['Constraints and tradeoffs', 'Keep the existing storage provider this round. Do not couple reliable uploads to an infrastructure migration. Check session ownership and make completion safe to retry.'],
+      ['Validation plan', 'Interrupt both chunk transfers and completion requests, then verify file integrity after recovery. Also test repeated completion, expired sessions, and cleanup of unfinished chunks.'],
+    ],
+    nodes: [
+      ['◆', 'Recovery flow', 'Trust server-confirmed progress', 'Local cache improves the experience but cannot mark unacknowledged chunks as complete.'],
+      ['◆', 'Recovery flow', 'Send only missing chunks', 'Query acknowledged chunks through the upload session rather than restarting the entire file.'],
+      ['◆', 'Constraints and tradeoffs', 'Make completion idempotent', 'Repeated requests must not duplicate merges or files; they should return the same completion result.'],
+      ['⏸', 'Constraints and tradeoffs', 'Keep the current storage provider', 'Validate recovery on the existing service before taking on a separate migration.'],
+      ['？', 'Validation plan', 'Does recovery preserve file integrity?', 'Check the file’s contents after resuming, not just whether the progress bar reaches 100%.'],
+      ['◇', 'Validation plan', 'Test retries and expired sessions', 'Cover duplicate completion, unauthorized access to upload sessions, and cleanup of expired chunks.'],
+    ],
+    edges: [[0,1],[1,2],[1,3],[2,4],[4,5]],
+    messages: [
+      ['user', 'Large uploads currently restart after an interruption. I want chunking and resume, but do not change the storage provider this round.'],
+      ['assistant', 'Assign an upload session and record acknowledged chunks on the server. On recovery, query the session and send only the missing chunks.'],
+      ['user', 'Yes, trust server progress. Completion requests may repeat and must be idempotent. Check file integrity after recovery, not just the progress bar.'],
+      ['user', 'Add disconnections, repeated completion, session ownership, and expiry cleanup to the test plan. Leave page colors out of scope.'],
+    ],
+    editTip: 'Open a Map node to read its reasoning, then edit the validation plan in Doc. Your next coding conversation can read the current plan.',
+    nextPrompt: 'read “Technical plan: resume interrupted uploads” and break down the implementation under its current constraints. Validate recovery and idempotent completion first; do not migrate storage this round.',
+  },
+];

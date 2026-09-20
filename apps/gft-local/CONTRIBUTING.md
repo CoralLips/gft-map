@@ -58,3 +58,7 @@ npm run preview:site
 `SOURCE-MANIFEST.json` 只记录官方导出的来源，不参与普通构建、PR 检查或打包。`check:source` 是维护者可选的原始快照核对工具；修改源码后不需要运行它或更新校验值。发行附件中的 `SHA256SUMS` 用于核对安装包是否完整。
 
 源码按 MIT 许可开放。安装包附带实际打包依赖的许可证；第三方 Agent 和模型服务遵循各自条款。
+
+## 许可证范围
+
+GFT Map 自有代码采用 MIT。安装包中的第三方组件分别遵循自身许可证，完整声明见 Skill 包的 `THIRD_PARTY_NOTICES.txt`。其中 Claude Agent SDK 遵循 Anthropic 的单独条款，不属于 MIT 授权范围；修改、再发行或商用集成时应另行核对其条款。

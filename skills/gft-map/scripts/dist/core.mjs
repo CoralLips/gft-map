@@ -640,7 +640,7 @@ function renderDocRaw(st, source = false) {
     }
     byDomain.get(b.domain).push(b);
   }
-  const pinned = ["\u4E3B\u9898", "\u4E3B\u7EBF"].filter((d) => byDomain.has(d));
+  const pinned = ["\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].filter((d) => byDomain.has(d));
   const order = [...pinned, ...seen.filter((d) => !pinned.includes(d))];
   const out = [];
   for (const d of order) {
@@ -1460,7 +1460,7 @@ function mapToBundle(name, map) {
   return createTopicBundle(name, { ledger: absorbLegacyRow(map.ledger ?? "", map).ledger, raw: map.raw ?? "" });
 }
 function topicSummary(ledger) {
-  const text = liveProse(parseLedger(ledger)).filter((p) => p.domain === "\u4E3B\u7EBF").flatMap((p) => p.lines).join(" ").replace(/\s+/g, " ").trim();
+  const text = liveProse(parseLedger(ledger)).filter((p) => p.domain === "\u4E3B\u7EBF" || p.domain === "Main thread").flatMap((p) => p.lines).join(" ").replace(/\s+/g, " ").trim();
   const chars = Array.from(text);
   return chars.length > 240 ? chars.slice(0, 240).join("") + "\u2026" : text;
 }

@@ -1,6 +1,18 @@
 import { appendLines, judgmentLines, proseLines, relationLine } from '../../../src/service/ledger';
 import { appendSourceLog } from '../../../src/service/sourceLog';
 import { createTopicBundle } from '../../../src/service/topicBundle';
+import { englishExamples } from './examples-en';
+import type { ShowcaseLanguage } from './locale';
+
+export interface Example {
+  id: 'product' | 'writing' | 'engineering';
+  name: string; category: string; headline: string; situation: string; scope: string; summary: string;
+  sections: readonly (readonly [string, string])[];
+  nodes: readonly (readonly [Parameters<typeof judgmentLines>[1], string, string, string])[];
+  edges: readonly (readonly [number, number])[];
+  messages: readonly (readonly ['user' | 'assistant', string])[];
+  editTip: string; nextPrompt: string;
+}
 
 // Authored demonstration material, never copied from a user's chats.
 export const examples = [
@@ -93,18 +105,20 @@ export const examples = [
   },
 ] as const;
 
-export function exampleBundle(example: typeof examples[number]) {
+export function getExamples(lang: ShowcaseLanguage): readonly Example[] { return lang === 'en' ? englishExamples : examples; }
+
+export function exampleBundle(example: Example, lang: ShowcaseLanguage = 'zh') {
   const ledger = appendLines('', [
-    '[场次 2026-09-18T08:00:00Z · GFT Map 公开示例 · 人工编写]',
+    `[场次 2026-09-18T08:00:00Z · ${lang === 'en' ? 'GFT Map authored example' : 'GFT Map 公开示例 · 人工编写'}]`,
     ...proseLines('p1', '主题', example.scope),
-    ...proseLines('p2', '主线', example.summary),
+    ...proseLines('p2', lang === 'en' ? 'Main thread' : '主线', example.summary),
     ...example.sections.flatMap(([domain, text], i) => proseLines(`p${i + 3}`, domain, text)),
     ...example.nodes.flatMap(([mark, domain, title, body], i) => judgmentLines(`j${i + 6}`, mark, domain, title, body)),
     ...example.edges.map(([from, to]) => relationLine(`j${to + 6}`, `j${from + 6}`)),
   ]);
   const raw = appendSourceLog('', example.messages.map(([role, content], i) => ({
     v: 1 as const, provider: 'example', sessionId: `example-${example.id}`, id: `m${i + 1}`, role, content,
-    title: `${example.category} · 人工编写的示例讨论`, ts: Date.UTC(2026, 8, 18, 8, i),
+    title: `${example.category} · ${lang === 'en' ? 'Authored example discussion' : '人工编写的示例讨论'}`, ts: Date.UTC(2026, 8, 18, 8, i),
   })));
   return createTopicBundle(example.name, { ledger, raw });
 }

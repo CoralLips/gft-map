@@ -141,7 +141,7 @@ function renderDocRaw(st: LedgerState, source = false): string {
     byDomain.get(b.domain)!.push(b);
   }
   // 主题第一、主线第二（这张脉络记什么、现在到哪了），其余按首次出现
-  const pinned = ['主题', '主线'].filter(d => byDomain.has(d));
+  const pinned = ['主题', '主线', 'Main thread'].filter(d => byDomain.has(d));
   const order = [...pinned, ...seen.filter(d => !pinned.includes(d))];
   const out: string[] = [];
   for (const d of order) {

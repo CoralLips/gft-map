@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "1ebda9e1d315bc3531efe8052a9f95a619390d11",
+  "sourceRevision": "d1a65352b1fafd211075df415d52163cb5f4fedb",
   "sourceDirty": false,
   "version": "0.2.0",
   "files": [
@@ -69,7 +69,7 @@
     {
       "path": "apps/gft-local/CONTRIBUTING.md",
       "source": "apps/gft-local/CONTRIBUTING.md",
-      "sha256": "b516cd8258faa94d469ce77c7e1802ecf079ba1365944c1b0748c6edf850d901"
+      "sha256": "8b85c4a9f17601193d72f8d455511f1c6fac2b0b85038aaa7ee3862997537cfd"
     },
     {
       "path": "apps/gft-local/core.ts",
@@ -109,12 +109,12 @@
     {
       "path": "apps/gft-local/README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "9ad340a3c4241edd21acca5ad42b74dd9d82c7a24b6385ac5ba1859fa7c8a6a9"
+      "sha256": "aad3cafe85f8cb1d65cd0e434f81d38643ea387756c00d82809dc02154ae0f8f"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "e8bdbedb11db94fe086793efba26296ff6c760ed8bcf27f7d1e25c94fc2db56f"
+      "sha256": "14814674a21e4f187ce4acc2b5ddccca922388be7d4bb6680407b49398acfb5a"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -169,7 +169,7 @@
     {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "0c0b28b2ceeeebd1eee82e4f33ff6299cdd6c52a3a84d9e3aaf66812a0b120c6"
+      "sha256": "43be525571da7b29797fd5693a25b5b5ff97319e993e3e6bb8a3605754e9eb51"
     },
     {
       "path": "apps/gft-local/release/verify-source.mjs",
@@ -187,6 +187,11 @@
       "sha256": "668c46036ec6d5032a1f2ac097bf1ea50d955b7dee759d547c8f7c8ff9887add"
     },
     {
+      "path": "apps/gft-local/showcase/assets/engineering.en.png",
+      "source": "apps/gft-local/showcase/assets/engineering.en.png",
+      "sha256": "9715e71096a9e1247102b15ba946efd47979083ac7cfcb0651b067c5aff1312a"
+    },
+    {
       "path": "apps/gft-local/showcase/assets/engineering.png",
       "source": "apps/gft-local/showcase/assets/engineering.png",
       "sha256": "8df574b00259d8370db6aed73b25d60e3944967d6d09e78ced442f160db9a271"
@@ -195,6 +200,11 @@
       "path": "apps/gft-local/showcase/assets/mark.svg",
       "source": "apps/gft-local/showcase/assets/mark.svg",
       "sha256": "f2f5d15b75b9b5424f7b41c79ede158d12cf2b709a5b36a0a0b02ce6608c5074"
+    },
+    {
+      "path": "apps/gft-local/showcase/assets/product.en.png",
+      "source": "apps/gft-local/showcase/assets/product.en.png",
+      "sha256": "f8b9c9584aa1425478a42b242c292558018cb0dac931a000d2d911306914ebd7"
     },
     {
       "path": "apps/gft-local/showcase/assets/product.png",
@@ -207,6 +217,11 @@
       "sha256": "197a4de76bb86fdd51401a916e8c7c5f6c14c7dbbc8a28b4956816268bb217c1"
     },
     {
+      "path": "apps/gft-local/showcase/assets/writing.en.png",
+      "source": "apps/gft-local/showcase/assets/writing.en.png",
+      "sha256": "fecf3944735a4865c0026fa9208d8a45c3b1c2f50739bedd705394c023d3283d"
+    },
+    {
       "path": "apps/gft-local/showcase/assets/writing.png",
       "source": "apps/gft-local/showcase/assets/writing.png",
       "sha256": "e7ae8a24a457319f3bc77e6d6ad55c9212346c5609db49f338c49bb955172e7d"
@@ -214,17 +229,17 @@
     {
       "path": "apps/gft-local/showcase/build.mjs",
       "source": "apps/gft-local/showcase/build.mjs",
-      "sha256": "444a0b81f2a45dce7dbc64c5d1108f1a4b0634cab00d82b0a4b662c52485040b"
+      "sha256": "6302e7c26c7a6dfdb598fe97344b5ee56ac62c26d24408dded90c2ba40f70cce"
     },
     {
       "path": "apps/gft-local/showcase/check.mjs",
       "source": "apps/gft-local/showcase/check.mjs",
-      "sha256": "746d2459aec9baf6d47b7fb1d72e14f1d81807ddf56fde0a9fa7e7c61939e435"
+      "sha256": "3cf6449ea4724dc1c5d760bfb25a3f7abc603857049173263f3df007fc49d415"
     },
     {
       "path": "apps/gft-local/showcase/demo.css",
       "source": "apps/gft-local/showcase/demo.css",
-      "sha256": "b8d667acf5fddc3dba947a7615f5c296d2c189ab7e4f486f68815fe632a5f83e"
+      "sha256": "a99584df576bd3b6831fc1f34c27ea376dbab5831788c72cc25281dcf33e968f"
     },
     {
       "path": "apps/gft-local/showcase/demo.html",
@@ -234,32 +249,47 @@
     {
       "path": "apps/gft-local/showcase/demo.tsx",
       "source": "apps/gft-local/showcase/demo.tsx",
-      "sha256": "d47c2aea283b23aaed6399aa38ed701b0f7b7f132728a8e444c425e402786538"
+      "sha256": "00e4c5753e5c054d4ad3221eab932b6b80453c3f658245e3521812f40d870f53"
+    },
+    {
+      "path": "apps/gft-local/showcase/examples-en.ts",
+      "source": "apps/gft-local/showcase/examples-en.ts",
+      "sha256": "2eca3e78b8c3d9dc45d080030dc8dc57023e91ee69be18749f610e0b233ab835"
     },
     {
       "path": "apps/gft-local/showcase/examples.ts",
       "source": "apps/gft-local/showcase/examples.ts",
-      "sha256": "a2864fc4de68be3e4f196dc81cb666214c78e74d4f8e7df67f2b89a4289943d9"
+      "sha256": "baff6b9a4c48172d3dcd4a2563c7e90d5a1e0be9826e612bf930dcc599b37074"
+    },
+    {
+      "path": "apps/gft-local/showcase/index.en.html",
+      "source": "apps/gft-local/showcase/index.en.html",
+      "sha256": "87762c7b0c56189b67dbb7aa63a071fd2096e58cd7d44e617598c1ce268889aa"
     },
     {
       "path": "apps/gft-local/showcase/index.html",
       "source": "apps/gft-local/showcase/index.html",
-      "sha256": "bc04bef4029c162b3cb4e8fafed2f71d056894a4a26c5597fedb1dbd05bcd7ec"
+      "sha256": "5b3ba761e06e441f24fd80cc8c5e0716bddfd28279a4453d91494d9737ba8066"
+    },
+    {
+      "path": "apps/gft-local/showcase/locale.ts",
+      "source": "apps/gft-local/showcase/locale.ts",
+      "sha256": "0a650e176f0af65bca3abcc291a4f33b7670e63e9482c1adb32f9ed99b0c443f"
     },
     {
       "path": "apps/gft-local/showcase/runtime.ts",
       "source": "apps/gft-local/showcase/runtime.ts",
-      "sha256": "04eb11e797791397b503746d9c9d52b9b574db2e5e1f669d438b9cdd08f1c6e4"
+      "sha256": "d7e3c30945f8fb664808d095c079bf961fd7d53baa962ba36fa659558232a8fb"
     },
     {
       "path": "apps/gft-local/showcase/site.css",
       "source": "apps/gft-local/showcase/site.css",
-      "sha256": "d5f0836b9a09fb03d0899e6603d683f13c04439d1e356bce0c577848b400f0d2"
+      "sha256": "e86cae805d4fb5379fcf602a281d548240308bbd7bdf7117679c88ec3eff44af"
     },
     {
       "path": "apps/gft-local/showcase/site.js",
       "source": "apps/gft-local/showcase/site.js",
-      "sha256": "5e7eba9249e3897044dc8cf6d0ee1bf1dadf14f936634b2e526e6201803e96f2"
+      "sha256": "687b83e82c1d02252c00e04d52215f1ab64fe91351cc8bf77fd9053eabde1fcd"
     },
     {
       "path": "apps/gft-local/skill/references/acp.md",
@@ -484,12 +514,12 @@
     {
       "path": "README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "9ad340a3c4241edd21acca5ad42b74dd9d82c7a24b6385ac5ba1859fa7c8a6a9"
+      "sha256": "aad3cafe85f8cb1d65cd0e434f81d38643ea387756c00d82809dc02154ae0f8f"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "e8bdbedb11db94fe086793efba26296ff6c760ed8bcf27f7d1e25c94fc2db56f"
+      "sha256": "14814674a21e4f187ce4acc2b5ddccca922388be7d4bb6680407b49398acfb5a"
     },
     {
       "path": "skills/gft-map/LICENSE",
@@ -544,7 +574,7 @@
     {
       "path": "skills/gft-map/scripts/dist/core.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "31263d01589293cda893d43d710b7bfa2941a947dfb3b2523f7141b6d22e8e90"
+      "sha256": "eb439e03b1435397b63e2aa73ae662765a800ccd858988f160b47d2594f0d247"
     },
     {
       "path": "skills/gft-map/scripts/dist/mcp.mjs",
@@ -564,7 +594,7 @@
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "609d8478194b9fe16b0ad7c181f0e05b9515e7d6f6d2a2f91f410f31edf4bc44"
+      "sha256": "16dfa24407bb57f2dc17dbaadabb4baad985418548ab4f76a76a973c50a60308"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -1089,7 +1119,7 @@
     {
       "path": "src/service/ledger/render.ts",
       "source": "src/service/ledger/render.ts",
-      "sha256": "8b2beec2337e9900cba6d505fb10e6edc812781eefedfe3ff6e221f4674a6b44"
+      "sha256": "bb71bd3c4b1d83d46995f8f831758e30e8f4b75d49e6f96e4d11d876e9e3c347"
     },
     {
       "path": "src/service/ledger/text.ts",
@@ -1134,7 +1164,7 @@
     {
       "path": "src/service/topicBundle.ts",
       "source": "src/service/topicBundle.ts",
-      "sha256": "3e1faeee00099f39a59ac381a3bef055c26702954451ca5fa5fea0d94b420583"
+      "sha256": "34ffdf65f2d80810c0b5a650da814e777293edcdc90a18ed7b74be7dc16f3fec"
     },
     {
       "path": "src/service/whiteboxDoc.ts",

@@ -7,7 +7,7 @@ import { build } from 'esbuild';
 const source = path.dirname(fileURLToPath(import.meta.url));
 const output = path.resolve(source, '../site-dist');
 // Relative assets must keep working below the GitHub Pages repository prefix.
-for (const file of ['index.html', 'demo.html']) {
+for (const file of ['index.html', 'index.en.html', 'demo.html']) {
   const html = await readFile(path.join(output, file), 'utf8');
   for (const [, raw] of html.matchAll(/(?:href|src|srcset)="([^"]+)"/g)) {
     if (/^(?:https?:|data:)/.test(raw)) continue;
@@ -66,6 +66,26 @@ try {
   assert.equal(messages.length, count + 3, 'Model buttons explain their boundary');
   assert.equal(reloaded.store.getState().doc, original, 'Static demo never fabricates generation');
   reloaded.flush();
+  const english = createShowcaseRuntime('product', message => messages.push(message), 'en');
+  await english.start();
+  assert.match(english.store.getState().doc, /Main thread/);
+  assert.doesNotMatch(english.store.getState().doc, /主线|五位用户独立试用/);
+  for (const id of ['product', 'writing', 'engineering']) {
+    const bundle = JSON.parse(await readFile(path.join(output, 'examples', id + '.en.gft.json'), 'utf8'));
+    await english.host.importBundle(bundle);
+    assert.equal(english.store.getState().nodes.length, 6);
+    assert.equal(english.store.getState().raw, bundle.topic.raw);
+    assert.match(english.store.getState().doc, /Main thread/, 'English main thread survives import');
+  }
+  await english.host.switchProject('product');
+  english.store.getState().setDocDraft(english.store.getState().doc + '\n\nAcceptance: five independent users.');
+  english.flush();
+  const englishReload = createShowcaseRuntime('product', () => {}, 'en');
+  await englishReload.start();
+  assert.match(englishReload.store.getState().doc, /five independent users/);
+  const chineseReload = createShowcaseRuntime('product', () => {}, 'zh');
+  await chineseReload.start();
+  assert.equal(chineseReload.store.getState().doc, original, 'Language switch cannot overwrite Chinese edits');
 } finally {
   if (previous === undefined) delete globalThis.sessionStorage;
   else globalThis.sessionStorage = previous;

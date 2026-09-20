@@ -8,19 +8,19 @@ A new chat can lose track of earlier decisions and why you made them. You can't 
 
 **GFT Map turns those decisions, reasons, and open questions into context you can inspect, correct, and take with you.** Your agent can read it when needed and continue the work in another conversation.
 
-[Explore examples](https://corallips.github.io/gft-map/) · [Get started](#get-started) · [Everyday use](#everyday-use)
+[Explore examples](https://corallips.github.io/gft-map/index.en.html) · [Get started](#get-started) · [Everyday use](#everyday-use)
 
-[![GFT Map: explore a map, edit its document, preview context, and export it](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/walkthrough.gif)](https://corallips.github.io/gft-map/demo.html?case=product)
+[![GFT Map: explore a map, edit its document, preview context, and export it](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=product)
 
 ### See it in use
 
 | Product decisions | Writing | Technical planning |
 |---|---|---|
-| [![A map of product decisions](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.png)](https://corallips.github.io/gft-map/demo.html?case=product) | [![An editable writing document](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/writing.png)](https://corallips.github.io/gft-map/demo.html?case=writing&view=doc) | [![Technical constraints and a validation plan](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/engineering.png)](https://corallips.github.io/gft-map/demo.html?case=engineering) |
+| [![A map of product decisions](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=product) | [![An editable writing document](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/writing.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) | [![Technical constraints and a validation plan](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/engineering.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering) |
 | Keep the tradeoffs and their reasons. | Organize ideas and clarify your position. | Keep track of constraints and open questions. |
-| [Open example →](https://corallips.github.io/gft-map/demo.html?case=product) | [Open example →](https://corallips.github.io/gft-map/demo.html?case=writing&view=doc) | [Open example →](https://corallips.github.io/gft-map/demo.html?case=engineering) |
+| [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=product) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering) |
 
-The examples use prewritten material, currently in Chinese. Edit and export them without installing anything or calling a model. AI-powered Update, Tidy, and Redraw require the local app.
+The examples use prewritten material, with English and Chinese versions. Edit and export them without installing anything or calling a model. AI-powered Update, Tidy, and Redraw require the local app.
 
 <a id="第一次使用"></a>
 <a id="开始使用"></a>

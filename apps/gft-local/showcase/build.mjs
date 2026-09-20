@@ -38,15 +38,16 @@ await build({
     });
   }}],
 });
-for (const name of ['index.html', 'demo.html', 'site.css', 'site.js']) await copyFile(path.join(source, name), path.join(output, name));
+for (const name of ['index.html', 'index.en.html', 'demo.html', 'site.css', 'site.js']) await copyFile(path.join(source, name), path.join(output, name));
 await cp(path.join(source, 'assets'), path.join(output, 'assets'), { recursive: true });
 await writeFile(path.join(output, '.nojekyll'), '');
 const generated = path.join(app, 'node_modules/.cache/gft-showcase');
 await mkdir(generated, { recursive: true });
 await build({ entryPoints: [path.join(source, 'examples.ts')], outfile: path.join(generated, 'examples.mjs'), bundle: true, platform: 'node', format: 'esm', target: 'node20' });
-const { examples, exampleBundle } = await import(pathToFileURL(path.join(generated, 'examples.mjs')).href);
+const { examples, exampleBundle, getExamples } = await import(pathToFileURL(path.join(generated, 'examples.mjs')).href);
 await mkdir(path.join(output, 'examples'), { recursive: true });
 for (const example of examples) await writeFile(path.join(output, 'examples', `${example.id}.gft.json`), JSON.stringify(exampleBundle(example), null, 2) + '\n');
+for (const example of getExamples('en')) await writeFile(path.join(output, 'examples', `${example.id}.en.gft.json`), JSON.stringify(exampleBundle(example, 'en'), null, 2) + '\n');
 console.log(`GFT Map showcase: ${output}`);
 if (process.argv.includes('--serve')) {
   const { createServer } = await import('node:http');
