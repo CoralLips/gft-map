@@ -12,3 +12,6 @@ html,body,#root{height:100%;margin:0}body{overflow:hidden}.demo-header,.demo-gui
 .demo-header .demo-language a[aria-current="page"] { background: var(--poe-surface); color: var(--poe-purple); font-weight: 600; box-shadow: 0 1px 3px #0001; }
 .demo-language a:focus-visible { outline: 2px solid var(--poe-purple); outline-offset: 2px; }
 .demo-install { margin-left: 0; }
+
+.demo-github { white-space: nowrap; font-size: 12px; padding: 6px 10px; border: 1px solid var(--poe-gray-200); border-radius: 7px; }
+@media(max-width: 720px) { .demo-header { gap: 10px; } }

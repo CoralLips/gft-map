@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "d1a65352b1fafd211075df415d52163cb5f4fedb",
+  "sourceRevision": "bd934fefab2226544101f4336164dc87ba92de9e",
   "sourceDirty": false,
   "version": "0.2.0",
   "files": [
@@ -239,7 +239,7 @@
     {
       "path": "apps/gft-local/showcase/demo.css",
       "source": "apps/gft-local/showcase/demo.css",
-      "sha256": "a99584df576bd3b6831fc1f34c27ea376dbab5831788c72cc25281dcf33e968f"
+      "sha256": "dd3d1feb82d1982101531f7e2938a4f9e857623a3fd9aabc6bc6e0090181dca4"
     },
     {
       "path": "apps/gft-local/showcase/demo.html",
@@ -249,7 +249,7 @@
     {
       "path": "apps/gft-local/showcase/demo.tsx",
       "source": "apps/gft-local/showcase/demo.tsx",
-      "sha256": "00e4c5753e5c054d4ad3221eab932b6b80453c3f658245e3521812f40d870f53"
+      "sha256": "c3bbc5b6fdbc546fc021ebd9556b82d4f5f33a39c2a38a80c36f957f052cd697"
     },
     {
       "path": "apps/gft-local/showcase/examples-en.ts",
