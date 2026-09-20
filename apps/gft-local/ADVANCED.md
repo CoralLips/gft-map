@@ -8,7 +8,7 @@
 
 ## 安装与启动
 
-从 GitHub 安装的命令见 [README](https://github.com/CoralLips/gft-map#开始使用)。安装工具需要 Node.js 22.20+；手动安装完整 Release 包支持 Node.js 20+。只安装聊天桌面客户端，不一定具备页面 AI 操作所需的 CLI；还需安装并登录相应 CLI。
+从 GitHub 安装的命令见 [README](https://github.com/CoralLips/gft-map/blob/main/README_ZH.md#开始使用)。安装工具需要 Node.js 22.20+；手动安装完整 Release 包支持 Node.js 20+。只安装聊天桌面客户端，不一定具备页面 AI 操作所需的 CLI；还需安装并登录相应 CLI。
 
 | 能力 | 支持情况 |
 |---|---|

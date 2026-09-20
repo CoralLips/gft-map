@@ -1,6 +1,6 @@
 # 开发与贡献
 
-这份说明面向希望修改 GFT Map、从源码运行或提交贡献的开发者。安装和使用 Skill 请看 [README](https://github.com/CoralLips/gft-map#开始使用)。
+这份说明面向希望修改 GFT Map、从源码运行或提交贡献的开发者。安装和使用 Skill 请看 [README](https://github.com/CoralLips/gft-map/blob/main/README_ZH.md#开始使用)。
 
 ## 从源码运行
 
