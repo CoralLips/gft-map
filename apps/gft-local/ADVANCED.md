@@ -4,9 +4,34 @@
 
 需要 Node.js 20 或更高版本。数据默认保存在 `~/.gft-local/`，与安装目录分开；可通过环境变量 `GFT_LOCAL_HOME` 指定其他目录。页面、CLI 和 Skill 应使用同一数据目录。
 
-## 使用 Skill 安装包
+<a id="installation"></a>
 
-将本地构建得到的 `gft-map-版本.tar.gz` 解压，把完整的 `gft-map` 目录放到所用 Agent 支持的技能目录。包内包含 `SKILL.md`、参考说明和运行脚本，无需再安装 npm 依赖，也不会自动修改 Agent 配置。安装包从 CoralLips/gft-map 的 Releases 下载。
+## 安装与启动
+
+从 GitHub 安装的命令见 [README](https://github.com/CoralLips/gft-map#开始使用)。安装工具需要 Node.js 22.20+；手动安装完整 Release 包支持 Node.js 20+。只安装聊天桌面客户端，不一定具备页面 AI 操作所需的 CLI；还需安装并登录相应 CLI。
+
+| 能力 | 支持情况 |
+|---|---|
+| 本地面板、Doc／Map 编辑、文件迁移 | 可用，无需 GFT 登录。 |
+| Codex 页面 AI 操作 | 已完成真实任务验收，使用临时 CLI 任务。 |
+| Codex／Claude Code 聊天来源 | 可选择具体会话，按各自进度收录增量。 |
+| Claude Code 页面 AI 操作 | 需配置 Claude ACP，真实生成与跨客户端续接仍待完整验收。 |
+| MCP 原生连接表单 | 可选，是否显示取决于客户端；也可使用网页入口。 |
+
+读取聊天来源和执行模型分别配置。例如，可用 Codex 执行器处理选定的 Claude Code 聊天。支持 ACP 不代表已经适配所有 Agent 的聊天历史。
+
+### 手动安装
+
+从 [Releases](https://github.com/CoralLips/gft-map/releases/latest) 下载 `gft-map-版本.tar.gz`，解压后把完整的 `gft-map` 目录放到技能目录。目录内应直接有 `SKILL.md` 和 `scripts/`，不能只复制 `SKILL.md`，也不要多套一层目录。包内已包含运行依赖，无需 `npm install`，不会自动修改 Agent 配置。GitHub 附带的 **Source code** 用于源码开发。
+
+| Agent | 用户级技能目录 |
+|---|---|
+| Codex | `~/.agents/skills/gft-map/` |
+| Claude Code | `~/.claude/skills/gft-map/` |
+
+`~` 是用户主目录；Windows 通常为 `C:\Users\你的用户名`。安装后刷新技能列表或重新打开 Agent 对话。路径说明参见 [Codex 官方文档](https://learn.chatgpt.com/docs/build-skills)与 [Claude Code 官方文档](https://code.claude.com/docs/en/skills)。
+
+### 安装后的使用
 
 在 Agent 中要求使用 `gft-map`，通过确认选项连接指定主题。每场对话可以连接多个主题，并按主题分别记录收录进度。页面和聊天使用同一组连接；断开不会删除主题内容。
 
@@ -25,6 +50,8 @@ node scripts/cli.mjs serve --port 4317
 ```
 
 打开 `http://127.0.0.1:4317`。默认模式支持查看、编辑、导入和导出；模型任务可由当前 Agent 通过 Skill 的 CLI 完成。页面中的模型操作需要启用执行器，默认页面不会唤醒当前 Agent 对话。
+
+本机已安装并登录 Codex CLI 时，用 `node scripts/cli.mjs serve --port 4317 --agent codex` 启用页面 AI 操作。Claude 的页面执行配置见下一节。自行启动时保留终端，按 Ctrl+C 停止；服务停止后不能使用面板，但已保存内容仍会保留。
 
 ## ACP 执行器
 
@@ -104,6 +131,15 @@ ACP v1 使用 `session/new` 与 `session/prompt`，没有统一的无会话单�
 - 更新收录新材料；整理当前主题的表述、手写文稿与现有判断；重画按当前主题重新筛选这份脉络保存的原始消息与 Log。长来源先提炼再成稿，不扫描其他会话、不重置增量水位。旧备份若没有来源快照，只能使用已有 Log，无法恢复从未保存的信息。
 - Log 保存已经接收的来源。“完整脉络包 .json”导出当前单个主题的名称、范围、Doc／Map 和 Log；导入建立新主题，不覆盖现有主题，也不带入浏览器草稿、会话绑定或增量进度。
 - 本地与 GFT 平台共用 `gft-theme` 格式，支持 v1/v2/v3；自由编辑过的 Log 使用 v3，旧客户端会拒绝导入。单个包上限 4 MB，超过时明确报错，不截断来源。导出菜单的“复制”提供当前 Doc，“下载”提供完整迁移文件。
+- Log 可在设置中整篇编辑、复制全部；失焦或 Ctrl+S 保存。保存改变底层来源，Doc／Map 不会立即重新生成；点击重画后使用修改后的 Log。后续更新只追加未收录的新消息。
+
+安装目录与数据目录分开，升级安装包不会替换 `~/.gft-local/` 中的数据。页面和 Skill 必须使用同一个数据目录；升级前可下载重要脉络作为备份。下载文件不包含账号凭证、聊天连接或读取进度，导入后需重新连接那台电脑上的聊天。
+
+可以在[在线示例](https://corallips.github.io/gft-map/demo.html?case=product&step=transfer)中试一次下载、导入，或把[产品讨论示例](https://corallips.github.io/gft-map/examples/product.gft.json)导入本地面板。
+
+使用联网执行器时，任务所需材料会发送给该执行器的模型服务，并使用它的额度；本地存储不代表模型离线运行。默认模型与思考强度来自执行器配置，不跟随另一场聊天输入框。
+
+<a id="account"></a>
 
 ## GFT 账号（可选）
 
@@ -119,22 +155,6 @@ ACP v1 使用 `session/new` 与 `session/prompt`，没有统一的无会话单�
 
 强制退出后若存在遗留锁或运行状态，先关闭旧服务，再运行 `node scripts/cli.mjs recover`。恢复只回收能够确认原进程已退出的锁；失败任务不会自动调用模型重试。
 
-## 从源码构建
+## 开发与贡献
 
-公开仓只包含本地应用和它直接复用的 GFT 源码。Doc、Map、状态管理、提示词及解析保持同源，云端依赖留在原项目的宿主包装中。
-
-在公开仓根目录运行：
-
-```text
-npm ci
-npm run typecheck
-npm run build
-npm test
-npm start
-```
-
-`npm run pack:skill` 根据当前源码生成 `apps/gft-local/release/gft-map-版本.tar.gz` 和 `SHA256SUMS`；打包需要系统 `tar`。`npm run build:skill` 只生成完整技能目录。修改源码后可以直接构建、测试和打包，无需修改来源清单。`npm run check:source` 仅供维护者自愿核对原始导出快照，不在普通打包和公开仓 CI 中执行。
-
-GitHub 直装使用仓库的 `skills/gft-map/`；它包含完整运行程序，由同源发行流程生成。贡献者修改 `apps/gft-local/` 或 `src/` 后，用自己新构建的目录或压缩包验收，不直接编辑此生成目录。安装工具复制 Skill，不负责执行源码构建。
-
-源码按 MIT 许可开放。安装包附带实际打包依赖的完整许可文本；构建依赖的版本与许可证记录在锁文件中。来源清单只记录源提交及导出文件，不包含原仓库历史。
+源码运行、目录结构、测试、打包和贡献流程见 [开发与贡献](CONTRIBUTING.md)。

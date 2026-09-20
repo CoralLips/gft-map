@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "b09a3f4fe20eb078f0cfe16ac7501d871fadb010",
+  "sourceRevision": "24cf24bab6633f9b62a14a24f0b798972e47b1ea",
   "sourceDirty": false,
   "version": "0.2.0",
   "files": [
@@ -44,7 +44,7 @@
     {
       "path": "apps/gft-local/ADVANCED.md",
       "source": "apps/gft-local/ADVANCED.md",
-      "sha256": "529bd0c77e9dfa89344989a0b1fb50561c7e47cc933e287af631ebf09e3f1bca"
+      "sha256": "5c22c228c1d7fe93bc60f6da047d9034c98e7efe9cb28e88c3ddfe72e8ee4791"
     },
     {
       "path": "apps/gft-local/build.mjs",
@@ -65,6 +65,11 @@
       "path": "apps/gft-local/connections.mjs",
       "source": "apps/gft-local/connections.mjs",
       "sha256": "8a65e38c02c852db8f1f30b432eca7b97c8e5cc5728584c267489afe5be008b8"
+    },
+    {
+      "path": "apps/gft-local/CONTRIBUTING.md",
+      "source": "apps/gft-local/CONTRIBUTING.md",
+      "sha256": "7c1bb54278d8633ac0a5558d0b936df20d3d9216633790db77790b40419f993a"
     },
     {
       "path": "apps/gft-local/core.ts",
@@ -104,7 +109,7 @@
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "f2d8739c9c2815000d5a48fcbad3e8823b8cfd16fb92cc26ffb27ae5e913f3c2"
+      "sha256": "20951ccca1dfe22d10fe640233e4d408c845dbc16fcf0defbe1a4f8c42588a7f"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -159,7 +164,7 @@
     {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "b221fe2a00e31792746ab07c45eb70d7f6b623faf97630d67a6ae0fe1b4e2b0a"
+      "sha256": "adea2cf069c1ddd083c7153f3367c84df755a39e922a523c0f6298eba9538143"
     },
     {
       "path": "apps/gft-local/release/verify-source.mjs",
@@ -474,7 +479,7 @@
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "f2d8739c9c2815000d5a48fcbad3e8823b8cfd16fb92cc26ffb27ae5e913f3c2"
+      "sha256": "20951ccca1dfe22d10fe640233e4d408c845dbc16fcf0defbe1a4f8c42588a7f"
     },
     {
       "path": "skills/gft-map/LICENSE",

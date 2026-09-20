@@ -3,6 +3,7 @@
   "files": [
     "apps/gft-local/.gitignore",
     "apps/gft-local/ADVANCED.md",
+    "apps/gft-local/CONTRIBUTING.md",
     "apps/gft-local/README.md",
     "apps/gft-local/account.mjs",
     "apps/gft-local/acpRunner.mjs",
