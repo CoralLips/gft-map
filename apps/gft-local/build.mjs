@@ -23,6 +23,7 @@ for (const name of Object.keys(dependencies).filter(name => name === 'react' || 
   }
 }
 await mkdir(path.join(root, 'dist/web'), { recursive: true });
+await writeFile(path.join(root,'dist/version.json'),JSON.stringify({product:'gft-map',version:JSON.parse(await readFile(path.join(root,'package.json'),'utf8')).version}));
 await build({ entryPoints: [path.join(root, 'core.ts')], outfile: path.join(root, 'dist/core.mjs'), bundle: true, platform: 'node', format: 'esm', target: 'node20', treeShaking: true, nodePaths: [path.join(root,'node_modules')] });
 const acp = await build({ entryPoints: [path.join(root, 'acpRunner.mjs')], outfile: path.join(root, 'dist/acp.mjs'), bundle: true, platform: 'node', format: 'esm', target: 'node20', metafile: true, nodePaths: [path.join(root,'node_modules')] });
 await writeFile(path.join(root, 'dist/acp-inputs.json'), JSON.stringify(Object.keys(acp.metafile.inputs), null, 2));
@@ -47,7 +48,7 @@ if (process.argv.includes('--skill')) {
   const target = path.join(root, 'release/gft-map');
   await cp(path.join(root, 'skill'), target, { recursive: true });
   await mkdir(path.join(target, 'scripts/dist'), { recursive: true });
-  for (const f of ['cli.mjs', 'store.mjs', 'server.mjs', 'account.mjs', 'sync.mjs', 'runner.mjs', 'connections.mjs', 'memory.mjs', 'notifications.mjs', 'change-hook.mjs', 'install-hooks.mjs']) await copyFile(path.join(root, f), path.join(target, 'scripts', f));
+  for (const f of ['cli.mjs', 'store.mjs', 'server.mjs', 'account.mjs', 'sync.mjs', 'runner.mjs', 'connections.mjs', 'memory.mjs', 'notifications.mjs', 'change-hook.mjs', 'install-hooks.mjs', 'version.mjs', 'upgrade.mjs']) await copyFile(path.join(root, f), path.join(target, 'scripts', f));
   await cp(path.join(root, 'dist'), path.join(target, 'scripts/dist'), { recursive: true });
   for (const file of ['browser-inputs.json', 'acp-inputs.json', 'mcp-inputs.json', 'sources-inputs.json']) {
     // Metadata is retained for source packaging, not needed by an installed Skill.

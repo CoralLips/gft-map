@@ -77,7 +77,7 @@ export function appendSourceLog(raw: string, records: SourceRecord[]): string {
   const lines: string[] = [];
   for (const record of records) {
     const key = identity(record), sourceKey = fingerprint(key);
-    if (!record.content.trim() || seen.has(sourceKey)) continue;
+    if (!record.content.length || seen.has(sourceKey)) continue;
     seen.add(sourceKey);
     const stamp = new Date(Number.isFinite(new Date(record.ts ?? 0).getTime()) ? record.ts ?? 0 : 0).toISOString();
     lines.push(`[场次 ${stamp} · 来源 · ${fingerprint(key)}]`, PREFIX + JSON.stringify(record));
@@ -124,7 +124,7 @@ export interface SourceEvent {
 }
 export function sourceRecordsFromEvents(events: SourceEvent[]): SourceRecord[] {
   return events.flatMap(event => event.layer === 'L0->L1' && Array.isArray(event.inputs)
-    ? event.inputs.flatMap((m: { id?: string; role?: string; content?: string; ts?: number; name?: string; phase?: string; turnStatus?: string }) => typeof m?.content === 'string' && m.content.trim() ? [{
+    ? event.inputs.flatMap((m: { id?: string; role?: string; content?: string; ts?: number; name?: string; phase?: string; turnStatus?: string }) => typeof m?.content === 'string' && m.content.length ? [{
       v: 1 as const, provider: event.sourceMeta?.provider || (event.sourceMeta?.sessionId === 'manual' ? 'human' : 'chat'), sessionId: event.sourceMeta?.sessionId || 'manual',
       id: m.id || fingerprint(m.content), role: m.role || 'user', content: m.content,
       title: event.sourceMeta?.sessionTitle || '', ts: m.ts,

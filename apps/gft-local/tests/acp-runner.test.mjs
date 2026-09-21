@@ -59,7 +59,10 @@ test('ACP预检真实stdio握手，不声称认证已完成；命令/协议错�
   const runner = createAcpRunner(options());
   const status = await runner.check();
   assert.equal(status.status, 'ready'); assert.equal(status.version, 'fixture-1.0');
-  assert.equal(status.checkScope, 'protocol'); assert.equal(status.authenticated, null);
+  assert.equal(status.checkScope, 'session-and-model'); assert.equal(status.authenticated, null);
+  assert.equal(status.model, 'fixture-default');
+  await assert.rejects(createAcpRunner(options('auth-failure')).check(), {code:'RUNNER_AUTH'});
+  await assert.rejects(createAcpRunner(options('success',{model:'not-available'})).check(), {code:'RUNNER_MODEL'});
   assert.deepEqual(status.authMethods, ['fixture-login']);
   await assert.rejects(createAcpRunner(options('bad-version')).check(), { code: 'RUNNER_PROTOCOL' });
   await assert.rejects(createAcpRunner({ binary: path.join(tmpdir(), 'nonexistent-gft-acp') }).check(), { code: 'RUNNER_START' });

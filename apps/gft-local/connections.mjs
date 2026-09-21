@@ -192,13 +192,13 @@ export function createConnections({ readers } = {}) {
         return {task:await store.getTaskStatus(task.id),hasMore:false,until:boundary,messageCount:messages.length,stage:'publish'};
       }
       const fromCursor = jsonCopy(checkpoint ? checkpoint.cursor : has(topic.sourceCursors || {},key) ? topic.sourceCursors[key].cursor : binding.initialCursor);
-      const delta = await (await reader()).readChatDelta(descriptor,fromCursor,{limit:100,maxChars:60000,...(boundary === undefined ? {} : {until:boundary})});
+      const delta = await (await reader()).readChatDelta(descriptor,fromCursor,{limit:100,maxChars:IMPORT_COMPACT_THRESHOLD,...(boundary === undefined ? {} : {until:boundary})});
       if (!delta || !has(delta,'cursor')) throw store.fail('来源读取器未返回增量水位',502);
       const messages = checkMessages(delta.messages);
       if (!messages.length) return {unchanged:true,message:'这段会话没有新增可收录的消息。',hasMore:!!delta.hasMore};
       if (JSON.stringify(fromCursor) === JSON.stringify(delta.cursor ?? null)) throw store.fail('来源读取器未推进增量水位，未创建重复任务',502);
       const input = messages.map(messageText).join('\n\n');
-      const compact = !!checkpoint || (continuous && (delta.hasMore || input.length > IMPORT_COMPACT_THRESHOLD));
+      const compact = !!checkpoint || delta.cursor?.v === 2 || (continuous && (delta.hasMore || input.length > IMPORT_COMPACT_THRESHOLD));
       const source = {provider:descriptor.provider,id:descriptor.id,title:descriptor.title,connectionId:binding.id,generation:binding.generation,
         initialCursor:jsonCopy(binding.initialCursor),fromCursor,toCursor:jsonCopy(delta.cursor),messages,hasMore:!!delta.hasMore,...(boundary === undefined ? {} : {until:boundary}),
         ...(compact ? {stage:'distill',summary:checkpoint?.summary || ''} : {})};

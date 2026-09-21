@@ -156,10 +156,11 @@ test('Codex scans tool-only turns until actual text or EOF instead of returning 
   assert.deepEqual((await readers.readChatDelta(codexSource, result.cursor)).messages.map(message => message.id), ['later-u', 'later-a']);
 });
 
-test('Codex an excessive empty span fails visibly within the scan budget', async () => {
+test('Codex skips long tool-only spans without rejecting the following chat', async () => {
   const { readers, state } = fakeCodex([...Array.from({ length: 1001 }, (_, id) => ({ id: String(id), status: 'completed', items: [] })), turn('later')]);
-  await assert.rejects(readers.readChatDelta(codexSource), { code: 'SOURCE_READ_LIMIT' });
-  assert.equal(state.calls.filter(call => call.method === 'thread/turns/list').length, 1000);
+  const result=await readers.readChatDelta(codexSource);
+  assert.deepEqual(result.messages.map(m=>m.id),['later-u','later-a']);
+  assert.equal(state.calls.filter(call => call.method === 'thread/turns/list').length, 1002);
 });
 
 test('Codex rejects branch/truncation/content changes and a cursor from another session', async () => {
@@ -172,9 +173,27 @@ test('Codex rejects branch/truncation/content changes and a cursor from another 
   await assert.rejects(readers.readChatDelta(codexSource, head), { code: 'SOURCE_CURSOR_STALE' });
 });
 
-test('limits do not truncate messages or advance past data that was not returned', async () => {
+test('oversized messages page without loss, including repeated text and Unicode', async () => {
+  const text = '很长的材料😀\n'.repeat(20000);
+  const t = turn('huge'); t.items[0].content[0].text = text;
+  for (const [source, readers] of [[codexSource, fakeCodex([t]).readers],
+    [claudeSource, fakeClaude([claudeMessage('huge-u','user',text),claudeMessage('huge-a','assistant','done')]).readers]]) {
+    const until = await readers.getChatHead(source);
+    let cursor = null; const parts = [], ids = [];
+    for (let n = 0; n < 20; n++) {
+      const page = await readers.readChatDelta(source,cursor,{maxChars:60000,until});
+      for (const m of page.messages) { if (m.role === 'user') {parts.push(m.content);ids.push(m.id);} assert.ok(m.content.length <= 60000); }
+      assert.notDeepEqual(page.cursor,cursor); cursor = page.cursor;
+      if (!page.hasMore) break;
+    }
+    assert.equal(parts.join(''),text);
+    assert.equal(new Set(ids).size,ids.length);
+    assert.equal((await readers.readChatDelta(source,cursor)).messages.length,0);
+  }
+});
+
+test('limits do not advance past data that was not returned', async () => {
   const { readers } = fakeCodex();
-  await assert.rejects(readers.readChatDelta(codexSource, null, { maxChars: 2 }), { code: 'SOURCE_MESSAGE_TOO_LARGE' });
   const page = await readers.readChatDelta(codexSource, null, { maxChars: 15 });
   assert.equal(page.messages.length, 1);
   assert.equal(page.hasMore, true);

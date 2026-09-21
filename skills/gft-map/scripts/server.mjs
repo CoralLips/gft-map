@@ -7,6 +7,7 @@ import { createAccount } from './account.mjs';
 import { createCloudSync } from './sync.mjs';
 import {pendingNotices,acknowledgeNotices} from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
+import {programVersion,installationId} from './version.mjs';
 import { prepareImport, parseImportSummary, redrawSummaryInput } from './dist/core.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const agents = ['codex', 'codex-acp', 'claude-acp'];
@@ -27,13 +28,15 @@ async function body(req) {
 export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs } = {}) {
   if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
   const runner = agent && !execute ? await createRunner(agent, runnerOptions) : null;
-  if (runner) await runner.check();
+  let startupError = null;
+  if (runner) try { await runner.check(); } catch (error) { startupError = {message:error.message,code:error.code,at:new Date().toISOString()}; }
+  const version = await programVersion();
   const readers = sourceReaders || await import('./dist/sources.mjs');
   const { createConnections } = await import('./connections.mjs');
   const connections = connectionService || createConnections({ readers });
   const account = accountService || createAccount({ home: store.homeDir() });
   const sync = createCloudSync({ account, intervalMs:syncIntervalMs });
-  let busy = false, closed = false, activeTaskId = null, activeController = null, lastError = null, shutdownPromise = null;
+  let busy = false, closed = false, activeTaskId = null, activeController = null, lastError = startupError, shutdownPromise = null;
   async function saveExecution(id, execution) {
     // Cancellation may be committing its task state as the child closes. Keep
     // the metrics without ever replacing that independently committed status.
@@ -42,7 +45,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
       catch (error) { if (error.status !== 409 || attempt >= 19) throw error; await new Promise(resolve=>setTimeout(resolve,25)); }
     }
   }
-  const runtime = () => ({ agent, mode: agent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: agent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
+  const runtime = () => ({ product:'gft-map',version,installationId,pid:process.pid,agent, mode: agent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: agent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
   const server = http.createServer(async (req,res) => {
     const send = (status,data) => { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(data)); };
     try {
@@ -86,7 +89,14 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else throw store.fail('接口不存在',404);
       } else if(req.method === 'POST') {
         const data = await body(req);
-        if(group === 'import') value = await store.importTopic(data);
+        if(group === 'upgrade' && id === 'prepare') {
+          if(data.installationId !== installationId) throw store.fail('此服务属于另一份安装，未停止。',409);
+          if(busy || (await store.listTasks()).some(t=>['pending','running'].includes(t.status))) throw store.fail('请等待任务完成或取消后再更新。',409);
+          closed=true;
+          send(200,{stopped:true,version});
+          setImmediate(()=>void server.shutdown()); return;
+        }
+        else if(group === 'import') value = await store.importTopic(data);
         else if(group === 'account' && id === 'login') value = await account.begin();
         else if(group === 'account' && id === 'logout') value = await account.logout();
         else if(group === 'account' && id === 'cancel') value = await account.cancel();
@@ -141,6 +151,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         catch { controller.abort('cancelled'); }
       }, 250);
       const prompt = await store.taskPrompt(task.id);
+      if(runner?.snapshot().status === 'unavailable') await runner.check();
       const runs = [];
       const run = async request => {
         if (controller.signal.aborted) throw store.fail('任务已取消，当前内容保留。',409);

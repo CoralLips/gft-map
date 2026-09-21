@@ -13,4 +13,4 @@ node scripts/cli.mjs serve --agent codex-acp --port 4317
 
 可用环境变量设置同一配置：`GFT_CODEX_ACP_BIN` / `GFT_CODEX_ACP_ARGS`，或 `GFT_CLAUDE_ACP_BIN` / `GFT_CLAUDE_ACP_ARGS`。参数变量是 JSON 字符串数组，例如 `["D:/adapters/package/dist/index.js"]`。这只是格式示例，应核对已安装包的真实入口，不猜路径。可选 `--model MODEL` 和 `--timeout-seconds 900` 分别请求模型和设置超时。
 
-检查成功表示协议连接可用，不等于一次模型任务已成功。依据任务状态和回读结果验收。不要承诺接入后可以读取已有 Codex/Claude 聊天、自动取得新消息或恢复当前对话；这些不在本连接的实现范围内。
+检查会核对协议、创建新会话、选择只读模式并检查模型配置。成功不等于模型服务接受了登录或已有额度；仍需用合成材料完成一次任务并回读结果。认证失败时指导用户在对应 Agent 登录，不重复重试、不猜模型名、不偷偷换付费服务。默认使用适配器实际返回的模型，显式 --model 仅能选适配器声明支持的项。不要承诺所有 Agent 的聊天来源都已适配；来源读取仍只支持 Codex 和 Claude Code。

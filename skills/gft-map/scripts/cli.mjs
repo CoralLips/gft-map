@@ -26,7 +26,13 @@ function runnerOptions(agent) {
   return { ...(binary ? { binary } : {}), ...(prefixArgs.length ? { prefixArgs } : {}), ...(arg('model') ? { model: arg('model') } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
 }
 try {
-  if(command === 'install-hooks') {
+  if(command === 'version') {
+    const {programVersion,installationId}=await import('./version.mjs');
+    print({product:'gft-map',version:await programVersion(),installationId,dataDirectory:store.homeDir()});
+  } else if(command === 'upgrade') {
+    const {upgradeSkill}=await import('./upgrade.mjs');
+    print(await upgradeSkill({directory:arg('directory') || path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),dataDirectory:store.homeDir(),url:process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317'}));
+  } else if(command === 'install-hooks') {
     const {installChangeHook} = await import('./install-hooks.mjs');
     print(await installChangeHook({provider:need('provider'),project:need('project')}));
   } else if(command === 'mcp') {

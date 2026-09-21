@@ -114,7 +114,7 @@ function appendSourceLog(raw, records) {
   const lines = [];
   for (const record of records) {
     const key = identity(record), sourceKey = fingerprint(key);
-    if (!record.content.trim() || seen.has(sourceKey)) continue;
+    if (!record.content.length || seen.has(sourceKey)) continue;
     seen.add(sourceKey);
     const stamp = new Date(Number.isFinite(new Date(record.ts ?? 0).getTime()) ? record.ts ?? 0 : 0).toISOString();
     lines.push(`[\u573A\u6B21 ${stamp} \xB7 \u6765\u6E90 \xB7 ${fingerprint(key)}]`, PREFIX + JSON.stringify(record));
@@ -149,7 +149,7 @@ function mergeSourceLogs(local, remote) {
   return appendSourceLog(remote, readSourceLog(local));
 }
 function sourceRecordsFromEvents(events) {
-  return events.flatMap((event) => event.layer === "L0->L1" && Array.isArray(event.inputs) ? event.inputs.flatMap((m) => typeof m?.content === "string" && m.content.trim() ? [{
+  return events.flatMap((event) => event.layer === "L0->L1" && Array.isArray(event.inputs) ? event.inputs.flatMap((m) => typeof m?.content === "string" && m.content.length ? [{
     v: 1,
     provider: event.sourceMeta?.provider || (event.sourceMeta?.sessionId === "manual" ? "human" : "chat"),
     sessionId: event.sourceMeta?.sessionId || "manual",

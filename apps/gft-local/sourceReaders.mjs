@@ -5,7 +5,6 @@ import { createInterface } from 'node:readline';
 // This module never starts/resumes a conversation or calls an inference API.
 const READ_METHODS = new Set(['initialize', 'thread/list', 'thread/read', 'thread/turns/list', 'model/list']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_SCAN_TURNS = 1000;
 const TERMINAL_TURNS = new Set(['completed', 'interrupted', 'failed']);
 
 export class SourceReaderError extends Error {
@@ -34,7 +33,7 @@ function hash(value) { return createHash('sha256').update(JSON.stringify(value))
 function initialCursor(source) { return { v: 1, provider: source.provider, sessionId: source.id, kind: 'messages', position: null }; }
 function decodeCursor(source, cursor) {
   if (cursor === null || cursor === undefined) return initialCursor(source);
-  if (typeof cursor !== 'object' || cursor.v !== 1 || cursor.kind !== 'messages'
+  if (typeof cursor !== 'object' || ![1,2].includes(cursor.v) || cursor.kind !== 'messages'
       || cursor.provider !== source.provider || cursor.sessionId !== source.id
       || !Object.hasOwn(cursor, 'position')) fail('SOURCE_CURSOR_INVALID', '来源游标无效或属于另一场会话，请重新选择读取起点。');
   return cursor;
@@ -244,7 +243,10 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
     return withCodex(async request => {
       await codexSession(request, source);
       let native = null;
-      for (let scanned = 0; scanned < MAX_SCAN_TURNS; scanned++) {
+      const visited = new Set();
+      for (;;) {
+        if (visited.has(native)) fail('SOURCE_CURSOR_STALE','来源分页未推进，请更新 Codex 后重试。');
+        visited.add(native);
         const page = await turns(request, source, native, 'desc');
         const turn = page.data[0];
         if (!turn) return cursor;
@@ -260,7 +262,6 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         if (!page.nextCursor) return cursor;
         native = page.nextCursor;
       }
-      fail('SOURCE_READ_LIMIT', '尚未找到完整轮次，请等待当前对话结束后再连接。');
     });
   }
 
@@ -288,20 +289,23 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
   async function readChatDelta(input, suppliedCursor = null, { limit = 100, maxChars = 60000, until } = {}) {
     const source = sourceOf(input);
     limit = bounded(limit, 100, 1000);
-    maxChars = bounded(maxChars, 60000, 1000000);
+    maxChars = Math.max(2, bounded(maxChars, 60000, 1000000));
     const start = decodeCursor(source, suppliedCursor);
     const end = until === undefined ? undefined : decodeCursor(source, until);
     if (end && !end.position) return { messages: [], cursor: start, hasMore: false };
     const messages = [];
     let chars = 0;
-    const append = message => {
-      if (messages.length >= limit || chars + message.content.length > maxChars) {
-        if (!messages.length) fail('SOURCE_MESSAGE_TOO_LARGE', '单条聊天内容超过本次读取上限，请缩小原消息或提高读取上限。');
-        return false;
-      }
-      messages.push(message);
-      chars += message.content.length;
-      return true;
+    const append = (message, offset = 0) => {
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset >= message.content.length) changed();
+      if (messages.length >= limit || (messages.length && chars + message.content.length - offset > maxChars)) return null;
+      let next = Math.min(message.content.length, offset + maxChars - chars);
+      // Never cut a Unicode surrogate pair. Fragment IDs include the offset so
+      // equal adjacent passages remain distinct receipts in the source Log.
+      if (next < message.content.length && /[\uD800-\uDBFF]/.test(message.content[next - 1])) next--;
+      const content = message.content.slice(offset,next);
+      messages.push({...message,content,...(offset || next < message.content.length ? {id:`${message.id}#gft-part-${offset}`} : {})});
+      chars += content.length;
+      return next;
     };
     if (source.provider === 'claude') {
       const all = await claudeComplete(await sdk(), source);
@@ -311,17 +315,22 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         if (index < 0 || hash(all[index]) !== end.position.digest) changed();
         endOffset = index + 1;
       }
-      let offset = 0;
+      let offset = 0, charOffset = 0;
       if (start.position) {
         if (typeof start.position.id !== 'string' || typeof start.position.digest !== 'string') fail('SOURCE_CURSOR_INVALID', 'Claude Code 来源游标格式无效。');
         const index = all.findIndex(message => message.id === start.position.id);
         if (index < 0 || hash(all[index]) !== start.position.digest) changed();
-        offset = index + 1;
+        offset = index + (start.position.offset === undefined ? 1 : 0);
+        charOffset = start.position.offset ?? 0;
       }
       let cursor = start;
       for (; offset < endOffset; offset++) {
-        if (!append(all[offset])) break;
-        cursor = { ...start, position: { id: all[offset].id, digest: hash(all[offset]) } };
+        const next = append(all[offset], charOffset);
+        if (next === null) break;
+        const partial = next < all[offset].content.length;
+        cursor = { ...start, v:partial ? 2 : 1, position: { id: all[offset].id, digest: hash(all[offset]), ...(partial ? {offset:next} : {}) } };
+        if (partial) break;
+        charOffset = 0;
       }
       return { messages, cursor, hasMore: offset < endOffset };
     }
@@ -332,7 +341,10 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
       let anchor = start.position;
       if (anchor && (typeof anchor.turnId !== 'string' || !Number.isSafeInteger(anchor.consumed) || anchor.consumed < 0 || typeof anchor.digest !== 'string'
           || (anchor.before !== null && typeof anchor.before !== 'string'))) fail('SOURCE_CURSOR_INVALID', 'Codex 来源游标格式无效。');
-      for (let scanned = 0; scanned < MAX_SCAN_TURNS; scanned++) {
+      const visited = new Set();
+      for (;;) {
+        if (visited.has(native)) fail('SOURCE_CURSOR_STALE','来源分页未推进，请更新 Codex 后重试。');
+        visited.add(native);
         const page = await turns(request, source, native);
         const turn = page.data[0];
         if (anchor && (!turn || turn.id !== anchor.turnId || !terminalTurn(turn))) changed();
@@ -346,13 +358,18 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         if (lastTurn && (!Number.isSafeInteger(endConsumed) || endConsumed < 0 || endConsumed > entries.length || hash(entries.slice(0, endConsumed)) !== end.position.digest)) changed();
         let consumed = anchor?.consumed ?? 0;
         if (anchor && (consumed > entries.length || hash(entries.slice(0, consumed)) !== anchor.digest)) changed();
+        let offset = anchor?.offset ?? 0;
+        if (anchor?.offset !== undefined && (!entries[consumed] || hash(entries[consumed]) !== anchor.messageDigest)) changed();
         anchor = null;
         for (; consumed < endConsumed; consumed++) {
-          if (!append(entries[consumed])) return { messages, cursor, hasMore: true };
-          cursor = { ...start, position: { before: native, turnId: turn.id, consumed: consumed + 1, digest: hash(entries.slice(0, consumed + 1)) } };
+          const next = append(entries[consumed],offset);
+          if (next === null) return { messages, cursor, hasMore: true };
+          if (next < entries[consumed].content.length) return {messages,hasMore:true,cursor:{...start,v:2,position:{before:native,turnId:turn.id,consumed,digest:hash(entries.slice(0,consumed)),offset:next,messageDigest:hash(entries[consumed])}}};
+          offset = 0;
+          cursor = { ...start, v:1, position: { before: native, turnId: turn.id, consumed: consumed + 1, digest: hash(entries.slice(0, consumed + 1)) } };
         }
         // Keep an anchor even for a completed turn without user-visible text.
-        cursor = { ...start, position: { before: native, turnId: turn.id, consumed: endConsumed, digest: hash(entries.slice(0, endConsumed)) } };
+        cursor = { ...start, v:1, position: { before: native, turnId: turn.id, consumed: endConsumed, digest: hash(entries.slice(0, endConsumed)) } };
         if (lastTurn) return { messages, cursor, hasMore: false };
         if (!page.nextCursor) {
           if (end?.position) changed();
@@ -360,10 +377,6 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         }
         native = page.nextCursor;
       }
-      // An empty resumable page cannot be committed by the update flow. Keep
-      // scanning empty turns above, and fail visibly if the safety bound is hit.
-      if (!messages.length) fail('SOURCE_READ_LIMIT', '连续读取了过多无正文轮次，尚未找到新消息；请重新选择读取起点。');
-      return { messages, cursor, hasMore: true };
     });
   }
 
@@ -379,7 +392,7 @@ export async function getCodexDefaults(options) {
     do {
       const page = await client.request('model/list', { limit: 100, ...(cursor ? { cursor } : {}) });
       const item = page.data?.find(model => model.isDefault);
-      if (item?.model && item.defaultReasoningEffort) return { model: item.model, effort: item.defaultReasoningEffort };
+      if (item?.model) return { model: item.model, ...(item.defaultReasoningEffort ? {effort:item.defaultReasoningEffort} : {}) };
       cursor = page.nextCursor;
     } while (cursor);
     fail('MODEL_DEFAULT_MISSING', '执行器未提供默认模型，请更新 Codex 后重试。');

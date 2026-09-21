@@ -67,7 +67,7 @@ export function createCodexRunner({ binary = process.env.GFT_CODEX_BIN || 'codex
   async function refreshDefaults() {
     if (explicitModel) return;
     const defaults = await resolveDefaults();
-    if (!defaults?.model || !defaults.effort) throw errorOf('RUNNER_DEFAULT', '执行器未提供默认模型和思考强度。');
+    if (!defaults?.model) throw errorOf('RUNNER_DEFAULT', '执行器未提供默认模型，请检查 Codex 登录和模型配置，或用 --model 指定可用模型。');
     model = defaults.model; effort = defaults.effort;
     readiness = { ...readiness, model, effort };
   }

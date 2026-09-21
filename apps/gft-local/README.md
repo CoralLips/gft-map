@@ -57,7 +57,7 @@ The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent r
 2. Select a Codex or Claude Code conversation. Choose **Include existing content** to import its past messages.
 3. Read and edit the document in **Doc**; explore decisions and relationships in **Map**.
 
-Later, click **Update** again to bring in only new messages.
+Later, click **Update** again to bring in only new messages. Long conversations, including oversized individual messages, are processed in batches. Cancel at any time; the next update resumes after the completed batches.
 
 ### 3. Continue with your agent
 
@@ -87,6 +87,16 @@ Edit the topic, document, or Log directly. Click outside the editor or press Ctr
 - **Download**: save the complete map file. Use **Settings → Import maps** in another GFT Map installation to keep working.
 
 No GFT account is needed for local use. Optionally sign in to the [GFT platform](https://gitforthought.com) in Settings for automatic two-way sync. [Sync details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
+
+**Where does your data go?** Without a GFT login, maps and received chat text stay on your computer. AI-powered Update, Tidy, and Redraw send the materials needed for the task to your selected agent's model service, using its account quota. Signing in to GFT syncs your maps, including Log, to GFT's cloud. GFT Map does not scan and upload every project file or conversation.
+
+### Update your installation
+
+Ask your agent:
+
+> Use gft-map to update to the latest stable release. Keep my maps, chat connections, and settings. Restart the panel and verify that the running version matches the installed version.
+
+The updater verifies the complete release archive, replaces the old program, and keeps a backup. Your data stays in its existing directory. Finish or cancel running tasks before updating. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
 
 ---
 

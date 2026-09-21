@@ -29,6 +29,28 @@ const waitFor = async (run, accept) => {
 };
 const task = { id: 'fixture-task', system: '合成系统规则', user: '合成用户材料' };
 
+test('没有思考强度的默认模型仍可执行，不注入猜测的强度', () => isolated(async dir => {
+  const runner=createCodexRunner(options('success',{resolveDefaults:async()=>({model:'plain-model'})}));
+  await runner.check();await runner.run(task,{directory:dir});
+  const {args}=JSON.parse(await readFile(path.join(dir,'invocation.json'),'utf8'));
+  assert.ok(args.includes('plain-model'));
+  assert.ok(!args.some(arg=>arg.startsWith('model_reasoning_effort=')));
+}));
+
+test('执行器不可用时仍可读写已有数据，任务失败给出登录原因', () => isolated(async () => {
+  const server=await startServer({port:0,agent:'codex',runnerOptions:options('auth-failure')});
+  try {
+    const base=`http://127.0.0.1:${server.address().port}`;
+    const runtime=await (await fetch(base+'/api/runtime')).json();
+    assert.equal(runtime.executor.status,'unavailable');assert.equal(runtime.product,'gft-map');
+    const t=await store.createTopic('离线文稿','保留内容');
+    const queued=await store.createTask(t.id,'update','合成材料');
+    const failed=await waitFor(()=>store.getTask(queued.id),r=>r.status==='failed');
+    assert.match(failed.error,/尚未登录/);
+    assert.equal((await (await fetch(base+'/api/topics')).json())[0].id,t.id);
+  } finally {await server.shutdown();}
+}));
+
 test('自动模型每次由执行器解析，模型及默认强度变化会用于下一次临时执行', () => isolated(async dir => {
   let defaults = { model: 'default-a', effort: 'low' };
   const runner = createCodexRunner(options('success', { resolveDefaults: async () => defaults }));

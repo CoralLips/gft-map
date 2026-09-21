@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import * as store from '../store.mjs';
 import { createConnections } from '../connections.mjs';
 import { readSourceLog } from '../dist/core.mjs';
+import { createSourceReaders } from '../sourceReaders.mjs';
 
 
 const sandbox = await mkdtemp(path.join(tmpdir(),'gft-local-connections-test-'));
@@ -46,6 +47,41 @@ function fixture({batchSize = 100} = {}) {
 }
 const message = (id,content = `仅供回查的源消息 ${id}`,extra = {}) => ({id,role:'user',content,timestamp:'2026-01-01T00:00:00Z',...extra});
 const output = title => `<doc>\n## 工程取舍\n### ◆ ${title}\n先保护已有判断，再添加新的取舍。\n</doc>`;
+
+test('真实读取链路分批接收超长单条，取消后续接且 Log 保留全部字符',async () => {
+  const prior=process.env.GFT_LOCAL_HOME;process.env.GFT_LOCAL_HOME=path.join(sandbox,'oversized-test');
+  try {
+  const id=randomUUID(), material='头部😀\n'+'相同段落\n'.repeat(20000)+' '.repeat(25000)+'\n尾部';
+  const descriptor={provider:'claude',id,cwd:sandbox};
+  const readers=createSourceReaders({claudeSdk:{
+    getSessionInfo:async()=>({sessionId:id,cwd:sandbox,summary:'large'}),
+    getSessionMessages:async()=>[{type:'user',uuid:'u',session_id:id,message:{role:'user',content:[{type:'text',text:material}]}},
+      {type:'assistant',uuid:'a',session_id:id,message:{role:'assistant',stop_reason:'end_turn',content:[{type:'text',text:'收到'}]}}],
+  }});
+  const api=createConnections({readers}), t=await store.createTopic('large','测试');
+  const [connection]=await api.connectSource({source:descriptor,topicIds:[t.id],history:'all'});
+  let count=0;
+  for (;;) {
+    let page=await api.createSourceUpdate(t.id,{connectionId:connection.id,continuous:true});
+    if(page.unchanged) break;
+    if(++count === 2) {
+      const before=await store.getTask(page.task.id);
+      await store.setTaskStatus(page.task.id,'cancelled');
+      page=await api.createSourceUpdate(t.id,{connectionId:connection.id,continuous:true});
+      assert.deepEqual((await store.getTask(page.task.id)).source.fromCursor,before.source.fromCursor);
+    }
+    if(page.stage === 'distill') {
+      assert.ok((await store.taskPrompt(page.task.id)).user.length<32000);
+      await store.completeTask(page.task.id,JSON.stringify({summary:'当前累计判断'}));
+    } else await store.completeTask(page.task.id,output('长消息已收录'));
+    assert.ok(count<30);
+  }
+  const log=readSourceLog((await store.getTopic(t.id)).raw);
+  assert.equal(log.filter(r=>r.role==='user').map(r=>r.content).join(''),material);
+  assert.equal(new Set(log.map(r=>r.id)).size,log.length);
+  assert.ok(count>3);
+  } finally {process.env.GFT_LOCAL_HOME=prior;}
+});
 const topic = name => store.createTopic(name,'仅记录本地编辑的工程判断');
 const binding = async (api,source,target,history = 'all') => (await api.connectSource({source,topicIds:[target.id],history}))[0];
 const cursorOf = async (target,connection) => (await store.getTopic(target.id)).sourceCursors?.[store.sourceCursorKey(connection)]?.cursor;
