@@ -47,6 +47,20 @@ async function exitedPid() {
   return child.pid;
 }
 
+test('starting the panel recovers dead-owner tasks and locks without requiring a CLI repair',()=>isolated(async dir=>{
+  const topic=await store.createTopic('重启恢复','服务重启后可以继续编辑');
+  const task=await store.createTask(topic.id,'update','中断前的材料');
+  const pid=await exitedPid();
+  await restoreTaskFixture(dir,{...task,status:'running',runnerPid:pid});
+  await writeFile(`${recordPath(dir,'topics',topic.id)}.lock`,String(pid));
+  const server=await startServer({port:0});
+  try {
+    assert.equal((await store.getTask(task.id)).status,'failed');
+    await store.saveGraph(topic.id,topic.revision,{kind:'add',title:'重启后仍能编辑'});
+    const response=await fetch(`http://127.0.0.1:${server.address().port}/api/runtime`);assert.equal(response.status,200);
+  }finally{await server.shutdown();}
+}));
+
 test('主题已保存而任务仍 pending：重试只补 completed，不重复追加或推进版本', () => isolated(async dir => {
   const { topic, task, view } = await savedTask();
   const before = await store.getTopic(topic.id);

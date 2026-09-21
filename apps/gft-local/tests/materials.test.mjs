@@ -1,11 +1,92 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import * as store from '../store.mjs';
 import * as materials from '../materials.mjs';
 import {archive,restore} from '../materialArchive.mjs';
+
+test('restoring an archive does not attach the transfer file to the currently selected topic',async()=>{
+  const previous=process.env.GFT_LOCAL_HOME,dir=await mkdtemp(path.join(tmpdir(),'gft-material-transfer-'));process.env.GFT_LOCAL_HOME=dir;
+  try {
+    const topic=await store.createTopic('正在查看的脉络','保留已有内容');
+    const blocks=[];for await(const block of archive(topic.id))blocks.push(block);
+    const bytes=Buffer.concat(blocks),upload=await materials.create({topicId:topic.id,name:'restore.gftpack',size:bytes.length,kind:'archive'});
+    await materials.upload(upload.id,0,bytes);await materials.finish(upload.id);await restore(upload.id);
+    assert.deepEqual(await materials.list(topic.id),[],'a transport archive is not source material');
+    // Upgrades must also hide transport records incorrectly attached by v0.3.1.
+    await writeFile(path.join(dir,'materials',`${upload.id}.json`),JSON.stringify({...await materials.get(upload.id),topicId:topic.id}));
+    assert.deepEqual(await materials.list(topic.id),[]);
+    const exported=[];for await(const block of archive(topic.id))exported.push(block);
+    assert.deepEqual(JSON.parse(Buffer.concat(exported).toString().split('\n')[0]).materials,[]);
+  } finally {if(previous===undefined)delete process.env.GFT_LOCAL_HOME;else process.env.GFT_LOCAL_HOME=previous;await rm(dir,{recursive:true,force:true});}
+});
+
+test('successive source corrections replace the last applied summary, not the first-ever summary',async()=>{
+  const previous=process.env.GFT_LOCAL_HOME,dir=await mkdtemp(path.join(tmpdir(),'gft-material-correction-'));process.env.GFT_LOCAL_HOME=dir;
+  let worker;
+  try {
+    const topic=await store.createTopic('连续修正','只记录计划'),bytes=Buffer.from('plan-A');
+    const job=await materials.create({topicId:topic.id,name:'plan.txt',size:bytes.length});
+    await materials.upload(job.id,0,bytes);await materials.finish(job.id);
+    const publications=[];
+    worker=materials.createWorker({run:async request=>{
+      if(request.stage==='extract')return JSON.stringify({summary:request.user.match(/plan-[ABC]/)?.[0]||'missing'});
+      publications.push(request.user);return '<noop/>';
+    }});
+    await worker.tick();
+    for(const text of ['plan-B','plan-C']) {
+      const page=await materials.page(job.id,0);await materials.editPage(job.id,0,page.end,text,page.etag);
+      await worker.control(job.id,'resume');await worker.tick();
+    }
+    assert.equal(publications.length,3);
+    assert.match(publications[1],/修改前提炼：plan-A/);
+    assert.match(publications[2],/修改前提炼：plan-B/);
+    assert.doesNotMatch(publications[2],/修改前提炼：plan-A/);
+  } finally {await worker?.close();if(previous===undefined)delete process.env.GFT_LOCAL_HOME;else process.env.GFT_LOCAL_HOME=previous;await rm(dir,{recursive:true,force:true});}
+});
+
+test('pausing at the end of upload prevents automatic processing; abandoned transfers can be removed without touching results',async()=>{
+  const previous=process.env.GFT_LOCAL_HOME,dir=await mkdtemp(path.join(tmpdir(),'gft-material-upload-pause-'));process.env.GFT_LOCAL_HOME=dir;
+  let worker;
+  try {
+    const topic=await store.createTopic('上传暂停','保存来源'),bytes=Buffer.from('暂停不应启动模型。'.repeat(1000));
+    const job=await materials.create({topicId:topic.id,name:'pause.txt',size:bytes.length});
+    await materials.upload(job.id,0,bytes);
+    let calls=0;worker=materials.createWorker({run:async()=>{calls++;return '<noop/>';}});
+    const finish=materials.finish(job.id);const pause=worker.control(job.id,'pause');
+    await Promise.all([finish,pause]);await worker.tick();
+    assert.equal(calls,0);assert.equal((await materials.get(job.id)).state,'paused');
+    await worker.control(job.id,'resume');assert.equal((await materials.get(job.id)).state,'queued');
+    await worker.control(job.id,'pause');
+    const abandoned=await materials.create({topicId:topic.id,name:'interrupted.txt',size:bytes.length});
+    await materials.upload(abandoned.id,0,bytes.subarray(0,100));
+    await assert.rejects(async()=>{for await(const _ of archive(topic.id)){};},/续传/);
+    await materials.discard(abandoned.id);
+    assert.equal((await materials.list(topic.id)).length,1);
+    for await(const _ of archive(topic.id)){};
+    await assert.rejects(materials.discard(job.id),/未完成/);
+    assert.equal((await materials.get(job.id)).state,'paused');
+  } finally {await worker?.close();if(previous===undefined)delete process.env.GFT_LOCAL_HOME;else process.env.GFT_LOCAL_HOME=previous;await rm(dir,{recursive:true,force:true});}
+});
+
+test('agent source pagination reads the complete Unicode file and rejects cursors made stale by an edit',async()=>{
+  const previous=process.env.GFT_LOCAL_HOME,dir=await mkdtemp(path.join(tmpdir(),'gft-material-pagination-'));process.env.GFT_LOCAL_HOME=dir;
+  let worker;
+  try {
+    const topic=await store.createTopic('来源分页','读取完整原文'),text=('中文😀abc\n'.repeat(16000))+'LAST-MARKER';
+    const bytes=Buffer.from(text),job=await materials.create({topicId:topic.id,name:'unicode.txt',size:bytes.length});
+    for(let offset=0;offset<bytes.length;offset+=materials.UPLOAD_BYTES)await materials.upload(job.id,offset,bytes.subarray(offset,offset+materials.UPLOAD_BYTES));
+    await materials.finish(job.id);worker=materials.createWorker({run:async()=>{throw new Error('Reading must not invoke a model');}});await worker.control(job.id,'pause');
+    const initial=(await store.readSources(topic.id)).files[0].cursor;let cursor=initial,all='',count=0;
+    while(cursor){const part=await store.readSources(topic.id,cursor);assert.ok(part.text.length<=12000);all+=part.text;cursor=part.nextCursor;assert.ok(++count<50);}
+    assert.equal(all,text);assert.ok(count>2);
+    const first=await materials.page(job.id,0);await materials.editPage(job.id,0,first.end,'corrected first page',first.etag);
+    await assert.rejects(store.readSources(topic.id,initial),/材料已改变/);
+    const current=(await store.readSources(topic.id)).files[0].cursor;assert.equal((await store.readSources(topic.id,current)).text,'corrected first page');
+  }finally{await worker?.close();if(previous===undefined)delete process.env.GFT_LOCAL_HOME;else process.env.GFT_LOCAL_HOME=previous;await rm(dir,{recursive:true,force:true});}
+});
 
 test('large source: bounded upload, durable visible checkpoints, pause/restart and exact Unicode recovery', async () => {
   const previous=process.env.GFT_LOCAL_HOME, dir=await mkdtemp(path.join(tmpdir(),'gft-material-'));

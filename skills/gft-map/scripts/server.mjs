@@ -31,6 +31,7 @@ async function body(req) {
 }
 export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs } = {}) {
   if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
+  await store.recover();
   const runner = agent && !execute ? await createRunner(agent, runnerOptions) : null;
   let startupError = null;
   if (runner) try { await runner.check(); } catch (error) { startupError = {message:error.message,code:error.code,at:new Date().toISOString()}; }
@@ -130,6 +131,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
           if(!id)value=await materials.create(data);
           else if(action==='finish')value=await materials.finish(id);
           else if(action==='restore')value=await restoreMaterialArchive(id);
+          else if(action==='discard')value=await materials.discard(id);
           else if(action==='pause'||action==='resume')value=await materialWorker.control(id,action);
           else if(action==='edit')value=await materials.editPage(id,data.start,data.end,data.text,data.etag);
           else throw store.fail('接口不存在',404);

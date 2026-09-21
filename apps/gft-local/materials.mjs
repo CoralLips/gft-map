@@ -1,4 +1,4 @@
-import {mkdir,readFile,open,readdir,stat,unlink} from 'node:fs/promises';
+import {mkdir,readFile,open,readdir,stat,unlink,rm} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -14,6 +14,13 @@ const metaFile=id=>path.join(store.homeDir(),'materials',`${validId(id)}.json`);
 export const sourceFile=id=>path.join(directory(id),'original');
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const save=job=>store.writeJsonAtomic(metaFile(job.id),{...job,updatedAt:new Date().toISOString()});
+async function lock(id,run) {
+  for(let attempt=0;;attempt++) {
+    let acquired=false;
+    try{return await store.withRecordLock('materials',id,()=>{acquired=true;return run();});}
+    catch(error){if(acquired||error.status!==409||attempt>=79)throw error;await new Promise(resolve=>setTimeout(resolve,25));}
+  }
+}
 export async function get(id) {
   try {return JSON.parse(await readFile(metaFile(id),'utf8'));}
   catch(error){if(error.code==='ENOENT')throw store.fail('材料不存在',404);throw error;}
@@ -23,7 +30,7 @@ export async function list(topicId) {
   const result=[];
   for(const name of await readdir(root))if(/^[a-zA-Z0-9_-]+\.json$/.test(name)) {
     const job=await get(name.slice(0,-5));
-    if(!topicId || job.topicId===topicId)result.push(job);
+    if(!topicId || (job.topicId===topicId&&job.kind==='text'))result.push(job);
   }
   return result.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
@@ -45,6 +52,9 @@ export async function create({topicId,name,size,kind='text'}) {
   if(!Number.isSafeInteger(size)||size<=0)throw store.fail('文件为空或大小无效');
   if(!['text','archive'].includes(kind))throw store.fail('不支持的材料类型');
   if(kind==='text'&&!/\.(txt|md|markdown|jsonl|ndjson|json)$/i.test(name))throw store.fail('请使用 UTF-8 文本、Markdown 或聊天记录文件');
+  // A transfer archive restores a new topic; it is never an original belonging
+  // to the topic that happened to be selected when the user opened Import.
+  if(kind==='archive')topicId=null;
   const topic=topicId ? await store.getTopic(topicId) : null;
   if(kind==='text'&&(!topic||topic.archived))throw store.fail('请先选择要加入的脉络');
   const job={id:randomUUID(),topicId:topicId || null,name:path.basename(name),size,kind,scope:topic?.scope || '',received:0,processed:0,batches:0,state:'uploading',epoch:0,contentRevision:0,createdAt:new Date().toISOString()};
@@ -76,15 +86,27 @@ export async function readBytes(id,start,length) {
   finally{await handle.close();}
 }
 export async function finish(id) {
-  return store.withRecordLock('materials',id,async()=>{
-    const job=await get(id);
-    if(job.state!=='uploading')return job;
-    if(job.received!==job.size||(await stat(sourceFile(id))).size!==job.size)throw store.fail('文件尚未接收完整，可继续上传',409);
-    const hash=createHash('sha256'),decoder=new TextDecoder('utf-8',{fatal:true});
-    try {for await(const bytes of createReadStream(sourceFile(id))){hash.update(bytes);if(job.kind==='text'){const text=decoder.decode(bytes,{stream:true});if(text.includes('\0'))throw new Error('binary');}}if(job.kind==='text')decoder.decode();}
-    catch {throw store.fail('文件不是有效 UTF-8 文本，请先转换为文本；原文件已保留');}
-    const next={...job,sha256:hash.digest('hex'),state:job.kind==='archive'?'ready':'queued',error:null};
+  const job=await get(id);
+  if(job.state!=='uploading')return job;
+  if(job.received!==job.size||(await stat(sourceFile(id))).size!==job.size)throw store.fail('文件尚未接收完整，可继续上传',409);
+  // Completed upload bytes are immutable. Hash outside the short metadata lock
+  // so a pause request remains responsive even for a multi-gigabyte original.
+  const hash=createHash('sha256'),decoder=new TextDecoder('utf-8',{fatal:true});
+  try {for await(const bytes of createReadStream(sourceFile(id))){hash.update(bytes);if(job.kind==='text'){const text=decoder.decode(bytes,{stream:true});if(text.includes('\0'))throw new TypeError('binary');}}if(job.kind==='text')decoder.decode();}
+  catch(error) {if(error instanceof TypeError)throw store.fail('文件不是有效 UTF-8 文本，请先转换为文本；原文件已保留');throw error;}
+  return lock(id,async()=>{
+    const current=await get(id);if(current.state!=='uploading')return current;
+    const next={...current,sha256:hash.digest('hex'),state:current.kind==='archive'?'ready':current.pauseAfterUpload?'paused':'queued',error:null};
     await save(next);return next;
+  });
+}
+export async function discard(id) {
+  return lock(id,async()=>{
+    const job=await get(id);
+    if(job.state!=='uploading')throw store.fail('只能取消未完成的文件导入；已保存的材料请使用暂停',409);
+    const root=path.resolve(store.homeDir(),'materials'),target=path.resolve(directory(id));
+    if(path.dirname(target)!==root)throw store.fail('材料目录无效');
+    await rm(target,{recursive:true,force:true});await unlink(metaFile(id));return {removed:true};
   });
 }
 async function slice(job,start) {
@@ -146,9 +168,12 @@ export function createWorker({run}) {
     if(!['pause','resume'].includes(action))throw store.fail('不支持的材料操作');
     // Abort immediately; the epoch check also discards a late model response.
     if(action==='pause'&&active?.id===id)active.controller.abort();
-    return store.withRecordLock('materials',id,async()=>{
+    return lock(id,async()=>{
       const job=await get(id);
-      if(job.state==='uploading'||job.kind!=='text')throw store.fail('文件尚未准备好',409);
+      if(job.kind!=='text')throw store.fail('文件尚未准备好',409);
+      if(job.state==='uploading') {
+        const next={...job,pauseAfterUpload:action==='pause',epoch:job.epoch+1};await save(next);return next;
+      }
       if(job.state==='completed'&&!job.pendingEdits?.length)return job;
       if(action==='resume'&&job.state==='running')return job;
       const next={...job,state:action==='pause'?'paused':'queued',epoch:job.epoch+1,error:null,pid:null};await save(next);return next;
@@ -174,13 +199,15 @@ export function createWorker({run}) {
       const part=await page(job.id,correction?job.pendingEdits[0]:job.processed);
       if(correction&&topic.materialCheckpoints?.[job.id]?.corrections?.[part.start]>=job.contentRevision){await save({...job,pendingEdits:job.pendingEdits.slice(1),state:'queued',pid:null});return;}
       let saved=await receipt(job.id,part.start);
-      const previousSummary=saved?.previousSummary ?? saved?.summary ?? '';
+      const appliedCorrection=topic.materialCheckpoints?.[job.id]?.corrections?.[part.start];
+      const alreadyApplied=saved?.correctionRevision&&appliedCorrection>=saved.correctionRevision;
+      const previousSummary=alreadyApplied?saved.summary:saved?.previousSummary ?? saved?.summary ?? '';
       if(!saved||saved.etag!==part.etag) {
         const request=prepareImport(topic,part.text);
         const result=part.text.trim()?await run({...request,materialId:job.id,stage:'extract'},controller.signal):'{"summary":""}';
         await check();
         const summary=parseImportSummary(typeof result==='string'?result:result.output);
-        saved={start:part.start,end:part.end,etag:part.etag,summary,scope:job.scope,...(correction?{previousSummary}: {})};
+        saved={start:part.start,end:part.end,etag:part.etag,summary,scope:job.scope,...(correction?{previousSummary,correctionRevision:job.contentRevision}: {})};
         await store.writeJsonAtomic(path.join(directory(job.id),`part-${part.start}.json`),saved);
       }
       let base=await store.getTopic(job.topicId),output='';
@@ -195,7 +222,8 @@ export function createWorker({run}) {
         await check();
         const before=new Map(viewTopic(base).graph.nodes.map(n=>[n.id,JSON.stringify(n)]));
         const result=await store.commitMaterialBatch(job.topicId,base.revision,{id:job.id,start:part.start,end:part.end,...(correction?{correction:job.contentRevision}: {})},output);
-        await store.writeJsonAtomic(path.join(directory(job.id),`part-${part.start}.json`),{...saved,outputs:result.graph.nodes.filter(n=>before.get(n.id)!==JSON.stringify(n)).map(n=>n.id)});
+        const {previousSummary:_previous,...appliedReceipt}=saved;
+        await store.writeJsonAtomic(path.join(directory(job.id),`part-${part.start}.json`),{...appliedReceipt,outputs:result.graph.nodes.filter(n=>before.get(n.id)!==JSON.stringify(n)).map(n=>n.id)});
         const pendingEdits=correction?job.pendingEdits.slice(1):job.pendingEdits||[],processed=correction?job.processed:part.end;
         await save({...job,scope:job.scope||result.scope||'',processed,batches:job.batches+(correction?0:1),pendingEdits,state:processed===job.size&&!pendingEdits.length?'completed':'queued',pid:null,error:null});
       });

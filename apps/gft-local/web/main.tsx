@@ -28,7 +28,7 @@ const Workspace = memo(ThinkingMapWorkspace);
 function HistoryDialog({ projectId, onClose }: { projectId: string; onClose(): void }) {
   const editor = useRef<SourceLogEditorHandle>(null);
   return <Modal title="Log" wide onClose={() => { if (editor.current?.save()) onClose(); }}>
-    <Materials topicId={projectId}/>
+    <Materials key={projectId} topicId={projectId}/>
     <SourceLogEditor ref={editor} projectId={projectId} />
   </Modal>;
 }
@@ -44,6 +44,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [dialog, setDialog] = useState<'tasks' | 'history' | 'import' | 'account' | null>(null);
   const [error, setError] = useState('');
+  const [connectionError, setConnectionError] = useState('');
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -58,8 +59,8 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
           localRequest<Task[]>('/api/tasks', undefined, controller.signal),
           localRequest<RuntimeStatus>('/api/runtime', undefined, controller.signal),
         ]);
-        if (!controller.signal.aborted) { setTasks(nextTasks); setStatus(nextStatus); }
-      } catch (error) { if (!controller.signal.aborted) setError(messageOf(error)); }
+        if (!controller.signal.aborted) { setTasks(nextTasks); setStatus(nextStatus); setConnectionError(''); }
+      } catch (error) { if (!controller.signal.aborted) setConnectionError(messageOf(error)); }
       finally { polling = false; }
     };
     void poll();
@@ -84,7 +85,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     finally { setCancelling(null); }
   };
   return <>
-    <Materials topicId={projectId}/>
+    <Materials key={projectId||'none'} topicId={projectId}/>
     <details className="gft-local-menu" ref={menuRef}>
       <summary aria-label={tr('设置')} title={tr('设置')} onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) menuRef.current.open=false;}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9.5 3-.5 2a8 8 0 0 0-2 1.2L5 5.6 3 9l1.5 1.4a8 8 0 0 0 0 2.4L3 14.2l2 3.4 2-.6a8 8 0 0 0 2 1.2l.5 2h4l.5-2a8 8 0 0 0 2-1.2l2 .6 2-3.4-1.5-1.4a8 8 0 0 0 0-2.4L20 9l-2-3.4-2 .6a8 8 0 0 0-2-1.2l-.5-2Z"/><circle cx="11.5" cy="11.6" r="3.1"/></svg>
@@ -107,10 +108,12 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     }} onClose={()=>setDialog(null)} />}
     {dialog === 'account' && <AccountDialog onClose={() => setDialog(null)} />}
     {error && !dialog && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
+    {connectionError && !dialog && <div className="gft-local-banner" role="alert">{tr(connectionError)}<button aria-label={tr('关闭提示')} onClick={() => setConnectionError('')}>×</button></div>}
     {dialog === 'history' && projectId && <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />}
     {dialog === 'tasks' && <Modal title={tr('任务')} wide onClose={() => setDialog(null)}>
       <p className="gft-local-note">{!status ? tr('正在读取执行状态…') : status.agent ? tr('当前由本机 {agent} 处理页面任务。', {agent:status.agent}) : tr('未启用自动 Agent。排队任务需由当前 Agent 对话通过 Skill 读取并处理。')}</p>
       {error && <p role="alert" className="gft-local-error">{tr(error)}</p>}
+      {connectionError && <p role="alert" className="gft-local-error">{tr(connectionError)}</p>}
       {status?.executor?.model && <p className="gft-local-note">{tr('执行模型：{model} · 思考强度：{effort}（自动）', {model:status.executor.model, effort:status.executor.effort || tr('执行器默认')})}</p>}
       {status?.executor?.lastError && <p className="gft-local-error">{typeof status.executor.lastError === 'string' ? status.executor.lastError : status.executor.lastError.message}</p>}
       {tasks.length === 0 ? <p className="gft-local-note">{tr('还没有任务。')}</p> : <ul className="gft-local-tasks">{tasks.map(task => <li key={task.id}>

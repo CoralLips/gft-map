@@ -398,6 +398,8 @@ export const EN: Record<string, string> = {
   "原文件保存完成后，按主题分批整理，每批完成即存档。可随时暂停；关闭页面后，本地服务继续处理。": "Once the original is saved, it is processed by topic in batches. Each completed batch is checkpointed. Pause at any time; closing this page leaves the local service working.",
   "文件原文与处理进度保存在本机，下载完整存档可带走；云端同步仍包含主题、Doc／Map 和 Log。": "File originals and processing checkpoints stay on this computer. Download a full archive to move them. Cloud sync includes the topic, Doc/Map, and Log.",
   "等待续传": "Upload paused",
+  "取消导入": "Cancel import",
+  "只能取消未完成的文件导入；已保存的材料请使用暂停": "Only unfinished uploads can be removed. Pause processing to keep saved materials.",
   "材料会先保存。请让 Agent 启动带执行器的面板，再继续整理。": "Materials are saved first. Ask your agent to start the panel with a model executor, then continue processing.",
   "原文件尚未接收完整，请完成续传后下载": "The original has not been fully received. Resume the upload before downloading.",
   "请先暂停材料整理，再下载完整存档": "Pause material processing before downloading the full archive.",

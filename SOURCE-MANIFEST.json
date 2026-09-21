@@ -2,9 +2,9 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "b105d3a15aaf72c47181fdb0364b28605511e6bd",
+  "sourceRevision": "99214fce9035316f53cf3bb048e9a8a1116895f2",
   "sourceDirty": false,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "files": [
     {
       "path": ".gitattributes",
@@ -44,7 +44,7 @@
     {
       "path": "apps/gft-local/ADVANCED.md",
       "source": "apps/gft-local/ADVANCED.md",
-      "sha256": "3bf465338a7bdf516ef569e3b53093d52ce068bd4adac233cc98b36c362f4799"
+      "sha256": "fc80914b7bfbcd556bb6c15f6a6b2d3b4dc00df38163dfa68484bb09264a04b0"
     },
     {
       "path": "apps/gft-local/build.mjs",
@@ -89,7 +89,7 @@
     {
       "path": "apps/gft-local/materials.mjs",
       "source": "apps/gft-local/materials.mjs",
-      "sha256": "273d343ddf629566e21f0cbfd0267af239ff90e57f56d694fdc1462f0e2d8d03"
+      "sha256": "9775de29949cbd878a824c3ac7972acaa5c635546cd1780ae90e1ee8dfbe257e"
     },
     {
       "path": "apps/gft-local/mcp.mjs",
@@ -109,12 +109,12 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "981ff9afe8a524b756d5ae7e732d72e8e54abafe2599607fe0a9e5fe34917d47"
+      "sha256": "274aa3eeb5f6fc1d36d0a7626bb77f740eff01b866190bea03eff4df045efeb2"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "390ac54317c9f8ae5f2acf389c9ebd2c0ab4bc322e9bf80d8cda3394aae2c3ff"
+      "sha256": "cf9ad68e65498ac9160b785438451bebf6ea01d4ce5ac19956f12a996c2170d2"
     },
     {
       "path": "apps/gft-local/README_ZH.md",
@@ -194,7 +194,7 @@
     {
       "path": "apps/gft-local/server.mjs",
       "source": "apps/gft-local/server.mjs",
-      "sha256": "b2b3c9141c20a4a6da5c15bd50ee92b96cf955dfab261f6bb2548662e5b2797f"
+      "sha256": "fe5e0d2ec9d570b7168ae4efa1af0fb91beb2750fc9dc44cbfa4a2aca6c39198"
     },
     {
       "path": "apps/gft-local/showcase/assets/engineering.en.png",
@@ -409,7 +409,7 @@
     {
       "path": "apps/gft-local/tests/materials.test.mjs",
       "source": "apps/gft-local/tests/materials.test.mjs",
-      "sha256": "ab1165c1b914114e2c6a8577ebd31aea29b6e4a94fb8af0d18538588e4f34f70"
+      "sha256": "4f1ab5b160ef6b96f424284cb1c58c3bb6df293b155cb729f00892c86abd883a"
     },
     {
       "path": "apps/gft-local/tests/mcp.test.mjs",
@@ -439,7 +439,7 @@
     {
       "path": "apps/gft-local/tests/recovery.test.mjs",
       "source": "apps/gft-local/tests/recovery.test.mjs",
-      "sha256": "dd55893b3abf57e6a2b2bff8a06a0e5de6768f6d15a8e16bba1cf16450b81ee7"
+      "sha256": "8b2f27a779cc9c22d8137e429192b7866c82cd98d1cea84ee51b2ed800735a36"
     },
     {
       "path": "apps/gft-local/tests/runner.test.mjs",
@@ -524,12 +524,12 @@
     {
       "path": "apps/gft-local/web/main.tsx",
       "source": "apps/gft-local/web/main.tsx",
-      "sha256": "28d5de17fe007718c5c60f99e5a44680a61979b688b693f4ec20131c9d13276e"
+      "sha256": "5a09d0c813f6e69403392da77500fa2f5a7bf90e55937a5af09403a9ec2a7528"
     },
     {
       "path": "apps/gft-local/web/Materials.tsx",
       "source": "apps/gft-local/web/Materials.tsx",
-      "sha256": "ba8725eb705b19be1f307b5c418b477ecd7a916f6cb5ab4d479c9b6e9d14c210"
+      "sha256": "4716c0bd7b5053364539331beff7282fd34df2cd5af5aa89c18107f0be888e0f"
     },
     {
       "path": "apps/gft-local/web/styles.css",
@@ -544,12 +544,12 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "ac8ff3b215fd16768f78f3c5d2c4de353706fd9602ce8e4d21618341f364999c"
+      "sha256": "eff5fe76b86223b7aae836e5d2311b110922d6bbe68463674b03f5eb95418df7"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "4a1be3da461f70c5fbd9af48e6e07d47257a683e7c49fb0ae4efd55d6ac24a8a"
+      "sha256": "7ace7df22f120223ab25b5ee17066eae4db1b5a8cca2ded4ee293e95633b9bf5"
     },
     {
       "path": "README_ZH.md",
@@ -629,7 +629,7 @@
     {
       "path": "skills/gft-map/scripts/dist/version.json",
       "source": "generated:apps/gft-local",
-      "sha256": "d0a597d748f89dd29a24a9e21a3c2d6ed2a44374f4bdb8211008a4402559fbb9"
+      "sha256": "378286ea6bf6559aa0a7dffd5c83f09002d5e874fcda6e15dc7b844a7eb1e7b1"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.css",
@@ -639,7 +639,7 @@
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "23894fe1642546cd7a7b0ecb7cc266cf6c101813c3c174eb00772db79576752d"
+      "sha256": "b01517fa7cc7e2fa98b2d5aa75896ea29416e9a05aa5cb14218d149a26f545ec"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -959,7 +959,7 @@
     {
       "path": "skills/gft-map/scripts/materials.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "273d343ddf629566e21f0cbfd0267af239ff90e57f56d694fdc1462f0e2d8d03"
+      "sha256": "9775de29949cbd878a824c3ac7972acaa5c635546cd1780ae90e1ee8dfbe257e"
     },
     {
       "path": "skills/gft-map/scripts/memory.mjs",
@@ -979,7 +979,7 @@
     {
       "path": "skills/gft-map/scripts/server.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "b2b3c9141c20a4a6da5c15bd50ee92b96cf955dfab261f6bb2548662e5b2797f"
+      "sha256": "fe5e0d2ec9d570b7168ae4efa1af0fb91beb2750fc9dc44cbfa4a2aca6c39198"
     },
     {
       "path": "skills/gft-map/scripts/store.mjs",
@@ -1134,7 +1134,7 @@
     {
       "path": "src/i18n/en.ts",
       "source": "src/i18n/en.ts",
-      "sha256": "a53edaef50eb3304409d5c51b71323b3e21f0bb4a635a879269ff6e782a8ff41"
+      "sha256": "c490351472f87c5839a313e863f4a5344e9b9106e24387e9fc646a74a6f620a6"
     },
     {
       "path": "src/i18n/index.ts",
