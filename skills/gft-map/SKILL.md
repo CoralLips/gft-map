@@ -30,6 +30,16 @@ node scripts/cli.mjs read-connected --provider codex --session SESSION --project
 4. 按原参数从原安装位置重启，核对 `/api/runtime.version` 与安装 `version` 一致，并通过 `list --remote` 检查已有脉络仍在。刷新页面／技能列表，重启使用旧代码的 MCP 进程。仅下载完成不能报告“更新成功”。
 5. 失败先保留原数据。恢复更新器返回的完整程序备份；意外中断时查看 `.gft-updating` 中的备份路径和相邻更新锁，确认没有更新进程后恢复，再重试。不能混用新旧脚本，也不降级尚有分段读取进度的安装。
 
+## 大文件材料
+
+用户指定文件加入主题时，先确认目标主题及实际文件路径。通过正在运行的同一本地服务执行 `node scripts/cli.mjs import-file --project TOPIC_ID --file ABSOLUTE_FILE`。不要先把整个文件读取到上下文，不截断原文，不让用户手动拆文件。支持 UTF-8 文本、Markdown、JSON/JSONL 聊天材料；其他格式需要先转文本，不声称已读取未支持的格式。
+
+导入命令返回材料 ID 与接收状态，后台会分批整理。用 `material --id MATERIAL_ID` 查看进度、`materials --project TOPIC_ID` 列材料；只有 `completed` 才能称已全部处理。每批完成后右侧已有结果并保存存档。用户说暂停、停止时调用 `pause-material --id MATERIAL_ID`，保留全部已完成内容；继续时用 `resume-material --id MATERIAL_ID`。授权或额度错误先说明具体原因，恢复后再继续，不切换到别人的模型或账号。
+
+上传中断时使用同一文件及 `import-file ... --id MATERIAL_ID` 核对续传。按需查看原文用 `read-material --id MATERIAL_ID --start 0`，后续以返回的 `end` 翻页；连接的主题也可用 `sources-connected` 返回的文件游标分页读取。每页只是部分原文，不能当作全文。
+
+升级程序前暂停文件任务，再使用上方“更新安装”流程。数据目录中的原文、编辑和存档保留，重启后核对 `materials` 中的进度再继续。完整迁移请暂停并下载 `.gftpack`，用 `import-file --file ARCHIVE.gftpack` 恢复；文件原文与存档目前只在本机，不随 Doc／Map 的云同步迁移。
+
 ## 连接、加载与断开
 
 “连接 GFT”“加载战术转向”是连接入口。连接由本场主 Agent 执行，不能委派子 Agent 用它自己的编号替主会话连接。选择内容与实际保存结果都必须可见。

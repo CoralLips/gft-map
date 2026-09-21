@@ -513,7 +513,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         absorbedIds.forEach(id => unreadIds.add(id));
         // 原始记录为空（070 之前的行）→ 从工作账剥出一次并回写
         let raw = m?.raw ?? '';
-        if (!raw && ledger) { raw = stripToRaw(ledger); migrated = true; }
+        if (!raw && ledger && runtime.persistence.migrateLegacySources !== false) { raw = stripToRaw(ledger); migrated = true; }
         applyLedgerText(ledger, {
           boundProjectId: projectId,
           unreadIds,

@@ -442,6 +442,19 @@ test('计算中切换主题即取消旧任务，迟到输出不能写旧主题�
   });
 });
 
+test('材料批次先落盘，随后保存人的编辑：批次与手改都保留且页面继续刷新',async()=>{
+  await fixture(async()=>output,async({local,a,browserCache})=>{
+    const before=await backend.getTopic(a.id);
+    await backend.commitMaterialBatch(a.id,before.revision,{id:'synthetic-material',start:0,end:100},'<doc>\n## 分批来源\n### ◆ 后台新判断\n来自文件首段。\n</doc>');
+    local.store.getState().updateNode('j1',{title:'人的最新决定'});local.store.getState().flushDoc();
+    await waitFor(()=>JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),entry=>entry.pending===false&&entry.revision>=3);
+    const view=await backend.getView(a.id);
+    assert.match(view.doc,/人的最新决定/);assert.match(view.doc,/后台新判断/);
+    assert.equal(local.store.getState().error,null);
+    assert.equal((await backend.getTopic(a.id)).materialCheckpoints['synthetic-material'].offset,100);
+  });
+});
+
 test('外部写入使本地保存CAS冲突时，远端不被覆盖，手改与pending镜像保留',async()=>{
   await fixture(async()=>output,async({local,a,browserCache})=>{
     const before=await backend.getTopic(a.id);

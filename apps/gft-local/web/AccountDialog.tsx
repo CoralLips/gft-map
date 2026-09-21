@@ -41,6 +41,7 @@ export function AccountDialog({ onClose }: { onClose(): void }) {
   return <LocalDialog title={tr('GFT 账号')} onClose={onClose}>
     <p>{!account ? tr('正在读取账号…') : account.connected ? `${tr('已登录')} · ${account.account?.email}` : account.pending ? tr('请在 GFT 授权页完成登录。') : tr('连接你的 GFT 账号')}</p>
     <p className="gft-local-note">{tr('无需登录也能使用。登录后，脉络自动与 GFT 双向同步；一端删除，另一端也会删除。')}</p>
+    <p className="gft-local-note">{tr('文件原文与处理进度保存在本机，下载完整存档可带走；云端同步仍包含主题、Doc／Map 和 Log。')}</p>
     {account?.connected && <p className="gft-local-note" role="status">{tr(!account.sync ? '重启本地服务后启用同步' : account.sync.status === 'synced' ? '已同步' : account.sync.status === 'pending' ? '等待同步，已保留本地修改' : '正在同步…')}{account.sync?.conflicts ? ` · ${tr('并发修改已保留为冲突副本')}` : ''}</p>}
     {account?.connected && account.sync?.error && <p role="alert" className="gft-local-error">{tr(account.sync.error)}</p>}
     {(error || account?.error) && <p role="alert" className="gft-local-error">{tr(error || account?.error || '')}</p>}

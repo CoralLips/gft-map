@@ -371,8 +371,9 @@ export function ExportMenu(): JSX.Element {
     const snapshot = capture();
     return await copyToClipboard(snapshot.doc) ? t('✓ 已复制') : t('复制失败');
   });
-  const exportBundle = () => run(() => {
+  const exportBundle = () => run(async () => {
     const { current, name } = capture();
+    if(host.downloadBundle){await host.downloadBundle();return t('已开始下载');}
     const data = mapToBundle(name, { nodes: current.nodes, edges: current.edges, doc: current.doc, ledger: current.ledger, raw: current.raw, watermarks: {} });
     download(name, JSON.stringify(data, null, 2));
     return t('✓ 已下载');

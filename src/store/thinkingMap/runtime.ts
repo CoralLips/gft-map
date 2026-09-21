@@ -41,6 +41,7 @@ export interface ThinkingMapHost {
   fetchSourceBatches(id: string, alive: Set<string>): Promise<SourceBatch[]>;
   requestUpdate?(): Promise<void>;
   importBundle?(bundle: unknown): Promise<void>;
+  downloadBundle?(): Promise<void>;
 }
 export interface MapComputeContext {
   projectId: string | null;
@@ -49,6 +50,7 @@ export interface MapComputeContext {
 export interface ThinkingMapRuntime {
   host: ThinkingMapHost;
   persistence: {
+    migrateLegacySources?: boolean;
     load(projectId: string): Promise<PersistedThinkingMap | null>;
     loadCached(projectId: string): PersistedThinkingMap | null;
     save(projectId: string, map: PersistedThinkingMap): Promise<PersistedThinkingMap | null>;

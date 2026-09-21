@@ -58,6 +58,8 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 
 以后继续点击 **更新**，只收录新增消息。长聊天和超长单条消息会分批处理；可随时取消，再次更新时接着已完成的批次继续。
 
+**已有文件？** 打开脉络右上角的 **材料 → 添加文件**，放入 UTF-8 文本、Markdown 或聊天记录。原文件保存后按主题分批整理，每批结果都会出现在 Doc／Map，并自动存档。可随时 **暂停／继续**；服务重启后接着存档处理，已暂停的任务保持暂停。上传中断时重新选择原文件即可续传。[大文件说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
+
 ### 3. 让 Agent 接着用
 
 在当前或新的 Agent 对话中，告诉它要读取哪份脉络、接下来做什么。例如：
@@ -83,6 +85,8 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 - **复制**：复制当前 Doc，交给别人或另一个 Agent。
 - **下载**：保存完整脉络文件，在另一份 GFT Map 中通过「设置 → 导入脉络」继续使用。
 
+含文件材料时，暂停后下载 `.gftpack`，一起带走原文、修改和处理进度。文件原文与进度保存在本机；云端同步包含主题、Doc／Map 和 Log。
+
 本地使用无需 GFT 账号。也可在设置中登录 [GFT 平台](https://gitforthought.com)，自动双向同步脉络。[同步说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
 
 **数据会去哪？** 未登录 GFT 时，脉络和收到的聊天原文保存在本机。点击 AI 更新、整理或重画时，任务所需材料会交给所选 Agent 的模型服务，使用该服务的账号额度；登录 GFT 后，脉络（含 Log）会同步到 GFT 云端。不会扫描、上传所有项目文件或所有聊天。
@@ -93,7 +97,7 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 
 > 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
 
-更新会校验完整安装包、替换旧程序并保留备份；数据留在原目录。更新期间先完成或取消运行中的任务。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+更新会校验完整安装包、替换旧程序并保留备份；数据留在原目录。更新前暂停文件整理，完成或取消其他运行中的任务；重启后点击继续，接着文件存档处理。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
 
 ---
 

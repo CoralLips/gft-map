@@ -2,6 +2,10 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import * as materials from './materials.mjs';
+import {archive as materialArchive,restore as restoreMaterialArchive} from './materialArchive.mjs';
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 import * as store from './store.mjs';
 import { createAccount } from './account.mjs';
 import { createCloudSync } from './sync.mjs';
@@ -45,6 +49,13 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
       catch (error) { if (error.status !== 409 || attempt >= 19) throw error; await new Promise(resolve=>setTimeout(resolve,25)); }
     }
   }
+  const materialWorker=materials.createWorker({run:async (request,signal)=>{
+    if(runner?.snapshot().status==='unavailable')await runner.check();
+    if(execute)return execute(request,{signal});
+    if(!runner)throw store.fail('请先启用本地 Agent 执行器',503);
+    return runner.run(request,{directory:path.join(store.homeDir(),'runs',`material-${request.materialId}-${Date.now()}`),signal});
+  }});
+  await materialWorker.recover();
   const runtime = () => ({ product:'gft-map',version,installationId,pid:process.pid,agent, mode: agent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: agent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
   const server = http.createServer(async (req,res) => {
     const send = (status,data) => { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(data)); };
@@ -68,8 +79,27 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
       }
       const [,group,id,action] = parts;
       let value;
+      if(req.method==='PUT'&&group==='materials'&&action==='upload') {
+        if(req.headers['content-type']!=='application/octet-stream')throw store.fail('需要文件分块',415);
+        let size=0;const chunks=[];
+        for await(const chunk of req){size+=chunk.length;if(size>materials.UPLOAD_BYTES)throw store.fail('分块过大，请分批发送',413);chunks.push(chunk);}
+        value=await materials.upload(id,Number(url.searchParams.get('offset')),Buffer.concat(chunks));
+        send(200,value);return;
+      }
       if(req.method === 'GET') {
+        if(group==='topics'&&action==='download') {
+          const topic=await store.getTopic(id),hasMaterials=(await materials.list(id)).length>0;
+          if(hasMaterials){
+            const stream=materialArchive(id),first=await stream.next();
+            res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(topic.name.replace(/[\\/:*?"<>|]/g,'_')+'.gftpack')}`});
+            await pipeline(Readable.from((async function*(){yield first.value;yield* stream;})()),res);return;
+          }
+          res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(topic.name.replace(/[\\/:*?"<>|]/g,'_')+'.gft.json')}`});
+          res.end(JSON.stringify(await store.exportTopic(id),null,2));return;
+        }
         if(group === 'runtime') value = runtime();
+        else if(group==='material-evidence')value={text:await materials.evidence(url.searchParams.get('topicId'),url.searchParams.getAll('node'))};
+        else if(group==='materials') value=!id ? await materials.list(url.searchParams.get('topicId')) : action==='page' ? await materials.page(id,Number(url.searchParams.get('start') || 0)) : await materials.get(id);
         else if(group === 'account') value = {...await account.status(),sync:sync.snapshot()};
         else if(group === 'chat-sessions') {
           let cursor;
@@ -91,10 +121,18 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         const data = await body(req);
         if(group === 'upgrade' && id === 'prepare') {
           if(data.installationId !== installationId) throw store.fail('此服务属于另一份安装，未停止。',409);
-          if(busy || (await store.listTasks()).some(t=>['pending','running'].includes(t.status))) throw store.fail('请等待任务完成或取消后再更新。',409);
+          if(busy || (await store.listTasks()).some(t=>['pending','running'].includes(t.status)) || (await materials.list()).some(j=>['queued','running'].includes(j.state))) throw store.fail('请等待任务完成或暂停后再更新。',409);
           closed=true;
           send(200,{stopped:true,version});
           setImmediate(()=>void server.shutdown()); return;
+        }
+        else if(group==='materials') {
+          if(!id)value=await materials.create(data);
+          else if(action==='finish')value=await materials.finish(id);
+          else if(action==='restore')value=await restoreMaterialArchive(id);
+          else if(action==='pause'||action==='resume')value=await materialWorker.control(id,action);
+          else if(action==='edit')value=await materials.editPage(id,data.start,data.end,data.text,data.etag);
+          else throw store.fail('接口不存在',404);
         }
         else if(group === 'import') value = await store.importTopic(data);
         else if(group === 'account' && id === 'login') value = await account.begin();
@@ -130,14 +168,14 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
       } else throw store.fail('不支持的请求',405);
       send(200,value);
       if(req.method === 'POST') void sync.run();
-    } catch(e) { send(e.status || 500,{error:e.message}); }
+    } catch(e) { if(res.headersSent)res.destroy(e);else send(e.status || 500,{error:e.message}); }
   });
   async function tick() {
     if(busy || closed || !agent) return;
     busy = true; let task, claimed = false, cancellation;
     try {
       task = (await store.listTasks()).filter(t=>t.status === 'pending').at(-1);
-      if(!task) return;
+      if(!task) {await materialWorker.tick();return;}
       await store.setTaskStatus(task.id,'running');
       claimed = true;
       activeTaskId = task.id;
@@ -186,9 +224,10 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
   const timer = setInterval(()=>void tick(),800);
   sync.start();
   async function stopExecution() {
+    closed=true;clearInterval(timer);activeController?.abort('shutdown');
+    await materialWorker.close();
     account.close();
     await sync.close();
-    closed=true;clearInterval(timer);activeController?.abort('shutdown');
     if (activeTaskId) await store.setTaskStatus(activeTaskId,'failed','本地服务已停止，当前内容保留；可重新发起任务。').catch(()=>{});
     if (runner) await runner.waitForIdle();
   }

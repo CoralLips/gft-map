@@ -5,13 +5,14 @@ import type { CondensationEvent, SourceBatch } from '../../../src/type/sourceSna
 import { deriveCaches } from '../../../src/service/ledger/bridge';
 import { parseLedger } from '../../../src/service/ledger';
 import { isEditedSourceLog, mergeSourceLogs } from '../../../src/service/sourceLog';
+import { mergeLedgerPair } from '../../../src/service/ledger/merge';
 import { buildGenerateRequest, parseGenerateResponse, buildRefinePrompt, parseRefineTags } from '../../../src/service/thinkingMapCore';
 import { buildTidyRequest, parseTidyOps } from '../../../src/service/tidyCore';
 import { t } from '../../../src/i18n';
 
-interface LocalTopic { id: string; name: string; scope: string; revision: number; ledger: string; raw: string; panel?: PersistedThinkingMap }
+interface LocalTopic { id: string; name: string; scope: string; revision: number; ledger: string; raw: string; panel?: PersistedThinkingMap; materialRevision?:number }
 interface TopicSnapshot { topic: LocalTopic }
-interface CachedMap { revision: number; serial: number; pending: boolean; map: PersistedThinkingMap }
+interface CachedMap { revision: number; serial: number; pending: boolean; map: PersistedThinkingMap; base?: {ledger: string; raw: string} }
 export type ChatProvider = 'codex' | 'claude';
 export interface ChatSession { provider: ChatProvider; id: string; title: string; cwd: string; updatedAt: string }
 export interface ChatConnection { id: string; topicId: string; source: ChatSession; history: 'now' | 'all'; loadedRevision: number | null }
@@ -110,7 +111,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   };
   const cachePending = (id: string, map: PersistedThinkingMap) => {
     const old = readCache(id);
-    const entry = { map, revision: old?.revision ?? 1, serial: ++serial, pending: true };
+    const entry = { map, base: old?.base ?? (old && !old.pending ? {ledger:old.map.ledger || '',raw:old.map.raw || ''}:undefined), revision: old?.revision ?? 1, serial: ++serial, pending: true };
     writeCache(id, entry); return entry;
   };
   const save: ThinkingMapRuntime['persistence']['save'] = (id, map) => {
@@ -124,7 +125,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         try {
           const saved = await localRequest<{ revision: number }>(`/api/topics/${encodeURIComponent(id)}/state`, { baseRevision: entry.revision, map: entry.map });
           const latest = readCache(id)!;
-          writeCache(id, { ...latest, revision: Math.max(latest.revision,saved.revision), pending: latest.serial !== entry.serial });
+          writeCache(id, { ...latest, base:{ledger:entry.map.ledger || '',raw:entry.map.raw || ''}, revision: Math.max(latest.revision,saved.revision), pending: latest.serial !== entry.serial });
           if (rebased && latest.serial === entry.serial) {
             remoteVersions.set(entry.map, saved.revision);
             return entry.map;
@@ -134,10 +135,17 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
           if (!(error instanceof LocalApiError) || error.status !== 409 || attempt >= 2) throw error;
           const remote = (await localRequest<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`)).topic;
           const latest = readCache(id)!;
-          // Rebase source-only changes. Never resolve concurrent Doc/Map edits by guessing.
-          if (remote.ledger !== latest.map.ledger || !isEditedSourceLog(latest.map.raw ?? '')) throw error;
-          const raw = mergeSourceLogs(latest.map.raw ?? '', remote.raw);
-          entry = { ...latest, revision: remote.revision, map: { ...latest.map, raw }, pending: true };
+          const base = latest.base;
+          let merged;
+          if (base && remote.materialRevision === remote.revision && remote.ledger.startsWith(base.ledger) && (latest.map.ledger || '').startsWith(base.ledger)) {
+            // Both sides append operations to the accepted version. Keep the new
+            // batch first and the user's later operations last; remap new IDs.
+            merged = mergeLedgerPair(remote,latest.map);
+          } else if (remote.ledger === latest.map.ledger && isEditedSourceLog(latest.map.raw ?? '')) {
+            merged = {ledger:remote.ledger,raw:mergeSourceLogs(latest.map.raw ?? '',remote.raw)};
+          } else throw error; // Destructive/ambiguous edits still require review.
+          const rebasedMap = mapOf({...remote,...merged});
+          entry = { ...latest, base:{ledger:remote.ledger,raw:remote.raw}, revision: remote.revision, map: {...rebasedMap,watermarks:{...rebasedMap.watermarks,...latest.map.watermarks}}, pending: true };
           writeCache(id, entry);
           rebased = true;
         }
@@ -290,6 +298,14 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     return operation;
   }
   const host: ThinkingMapHost = {
+    async downloadBundle() {
+      const id=snapshot.currentProjectId;if(!id)return;
+      store.getState().flushDocEdits();store.getState().flushDoc();await flushPending(id);
+      const files=await localRequest<{state:string;received:number;size:number;sha256?:string}[]>(`/api/materials?topicId=${encodeURIComponent(id)}`);
+      if(files.some(file=>file.received!==file.size||!file.sha256))throw new Error(t('原文件尚未接收完整，请完成续传后下载'));
+      if(files.some(file=>['running','queued'].includes(file.state)))throw new Error(t('请先暂停材料整理，再下载完整存档'));
+      const anchor=document.createElement('a');anchor.href=`/api/topics/${encodeURIComponent(id)}/download`;anchor.download='';document.body.appendChild(anchor);anchor.click();anchor.remove();
+    },
     getSnapshot: () => snapshot,
     subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     createProject(name) {
@@ -441,20 +457,24 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   const runtime: ThinkingMapRuntime = {
     host,
     persistence: {
+      // Empty raw is valid for file-backed topics. Do not manufacture a Log
+      // from generated output or autosave a fake legacy migration on reload.
+      migrateLegacySources: false,
       load, loadCached: id => readCache(id)?.map || null, save, cachePending,
       hasPending: id => readCache(id)?.pending === true,
       hasRemoteChanges: (id,map) => remoteVersions.get(map) !== readCache(id)?.revision,
       accept(id, remote, applied = remote) {
         const revision = remoteVersions.get(remote); if(revision === undefined) return;
         const old = readCache(id);
-        writeCache(id, { map:applied, revision, pending:old?.pending || false, serial:++serial });
+        writeCache(id, { map:applied, base:{ledger:remote.ledger || '',raw:remote.raw || ''}, revision, pending:old?.pending || false, serial:++serial });
       },
       insertCondensation: (id,event) => writeSource(id,'sources',{event}),
       // An empty/filtered map is not permission to discard its saved source messages.
       // An empty or filtered map is not permission to discard saved original sources.
       clearCondensations: async () => {},
       async fetchSourceSnapshots(id,nodeIds) {
-        const text = (await sources(id,new Set(nodeIds))).flatMap(batch=>batch.messages).map(message=>`${message.role==='user' ? message.name || '用户' : 'AI'}：${message.content}`).join('\n\n');
+        const fileSources=await localRequest<{text:string}>(`/api/material-evidence?${new URLSearchParams([['topicId',id],...nodeIds.map(node=>['node',node])])}`);
+        const text = fileSources.text+(await sources(id,new Set(nodeIds))).flatMap(batch=>batch.messages).map(message=>`${message.role==='user' ? message.name || '用户' : 'AI'}：${message.content}`).join('\n\n');
         return text.length > 8000 ? `${text.slice(0,8000)}…` : text;
       },
     },

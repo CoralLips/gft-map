@@ -7,6 +7,7 @@ import { SourceLogEditor, type SourceLogEditorHandle } from '../../../src/compon
 import { useLangStore, useT } from '../../../src/i18n';
 import { initTheme, getThemePref, setThemePref, type ThemePref } from '../../../src/util/theme';
 import { ImportDialog } from './ImportDialog';
+import {Materials,addMaterial} from './Materials';
 import { AccountDialog } from './AccountDialog';
 import { createLocalRuntime, localRequest, type UpdateSource } from './localRuntime';
 import { ConnectionActions, ConnectionManager, LocalDialog as Modal } from './ConnectionManager';
@@ -27,6 +28,7 @@ const Workspace = memo(ThinkingMapWorkspace);
 function HistoryDialog({ projectId, onClose }: { projectId: string; onClose(): void }) {
   const editor = useRef<SourceLogEditorHandle>(null);
   return <Modal title="Log" wide onClose={() => { if (editor.current?.save()) onClose(); }}>
+    <Materials topicId={projectId}/>
     <SourceLogEditor ref={editor} projectId={projectId} />
   </Modal>;
 }
@@ -82,6 +84,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     finally { setCancelling(null); }
   };
   return <>
+    <Materials topicId={projectId}/>
     <details className="gft-local-menu" ref={menuRef}>
       <summary aria-label={tr('设置')} title={tr('设置')} onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) menuRef.current.open=false;}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9.5 3-.5 2a8 8 0 0 0-2 1.2L5 5.6 3 9l1.5 1.4a8 8 0 0 0 0 2.4L3 14.2l2 3.4 2-.6a8 8 0 0 0 2 1.2l.5 2h4l.5-2a8 8 0 0 0 2-1.2l2 .6 2-3.4-1.5-1.4a8 8 0 0 0 0-2.4L20 9l-2-3.4-2 .6a8 8 0 0 0-2-1.2l-.5-2Z"/><circle cx="11.5" cy="11.6" r="3.1"/></svg>
@@ -96,7 +99,12 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
         <button onClick={() => open('account')}>{tr('GFT 账号')}</button>
       </div>
     </details>
-    {dialog === 'import' && <ImportDialog importTopic={runtime.importTopic} onClose={()=>setDialog(null)} />}
+    {dialog === 'import' && <ImportDialog importTopic={runtime.importTopic} importMaterial={async file=>{
+      let target=runtime.host.getSnapshot().currentProjectId;
+      if(!target&&!file.name.toLowerCase().endsWith('.gftpack'))target=await runtime.host.createProject(file.name.replace(/\.[^.]+$/,''));
+      const result=await addMaterial(file,target||'');
+      await runtime.refreshProjects();await runtime.host.switchProject(result.topicId);
+    }} onClose={()=>setDialog(null)} />}
     {dialog === 'account' && <AccountDialog onClose={() => setDialog(null)} />}
     {error && !dialog && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {dialog === 'history' && projectId && <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />}

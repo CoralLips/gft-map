@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, open, stat } from 'node:fs/promises';
 import * as store from './store.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,29 @@ try {
   } else if(command === 'upgrade') {
     const {upgradeSkill}=await import('./upgrade.mjs');
     print(await upgradeSkill({directory:arg('directory') || path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),dataDirectory:store.homeDir(),url:process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317'}));
+  } else if(['import-file','materials','material','pause-material','resume-material','read-material'].includes(command)) {
+    const {createLocalClient}=await import('./dist/mcp.mjs');const request=createLocalClient();
+    if(command==='materials')print(await request(`/api/materials?topicId=${encodeURIComponent(need('project'))}`));
+    else if(command==='material')print(await request(`/api/materials/${encodeURIComponent(need('id'))}`));
+    else if(command==='read-material')print(await request(`/api/materials/${encodeURIComponent(need('id'))}/page?start=${Number(arg('start')||0)}`));
+    else if(command==='pause-material'||command==='resume-material')print(await request(`/api/materials/${encodeURIComponent(need('id'))}/${command==='pause-material'?'pause':'resume'}`,{}));
+    else {
+      const filename=path.resolve(need('file')),info=await stat(filename);
+      if(!info.isFile())throw store.fail('请选择一个文件');
+      const project=filename.toLowerCase().endsWith('.gftpack')?arg('project'):need('project');
+      const job=arg('id')?await request(`/api/materials/${encodeURIComponent(arg('id'))}`):await request('/api/materials',{topicId:project,name:path.basename(filename),size:info.size,kind:filename.toLowerCase().endsWith('.gftpack')?'archive':'text'});
+      if(job.size!==info.size||job.name!==path.basename(filename))throw store.fail('请选择同一份原文件继续上传');
+      console.error(`材料 ID: ${job.id}`);
+      if(job.state==='uploading'){
+        const handle=await open(filename,'r'),buffer=Buffer.alloc(512*1024);
+        try{for(let offset=0;offset<info.size;){const {bytesRead}=await handle.read(buffer,0,buffer.length,offset);if(!bytesRead)throw store.fail('文件在读取期间发生变化');
+          const response=await fetch(new URL(`/api/materials/${job.id}/upload?offset=${offset}`,process.env.GFT_LOCAL_URL||'http://127.0.0.1:4317'),{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:buffer.subarray(0,bytesRead),signal:AbortSignal.timeout(60000)});
+          const value=await response.json();if(!response.ok)throw store.fail(value.error,response.status);offset+=bytesRead;
+        }}finally{await handle.close();}
+      }
+      await request(`/api/materials/${job.id}/finish`,{});
+      print(job.kind==='archive'?await request(`/api/materials/${job.id}/restore`,{}):await request(`/api/materials/${job.id}`));
+    }
   } else if(command === 'install-hooks') {
     const {installChangeHook} = await import('./install-hooks.mjs');
     print(await installChangeHook({provider:need('provider'),project:need('project')}));
@@ -100,7 +123,16 @@ try {
     print(await store.taskPrompt(task.id));
   } else if(command === 'complete') print(await store.completeTask(need('id'),await readFile(need('file'),'utf8')));
   else if(command === 'cancel') print(await store.setTaskStatus(need('id'),'cancelled'));
-  else if(command === 'export') {await writeFile(need('file'),JSON.stringify(await store.exportTopic(need('project')),null,2),'utf8');print({saved:arg('file')});}
+  else if(command === 'export') {
+    const id=need('project'),filename=need('file'),materials=await import('./materials.mjs');
+    if((await materials.list(id)).length){
+      if(!filename.toLowerCase().endsWith('.gftpack'))throw store.fail('含文件材料的脉络请使用 .gftpack 后缀，完整保存原文与进度');
+      const {archive}=await import('./materialArchive.mjs'),{createWriteStream}=await import('node:fs'),{Readable}=await import('node:stream'),{pipeline}=await import('node:stream/promises');
+      const stream=archive(id),first=await stream.next();
+      await pipeline(Readable.from((async function*(){yield first.value;yield* stream;})()),createWriteStream(filename));
+    }else await writeFile(filename,JSON.stringify(await store.exportTopic(id),null,2),'utf8');
+    print({saved:filename});
+  }
   else if(command === 'import') print(await store.importTopic(JSON.parse(await readFile(need('file'),'utf8'))));
-  else {console.log('连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。默认手工处理任务，只有 --agent 才启用自动执行。'); if(command && command !== 'help') process.exitCode=1;}
+  else {console.log('连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\n材料: import-file --project ID --file FILE [--id MATERIAL] | materials --project ID | material --id ID | pause-material --id ID | resume-material --id ID | read-material --id ID --start BYTE_OFFSET\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。默认手工处理任务，只有 --agent 才启用自动执行。'); if(command && command !== 'help') process.exitCode=1;}
 } catch(e) {console.error(JSON.stringify({error:e.message,status:e.status || 500}));process.exitCode=1;}

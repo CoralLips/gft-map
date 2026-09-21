@@ -14,6 +14,7 @@ apps/gft-local/release/SHA256SUMS
 .mcp.json
 .claude/settings.local.json
 *.gft-map-backup
+*.gftpack
 .vercel/
 coverage/
 *.tsbuildinfo
