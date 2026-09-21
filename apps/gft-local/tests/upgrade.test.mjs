@@ -32,7 +32,18 @@ test('升级整目录替换、留下回退包、数据不变；损坏包和错�
     await assert.rejects(upgradeSkill(options),/停止旧版服务/);
     assert.equal(await readFile(path.join(directory,'obsolete.js'),'utf8'),'stale');
     await new Promise(resolve=>service.close(resolve));
-    const result=await upgradeSkill(options);
+    const originalFetch=globalThis.fetch;
+    let polls=0;
+    globalThis.fetch=async(url,init)=>{
+      const request=new URL(url);
+      if(request.origin!==`http://127.0.0.1:${port}`)return originalFetch(url,init);
+      if(request.pathname==='/api/upgrade/prepare')return new Response('{}');
+      if(polls++===0)return new Response(JSON.stringify({product:'gft-map',installationId:createHash('sha256').update(process.platform==='win32'?path.join(directory,'scripts').toLowerCase():path.join(directory,'scripts')).digest('hex')}));
+      throw new TypeError('fetch failed',{cause:Object.assign(new Error('old service exited'),{code:polls===2?'ECONNRESET':'ECONNREFUSED'})});
+    };
+    let result;
+    try{result=await upgradeSkill(options);}finally{globalThis.fetch=originalFetch;}
+    assert.equal(polls,3,'a reset is retried until the stopped listener refuses a new connection');
     assert.equal(result.version,'0.2.1');assert.equal(result.restartRequired,true);
     await assert.rejects(access(path.join(directory,'obsolete.js')),{code:'ENOENT'});
     assert.equal(await readFile(path.join(result.backup,'obsolete.js'),'utf8'),'stale');

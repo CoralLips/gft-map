@@ -103,7 +103,13 @@ export async function upgradeSkill({directory,dataDirectory,url='http://127.0.0.
       if(!response.ok) throw new Error((await response.json()).error || '旧服务尚未停止。');
       for(let i=0;i<40;i++) {
         try {await fetch(new URL('/api/runtime',base),{signal:AbortSignal.timeout(1000)});}
-        catch(error) {if(error.cause?.code==='ECONNREFUSED') break;throw error;}
+        catch(error) {
+          if(error.cause?.code==='ECONNREFUSED') break;
+          // The confirmed old service can close a reused socket while exiting.
+          // Retry until a fresh connection is refused; reset alone is not proof
+          // that its listener stopped, nor a reason to abandon a safe update.
+          if(!['ECONNRESET','UND_ERR_SOCKET'].includes(error.cause?.code))throw error;
+        }
         if(i===39) throw new Error('旧服务尚未退出，未替换程序。');await delay(100);
       }
     }
