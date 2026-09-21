@@ -51,6 +51,14 @@ After installing, reopen your agent conversation and ask:
 
 The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent returns. To change the panel language, open **Settings → Language**.
 
+<a id="update-your-installation"></a>
+
+**Already installed?** Ask your agent:
+
+> Use gft-map to update to the latest stable release. Keep my maps, chat connections, and settings. Restart the panel and verify that the running version matches the installed version.
+
+Pause file processing and finish or cancel other running tasks before updating. Your data and processing progress are preserved. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+
 ### 2. Connect a conversation and create a map
 
 1. Create a new map in the panel and click **Update**.
@@ -93,14 +101,6 @@ No GFT account is needed for local use. Optionally sign in to the [GFT platform]
 **Where does your data go?** Without a GFT login, maps and received chat text stay on your computer. AI-powered Update, Tidy, and Redraw send the materials needed for the task to your selected agent's model service, using its account quota. Signing in to GFT syncs your maps, including Log, to GFT's cloud. GFT Map does not scan and upload every project file or conversation.
 
 File originals and processing checkpoints stay on your computer. For a topic with file materials, pause processing and download its `.gftpack` to carry the originals, edits, and checkpoints to another GFT Map installation. Cloud sync includes the topic, Doc/Map, and Log.
-
-### Update your installation
-
-Ask your agent:
-
-> Use gft-map to update to the latest stable release. Keep my maps, chat connections, and settings. Restart the panel and verify that the running version matches the installed version.
-
-The updater verifies the complete release archive, replaces the old program, and keeps a backup. Your data stays in its existing directory. Pause file processing and finish or cancel other running tasks before updating. After restarting, choose Continue to resume from the saved checkpoint. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
 
 ---
 

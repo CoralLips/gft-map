@@ -50,6 +50,14 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 
 面板通常在 `http://127.0.0.1:4317/`，以 Agent 返回的地址为准。
 
+<a id="更新到新版"></a>
+
+**已经安装？** 在 Agent 中说：
+
+> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
+
+更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+
 ### 2. 连接讨论，生成脉络
 
 1. 在面板新建脉络，点击 **更新**。
@@ -90,14 +98,6 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 本地使用无需 GFT 账号。也可在设置中登录 [GFT 平台](https://gitforthought.com)，自动双向同步脉络。[同步说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
 
 **数据会去哪？** 未登录 GFT 时，脉络和收到的聊天原文保存在本机。点击 AI 更新、整理或重画时，任务所需材料会交给所选 Agent 的模型服务，使用该服务的账号额度；登录 GFT 后，脉络（含 Log）会同步到 GFT 云端。不会扫描、上传所有项目文件或所有聊天。
-
-### 更新到新版
-
-在 Agent 中说：
-
-> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
-
-更新会校验完整安装包、替换旧程序并保留备份；数据留在原目录。更新前暂停文件整理，完成或取消其他运行中的任务；重启后点击继续，接着文件存档处理。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
 
 ---
 
