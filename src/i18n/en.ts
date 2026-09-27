@@ -337,6 +337,11 @@ export const EN: Record<string, string> = {
   '复制失败': 'Copy failed',
   'AI 记忆': 'AI memory',
   '切换视野': 'Fit view',
+  '总览': 'Overview',
+  '总览全部节点，锁定视图': 'Show all nodes in a fixed overview',
+  '关闭总览，回到之前的阅读位置': 'Close overview and return to your reading position',
+  '总览中暂不跟随；退出后保留聚焦设置': 'Focus follow is paused in overview; your preference is kept',
+  '聚焦：开——点开节点时，视野移到该节点。点击关闭': 'Focus on: move to the node you open. Click to turn off',
   '聚焦': 'Focus',
   '判断正本，直接改（自动保存）': 'Source of truth — edit directly (autosaves)',
   // ===== Chat 输入区(长尾批) =====

@@ -4,6 +4,7 @@
   width: 100%;
   height: 100%;
   position: relative;
+  overscroll-behavior: contain;
 }
 
 /* ===== 空态 ===== */
@@ -125,6 +126,16 @@
   color: var(--poe-blue-dark);
   border-color: var(--tint-blue-border);
   background: var(--tint-blue-bg);
+}
+
+.resetViewBtn[aria-pressed="true"] {
+  color: var(--poe-purple);
+  border-color: var(--poe-purple);
+  background: color-mix(in srgb, var(--poe-purple) 8%, var(--poe-surface));
+}
+
+.container :global(.nowheel) {
+  overscroll-behavior: contain;
 }
 
 /* ===== 选中节点工具条（顺滑编辑统一入口） ===== */

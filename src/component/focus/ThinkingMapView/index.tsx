@@ -7,11 +7,13 @@
  *  - 取代/分组只在数据层默默积累（收拢时作为整理建议），图上不渲染——"给不出便宜纠错动作的 AI 提议不展示"
  */
 
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import ReactFlow, { Background, BaseEdge, getSmoothStepPath, getRectOfNodes } from 'reactflow';
+import ReactFlow, { Background, BaseEdge, getSmoothStepPath } from 'reactflow';
 import type { Node, Edge, NodeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
 import { layoutGraph, estimateNodeHeight, NODE_WIDTH, type MeasuredSizes } from './layout';
+import { unionBounds } from './viewport';
+import { useMapViewport } from './useMapViewport';
 import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import { wouldCycle } from '../../../type/thinkingMap';
@@ -554,6 +556,20 @@ function ThinkingMapViewImpl(): JSX.Element {
     // 签名已覆盖 mapNodes/mapEdges/measured/nudge 的全部布局相关内容(见上);sig 变才重算
   }, [layoutSig]);
 
+  const contentBounds = useMemo(() => {
+    const boxes = mapNodes.map(n => {
+      const position = layoutPositions.get(n.id) ?? { x: 0, y: 0 };
+      const size = measured.get(n.id);
+      return { ...position, width: size?.w ?? NODE_WIDTH,
+        height: size?.h ?? estimateNodeHeight({ title: n.title }) };
+    });
+    const bounds = unionBounds(boxes);
+    // Routed edges can detour up to 32px beyond the rightmost node.
+    return mapEdges.length ? { ...bounds, width: bounds.width + 32 } : bounds;
+  }, [mapNodes, mapEdges.length, layoutPositions, measured]);
+  const viewport = useMapViewport(containerRef, contentBounds, openPanelId, generation);
+  const { centerOn, overview } = viewport;
+
   // 结构出边集合——isOpen 签名保留该参数（口径收在 util/mapGroups；08-05 起实现已不看出边）
   const hasOutEdge = useMemo(() => new Set(fullEdges.map(e => e.from)), [fullEdges]); // 悬着与否按完整承接算，不受画法影响
 
@@ -580,21 +596,21 @@ function ThinkingMapViewImpl(): JSX.Element {
     if (!pos) return;
     const size = measured.get(id);
     const nodeW = size?.w ?? NODE_WIDTH;
-    rfInstanceRef.current?.setCenter(
+    centerOn(
       pos.x + (nodeW + 14 + 340) / 2,
       pos.y + (size?.h ?? 80) / 2 + 100,
-      { zoom: 1, duration: 200 },
+      id,
     );
-  }, [layoutPositions, measured]);
+  }, [layoutPositions, measured, centerOn]);
   // 只在「新展开」那一刻居中一次——面板开着期间的布局变化（撤回/重做/整理重排）
   // 不再拉视角（视野保持定则管辖：跟随是点开动作的伴随，不是持续锁定）
   const lastCenteredRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!focusFollowOn || !openPanelId) { lastCenteredRef.current = openPanelId; return; }
+  useLayoutEffect(() => {
+    if (overview || !focusFollowOn || !openPanelId) { lastCenteredRef.current = openPanelId; return; }
     if (lastCenteredRef.current === openPanelId) return;
     lastCenteredRef.current = openPanelId;
     centerOnOpenNode(openPanelId);
-  }, [focusFollowOn, openPanelId, centerOnOpenNode]);
+  }, [overview, focusFollowOn, openPanelId, centerOnOpenNode]);
 
   // ===== reactflow 节点（ExploreTreeNode 皮 + demo 能力裁剪）=====
   // 常驻状态圈（新节点亮蓝/分叉蓝/汇合黄）已全撤——用户判定过度设计：
@@ -684,7 +700,6 @@ function ThinkingMapViewImpl(): JSX.Element {
         type: 'exploreNode',
         data,
         position: layoutPositions.get(n.id) ?? { x: 0, y: 0 },
-        draggable: true,
         // 受控模式必须回填 selected，否则框选高亮/再次框选的 deselect 都不生效（覆盖层 patch）
         selected: false,
         zIndex: 1,
@@ -848,23 +863,15 @@ function ThinkingMapViewImpl(): JSX.Element {
   }, [linkingFromId, linkHoverId, linkMouse, linkVerdict]);
 
   // 手动加节点后：视口平移到新节点（它在时序尾部，多半在视口外）
-  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
-  // 「⊙ 视野」两态循环指针：下一次点击去哪（fit=全局总览 / origin=左上角 1:1）
-  const nextViewRef = useRef<'fit' | 'origin'>('fit');
   const handleInit = useCallback((inst: ReactFlowInstance) => {
     rfInstanceRef.current = inst;
-    setRfInstance(inst);
-  }, []);
-  useEffect(() => {
-    if (!editingNodeId || !rfInstance) return;
-    const t = setTimeout(() => {
-      const node = rfInstance.getNode(editingNodeId);
-      if (node) {
-        rfInstance.setCenter(node.position.x + NODE_WIDTH / 2, node.position.y + 60, { zoom: 1, duration: 300 });
-      }
-    }, 80);
-    return () => clearTimeout(t);
-  }, [editingNodeId, rfInstance]);
+    viewport.onInit(inst);
+  }, [viewport.onInit]);
+  useLayoutEffect(() => {
+    if (!editingNodeId) return;
+    const position = layoutPositions.get(editingNodeId);
+    if (position) centerOn(position.x + NODE_WIDTH / 2, position.y + 60);
+  }, [editingNodeId, layoutPositions, centerOn]);
 
   // 文档 ^id 跳过来：打开面板 + 居中（布局可能还没算好，每 100ms 试一次，最多 2s）
   useEffect(() => {
@@ -934,36 +941,23 @@ function ThinkingMapViewImpl(): JSX.Element {
 
   return (
     <div className={isTidying ? `${styles.container} ${styles.tidyingAnim}` : styles.container} ref={containerRef}>
-      {/* 视野两态循环（2026-07-12 用户拆分「恢复视图」的模糊语义）：
-          按一下=全局总览（fitView 看全部节点）；再按=原始视角（内容左上角贴屏 + 1:1，节点大小合适） */}
+      {/* 总览只改变阅读视野，退出后回到进入前的位置。 */}
       <button
+        type="button"
         className={styles.resetViewBtn}
-        onClick={() => {
-          const inst = rfInstance;
-          if (!inst) return;
-          if (nextViewRef.current === 'fit') {
-            inst.fitView({ maxZoom: 1, duration: 200 });
-            nextViewRef.current = 'origin';
-          } else {
-            // 原始视角分流：聚焦开着且有展开节点 → 1:1 居中到它（与点开跟随同款）；否则左上角
-            if (focusFollowOn && openPanelId) {
-              centerOnOpenNode(openPanelId);
-            } else {
-              const rect = getRectOfNodes(inst.getNodes());
-              inst.setViewport({ x: -rect.x + 24, y: -rect.y + 24, zoom: 1 }, { duration: 200 });
-            }
-            nextViewRef.current = 'fit';
-          }
-        }}
-        title={tGlobal('切换视野：按一下=全局总览（看全部节点），再按=原始大小（回到左上角、节点 1:1）')}
-      >⊙ {tGlobal('切换视野')}</button>
+        aria-pressed={overview}
+        onClick={viewport.toggleOverview}
+        title={overview ? tGlobal('关闭总览，回到之前的阅读位置') : tGlobal('总览全部节点，锁定视图')}
+      >{overview ? '◎' : '○'} {tGlobal('总览')}</button>
       {/* 聚焦跟随开关：开=点开节点时视野 1:1 居中到它（后续聚焦体验的第一块） */}
       <button
+        type="button"
         className={styles.resetViewBtn}
         style={{ top: 44 }}
+        aria-pressed={focusFollowOn}
         onClick={toggleFocusFollow}
-        title={focusFollowOn
-          ? tGlobal('聚焦：开——点开节点时，视野自动切到原始大小并居中到它。点击关闭')
+        title={overview && focusFollowOn ? tGlobal('总览中暂不跟随；退出后保留聚焦设置') : focusFollowOn
+          ? tGlobal('聚焦：开——点开节点时，视野移到该节点。点击关闭')
           : tGlobal('聚焦：关——点开节点不动视野。点击开启')}
       >{focusFollowOn ? `◎ ${tGlobal('聚焦')}` : `○ ${tGlobal('聚焦')}`}</button>
 
@@ -1031,7 +1025,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       )}
 
       <EdgeGeomContext.Provider value={edgeGeom}>
-      <ReactFlow
+      {viewport.ready && <ReactFlow
         key={generation}
         style={{ width: '100%', height: '100%' }}
         nodes={ghostNode ? [...flowNodes, ghostNode] : flowNodes}
@@ -1051,26 +1045,33 @@ function ThinkingMapViewImpl(): JSX.Element {
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
         onInit={handleInit}
-        nodesDraggable={true}
+        onMove={viewport.onMove}
+        translateExtent={viewport.translateExtent}
+        nodesDraggable={!overview}
         nodesConnectable={false}
         elementsSelectable={true}
         // 框选手势：拖=平移（1:1 设计下平移是核心导航，保持零键直拖）；Shift+拖=框选；Ctrl/Cmd+点=逐个加减选
-        selectionKeyCode="Shift"
+        selectionKeyCode={overview ? null : 'Shift'}
         multiSelectionKeyCode={['Control', 'Meta']}
         selectNodesOnDrag={false}
-        zoomOnScroll={true}
-        zoomOnPinch={true}
+        panOnDrag={!overview}
+        panOnScroll={false}
+        panActivationKeyCode={null}
+        zoomActivationKeyCode={null}
+        autoPanOnNodeDrag={!overview}
+        autoPanOnConnect={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
         zoomOnDoubleClick={false}
         preventScrolling={false}
-        minZoom={0.1}
-        maxZoom={1.5}
-        // 旧树同款：固定 1:1 原始大小从头读起（字永远清晰），不整图缩放；回正靠「⊙ 恢复视图」
-        defaultViewport={{ x: 40, y: 24, zoom: 1.0 }}
+        minZoom={overview ? 0 : 1}
+        maxZoom={1}
+        defaultViewport={viewport.defaultViewport}
         fitView={false}
         proOptions={{ hideAttribution: true }}
       >
         <Background color="var(--poe-gray-200)" gap={16} />
-      </ReactFlow>
+      </ReactFlow>}
       </EdgeGeomContext.Provider>
     </div>
   );
@@ -1079,4 +1080,9 @@ function ThinkingMapViewImpl(): JSX.Element {
 // memo 边界(工程审计批1):本组件无 props,数据全走自订阅——父面板(订阅 chatHistory)
 // 在 AI 流式期间每 chunk 重渲染,此前把整张 ReactFlow 地图子树拖着每秒 ~10 次空转
 // (图数据流式期间不变)。memo 后父的重渲染被直接挡掉,图更新照常走自己的 store 订阅。
-export const ThinkingMapView = memo(ThinkingMapViewImpl);
+export const ThinkingMapView = memo(function ThinkingMapView() {
+  const { store } = useThinkingMapRuntime();
+  const projectId = store(s => s.boundProjectId);
+  const hasNodes = store(s => s.nodes.some(n => !n.condensedInto));
+  return <ThinkingMapViewImpl key={`${projectId}:${hasNodes}`} />;
+});
