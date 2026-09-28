@@ -9,17 +9,22 @@ import * as materials from '../materials.mjs';
 const wait=async(read,ok)=>{for(let i=0;i<250;i++){const v=await read();if(ok(v))return v;await new Promise(r=>setTimeout(r,30));}throw new Error('timeout');};
 test('HTTP pause discards late output; restart resumes checkpoints; human edits survive retry; full completion includes tail',async()=>{
   const previous=process.env.GFT_LOCAL_HOME,dir=await mkdtemp(path.join(tmpdir(),'gft-material-http-'));process.env.GFT_LOCAL_HOME=dir;
-  let server,release,hold=true,calls=0;
+  let server,release,topicId,hold=true,calls=0;
   const execute=async request=>{
     calls++;
     if(request.stage==='extract')return JSON.stringify({summary:request.user.includes('TAIL-MARKER')?'尾部材料已读':'合成内容'});
     if(hold)await new Promise(r=>{release=r;});
-    return request.user.includes('尾部材料已读')?'<doc>\n## 验收\n### ◆ 已读最后一段\n尾部也在。\n</doc>':'<doc>\n## 验收\n### ◆ 首段完成\n原文保留。\n</doc>';
+    const nodes=(await store.getView(topicId)).graph.nodes.filter(node=>node.domain==='验收');
+    const refs=[...nodes.map(node=>node.id),'d1'].join(',');
+    return request.user.includes('尾部材料已读')
+      ? `<doc>\n## 验收\n### ◆ 已读最后一段\n尾部也在。\n</doc>\n<prose domain="验收" refs="${refs}">前面各段已经保存原文，本轮已读最后一段，尾部材料同样保留。</prose>`
+      : `<doc>\n## 验收\n### ◆ 首段完成\n原文保留。\n</doc>\n<prose domain="验收" refs="${refs}">首段完成后继续逐段保存原文；此前已处理的各段仍然保留，后续从当前进度接续。</prose>`;
   };
   try {
     server=await startServer({port:0,agent:'codex',execute});let base=`http://127.0.0.1:${server.address().port}`;
     const post=async(route,data={})=>{const response=await fetch(base+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const value=await response.json();assert.ok(response.ok,JSON.stringify(value));return value;};
     const topic=await post('/api/topics',{name:'暂停验收',scope:'只记录测试'}),data=Buffer.from('😀材料\n'.repeat(10000)+'TAIL-MARKER');
+    topicId=topic.id;
     const job=await post('/api/materials',{topicId:topic.id,name:'test.txt',size:data.length});
     assert.equal((await fetch(base+`/api/materials/${job.id}/upload?offset=0`,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:data})).status,200);
     await post(`/api/materials/${job.id}/finish`);

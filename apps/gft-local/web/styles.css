@@ -107,6 +107,17 @@
 .gft-material-control { display:inline-flex; gap:4px; align-items:center; white-space:nowrap; font-size:12px; }
 .gft-material-control button { border:1px solid var(--poe-gray-200); background:var(--poe-surface); color:var(--poe-gray-700); border-radius:7px; padding:4px 8px; cursor:pointer; }
 .gft-material-control button:disabled { opacity:.5; cursor:default; }
+.gft-local-transfer-actions { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.gft-local-transfer-button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:28px; box-sizing:border-box; }
+.gft-local-transfer-actions .gft-local-transfer-button { border:1px solid var(--poe-gray-200); border-radius:7px; padding:4px 9px; background:var(--poe-surface); color:var(--poe-gray-700); font:inherit; font-size:12px; cursor:pointer; }
+.gft-local-transfer-actions .gft-local-transfer-button:hover:not(:disabled) { background:var(--poe-gray-100); color:var(--poe-gray-800); }
+.gft-local-transfer-actions .gft-local-transfer-button:disabled { opacity:.5; cursor:default; }
+.gft-local-transfer-actions .gft-local-transfer-button[data-transfer-action="export"] { margin:0; }
+.gft-local-executor-trigger { border:1px solid var(--tint-blue-border); border-radius:7px; padding:4px 9px; background:var(--tint-blue-bg); color:var(--poe-blue-dark); font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
+.gft-local-executor-trigger:hover { background:var(--tint-blue-border); }
+.gft-local-executor-recovery { margin:14px 0 18px; padding:12px 14px; border:1px solid var(--tint-blue-border); border-radius:8px; background:var(--tint-blue-bg); }
+.gft-local-executor-recovery .gft-local-note { margin:0 0 10px; color:var(--poe-gray-700); }
+.gft-local-executor-recovery .gft-local-primary { background:var(--poe-blue-dark); border-color:var(--poe-blue-dark); color:var(--poe-on-accent); }
 .gft-material-list { list-style:none; margin:12px 0; padding:0; }
 .gft-material-list li { padding:14px 0; border-bottom:1px solid var(--poe-gray-200); }
 .gft-material-list li > div:first-child { display:flex; justify-content:space-between; gap:16px; }

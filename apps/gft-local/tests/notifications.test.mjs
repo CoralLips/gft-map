@@ -76,14 +76,14 @@ test('只有来源或水位变化、布局保存、无效输出不发通知；�
 test('图关系、主题、整理/重画后的内容变化和归档按发布内容判断',async()=>{
   const a=await store.createTopic('操作','范围'),who=identity('actions');await connect(who,a.id);
   const first=await store.createTask(a.id,'update','操作');
-  await store.completeTask(first.id,'<doc>\n## 决策\n### ◆ 判断甲\n依据甲。\n### ◆ 判断乙\n依据乙。\n</doc>');
+  await store.completeTask(first.id,'<doc>\n## 决策\n### ◆ 判断甲\n依据甲。\n### ◆ 判断乙\n依据乙。\n</doc>\n<prose domain="决策" refs="d1,d2">判断甲与判断乙分别保留依据甲和依据乙，供后续核对取舍。</prose>');
   await ack(who,await notices(who));
   let view=await store.getView(a.id);
   await store.saveGraph(a.id,view.revision,{kind:'connect',from:view.graph.nodes[0].id,to:view.graph.nodes[1].id});
   assert.equal((await notices(who)).length,1);await ack(who,await notices(who));
   view=await store.getView(a.id);await store.saveDoc(a.id,view.revision,view.doc.replace('范围','新的范围'));
   assert.equal((await notices(who))[0].scope,'新的范围');await ack(who,await notices(who));
-  const redraw=await store.createTask(a.id,'redraw');await store.completeTask(redraw.id,'<doc>\n## 决策\n### ◆ 新的合并判断\n依据甲乙。\n</doc>');
+  const redraw=await store.createTask(a.id,'redraw');await store.completeTask(redraw.id,'<doc>\n## 决策\n### ◆ 新的合并判断\n依据甲乙。\n</doc>\n<prose domain="决策" refs="d1">新的合并判断同时保留依据甲乙，形成当前的共同决定。</prose>');
   assert.equal((await notices(who)).length,1);await ack(who,await notices(who));
   view=await store.getView(a.id);await store.archiveTopic(a.id,view.revision);assert.deepEqual(await notices(who),[]);
 });

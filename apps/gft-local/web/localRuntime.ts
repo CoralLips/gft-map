@@ -489,7 +489,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         const request = buildTidyRequest(input);
         const raw = await compute('tidy',request.systemPrompt,request.text,context);
         const evidence = [input.sourceDoc ?? '', ...input.prose.map(prose=>prose.text)].join('\n\n');
-        return parseTidyOps(raw,request.alias,input.judgments,new Set(input.prose.map(prose=>prose.domain)),evidence,input.scopeIds === undefined ? undefined : new Set(input.scopeIds), input.prose.map(p=>p.text).join('\n'));
+        return parseTidyOps(raw,request.alias,input.judgments,new Set(input.prose.map(prose=>prose.domain)),evidence,input.scopeIds === undefined ? undefined : new Set(input.scopeIds), input.prose.map(p=>p.text).join('\n'), { requireChapterDoc: true });
       },
       async refine(target,neighbors,birth,chat,_settings,context) {
         return parseRefineTags(await compute('refine',buildRefinePrompt(target,neighbors.up,neighbors.down,birth,chat),'请按规则润色目标节点。',context));

@@ -77,7 +77,7 @@ async function handle(message) {
     send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'another-session', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '外国会话内容' } } } });
     update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: '不应进入结果的思考' } });
     if (mode !== 'empty-output') {
-      const text = '<doc>\n## ACP 回放\n### ◇ ACP 合成结果已回填\n没有调用真实模型。\n</doc>';
+      const text = '<doc>\n## ACP 回放\n### ◇ ACP 合成结果已回填\n没有调用真实模型。\n</doc>\n<prose domain="ACP 回放" refs="d1">ACP 合成结果已回填，本次只验证协议回放，没有调用真实模型。</prose>';
       const first = JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: text.slice(0, 34) } } } }) + '\n';
       const bytes = Buffer.from(first), split = bytes.indexOf(Buffer.from('回放')) + 1;
       process.stdout.write(bytes.subarray(0, split));

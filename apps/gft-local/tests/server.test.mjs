@@ -7,7 +7,7 @@ import http from 'node:http';
 import { startServer } from '../server.mjs';
 import * as store from '../store.mjs';
 
-const reply = '<doc>\n## 本地体验\n### ◇ 先验证续接\n在另一会话中复用当前判断。\n</doc>';
+const reply = '<doc>\n## 本地体验\n### ◇ 先验证续接\n在另一会话中复用当前判断。\n</doc>\n<prose domain="本地体验" refs="d1">先验证续接能否在另一会话复用当前判断，再评估后续工作。</prose>';
 const waitFor = async (run, accept) => {
   for(let n=0;n<100;n++) { const result=await run(); if(accept(result)) return result; await new Promise(resolve=>setTimeout(resolve,50)); }
   throw new Error('等待状态超时');

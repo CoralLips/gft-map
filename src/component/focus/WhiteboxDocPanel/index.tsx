@@ -18,7 +18,7 @@ import { useT } from '../../../i18n';
 // 与 FocusLab 同款懒加载：codemirror 478KB 不进首屏
 const LiveEditor = React.lazy(() => import('../LiveEditor'));
 
-export function WhiteboxDocPanel(): JSX.Element {
+export function WhiteboxDocPanel({ showExport = true }: { showExport?: boolean }): JSX.Element {
   const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
@@ -107,7 +107,7 @@ export function WhiteboxDocPanel(): JSX.Element {
         <MapStats />
         <span className={styles.btnGroup}>
           <AiMemoryToggle />
-          <ExportMenu />
+          {showExport && <ExportMenu />}
         </span>
       </div>
 

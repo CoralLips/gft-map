@@ -641,7 +641,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           const ops = await runtime.ai.tidy({ ...tidyInput(cur, get().unreadIds, source), sourceDoc: renderSourceLog(rawBase), target, consolidationRetry, ...(scope ? { scopeIds: [...scope] } : {}) }, modelId ? { modelId } : undefined, context);
           if (run !== tidyRun) return null; // 取消、切图或重新开始后，旧结果不再有权落账
           if (get().boundProjectId !== bound) { set({ isTidying: false, tidyRound: null }); return null; } // 期间切图 → 丢弃
-          const r = tidyOpsToLines(cur, ops, source, scope);
+          const r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
           lines.push(...r.lines);
           newIds.push(...r.newIds);
           merged += r.merged;
@@ -804,7 +804,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           const sourceTag = opts?.source ? `chat:${opts.source.sessionId}` : '本地';
           const note = opts?.live ? '现场' : isUpdate ? '更新' : opts?.rewrite ? '重画（按 Log 重写）' : '重画';
           if (st.ledger !== state.ledger || (opts?.rewrite && st.raw !== state.raw)) throw new Error('生成期间内容已变化，已保留当前图，请重新生成。');
-          const generated = linesFromGenerate(st.ledgerState, result, { isUpdate: !opts?.rewrite, source: sourceTag, note, at, ...(opts?.rewrite ? { provenanceSource: parseLedger(state.raw) } : {}) });
+          const generated = linesFromGenerate(st.ledgerState, result, { isUpdate: !opts?.rewrite, source: sourceTag, note, at, requireChapterDoc: true, ...(opts?.rewrite ? { provenanceSource: parseLedger(state.raw) } : {}) });
           const { lines } = generated;
           const newIds = isUpdate ? generated.newIds : [];
           sourceIncomplete = generated.sourceIncomplete;

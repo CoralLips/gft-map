@@ -46,7 +46,12 @@ function fixture({batchSize = 100} = {}) {
   },append(source,...messages) { get(source).messages.push(...messages); }};
 }
 const message = (id,content = `仅供回查的源消息 ${id}`,extra = {}) => ({id,role:'user',content,timestamp:'2026-01-01T00:00:00Z',...extra});
-const output = title => `<doc>\n## 工程取舍\n### ◆ ${title}\n先保护已有判断，再添加新的取舍。\n</doc>`;
+const output = async (title,taskId) => {
+  const task=await store.getTask(taskId),view=await store.getView(task.topicId);
+  const nodes=view.graph.nodes.filter(node=>node.domain==='工程取舍');
+  const refs=[...nodes.map(node=>node.id),'d1'].join(',');
+  return `<doc>\n## 工程取舍\n### ◆ ${title}\n先保护已有判断，再添加新的取舍。\n</doc>\n<prose domain="工程取舍" refs="${refs}">先保护已有判断${nodes.length?`（${nodes.map(node=>node.title).join('、')}）`:''}，本轮确认“${title}”，新的取舍与已有依据一并保存。</prose>`;
+};
 
 test('真实读取链路分批接收超长单条，取消后续接且 Log 保留全部字符',async () => {
   const prior=process.env.GFT_LOCAL_HOME;process.env.GFT_LOCAL_HOME=path.join(sandbox,'oversized-test');
@@ -73,7 +78,7 @@ test('真实读取链路分批接收超长单条，取消后续接且 Log 保留
     if(page.stage === 'distill') {
       assert.ok((await store.taskPrompt(page.task.id)).user.length<32000);
       await store.completeTask(page.task.id,JSON.stringify({summary:'当前累计判断'}));
-    } else await store.completeTask(page.task.id,output('长消息已收录'));
+    } else await store.completeTask(page.task.id,await output('长消息已收录',page.task.id));
     assert.ok(count<30);
   }
   const log=readSourceLog((await store.getTopic(t.id)).raw);
@@ -154,7 +159,7 @@ test('now 排除已有材料，all 独立从头读取；成功同次原子保存
   assert.match(request.user,/助手（过程说明；本轮已中断，内容未完成）/);
   assert.doesNotMatch(JSON.stringify(created),/"(?:input|messages|fromCursor|toCursor|initialCursor)"/);
   assert.equal(await cursorOf(a,ca),undefined);
-  const updated = await store.completeTask(pending.id,output('保持本地反馈'));
+  const updated = await store.completeTask(pending.id,await output('保持本地反馈',pending.id));
   assert.equal(updated.graph.nodes.length,1);
   assert.deepEqual(await cursorOf(a,ca),{offset:3});
   assert.equal(await cursorOf(b,cb),undefined);
@@ -192,11 +197,11 @@ test('并发点击同来源只产生一个任务，不同主题各自排队；�
   const other = await api.createSourceUpdate(b.id,{connectionId:cb.id});
   assert.notEqual(other.task.id,first.task.id);
   assert.equal((await store.listTasks()).filter(task=>task.source?.connectionId===ca.id).length,1);
-  await store.completeTask(first.task.id,output('第一条已保存'));
+  await store.completeTask(first.task.id,await output('第一条已保存',first.task.id));
   const second = await api.createSourceUpdate(a.id,{connectionId:ca.id});
   assert.equal(second.hasMore,false);
   assert.deepEqual((await store.getTask(second.task.id)).source.messages.map(item=>item.id),['second']);
-  await store.completeTask(second.task.id,output('第二条已保存'));
+  await store.completeTask(second.task.id,await output('第二条已保存',second.task.id));
   assert.equal((await store.getView(a.id)).graph.nodes.length,2);
   assert.deepEqual(await cursorOf(a,ca),{offset:2});
   assert.equal(await cursorOf(b,cb),undefined);
@@ -215,11 +220,11 @@ test('无效输出、失败和取消不推进；手工保存使旧任务冲突�
   const retry = (await api.createSourceUpdate(a.id,{connectionId:connection.id})).task;
   assert.notEqual(retry.id,first.id);
   await store.setTaskStatus(retry.id,'cancelled');
-  await assert.rejects(store.completeTask(retry.id,output('不可落账')),{status:409});
+  await assert.rejects(store.completeTask(retry.id,await output('不可落账',retry.id)),{status:409});
   assert.equal(await cursorOf(a,connection),undefined);
   const stale = (await api.createSourceUpdate(a.id,{connectionId:connection.id})).task;
   const manual = await store.saveGraph(a.id,a.revision,{kind:'add',title:'保留手工判断',mark:'◇',content:'手工修改优先',domain:'工程取舍'});
-  await assert.rejects(store.completeTask(stale.id,output('过期结果')),{status:409});
+  await assert.rejects(store.completeTask(stale.id,await output('过期结果',stale.id)),{status:409});
   await assert.rejects(api.createSourceUpdate(a.id,{connectionId:connection.id}),{status:409});
   assert.deepEqual(await store.getView(a.id),manual);
   assert.equal(await cursorOf(a,connection),undefined);
@@ -227,7 +232,7 @@ test('无效输出、失败和取消不推进；手工保存使旧任务冲突�
   await store.setTaskStatus(stale.id,'cancelled');
   const fresh = (await api.createSourceUpdate(a.id,{connectionId:connection.id})).task;
   assert.deepEqual((await store.getTask(fresh.id)).source.messages.map(item=>item.id),['keep']);
-  await store.completeTask(fresh.id,output('本次新判断'));
+  await store.completeTask(fresh.id,await output('本次新判断',fresh.id));
   assert.deepEqual((await store.getView(a.id)).graph.nodes.map(node=>node.title),['保留手工判断','本次新判断']);
 });
 
@@ -238,7 +243,7 @@ test('断开取消旧任务；重连的新 generation 按显式 history 起步�
   await store.setTaskStatus(queued.id,'running');
   await api.disconnectSource({connectionId:old.id});
   assert.equal((await store.getTaskStatus(queued.id)).status,'cancelled');
-  await assert.rejects(store.completeTask(queued.id,output('迟到结果')),{status:409});
+  await assert.rejects(store.completeTask(queued.id,await output('迟到结果',queued.id)),{status:409});
   const next = await binding(api,source,a,'now');
   assert.equal(next.id,old.id);
   assert.notEqual(next.generation,old.generation);
@@ -248,13 +253,13 @@ test('断开取消旧任务；重连的新 generation 按显式 history 起步�
   const taskFile = path.join(sandbox,'tasks',`${queued.id}.json`);
   const oldTask = JSON.parse(await readFile(taskFile,'utf8'));
   await writeFile(taskFile,JSON.stringify({...oldTask,status:'pending'}),'utf8');
-  await assert.rejects(store.completeTask(queued.id,output('跨代旧结果')),{status:409});
+  await assert.rejects(store.completeTask(queued.id,await output('跨代旧结果',queued.id)),{status:409});
   assert.equal((await store.getView(a.id)).revision,a.revision);
   assert.equal(await cursorOf(a,next),undefined);
   api.append(source,message('new'));
   const fresh = (await api.createSourceUpdate(a.id,{connectionId:next.id})).task;
   assert.deepEqual((await store.getTask(fresh.id)).source.messages.map(item=>item.id),['new']);
-  await store.completeTask(fresh.id,output('重连后的判断'));
+  await store.completeTask(fresh.id,await output('重连后的判断',fresh.id));
   assert.deepEqual(await cursorOf(a,next),{offset:2});
   assert.equal(await cursorOf(a,old),undefined);
   await store.setTaskStatus(queued.id,'cancelled');
@@ -264,12 +269,12 @@ test('主题已落账但任务回执中断，重试只补状态；其间手改�
   const api = fixture(), source = api.add('codex',undefined,[message('once')]), a = await topic('事务回执恢复');
   const connection = await binding(api,source,a), task = (await api.createSourceUpdate(a.id,{connectionId:connection.id})).task;
   const taskFile = path.join(sandbox,'tasks',`${task.id}.json`), pending = await readFile(taskFile,'utf8');
-  const applied = await store.completeTask(task.id,output('只写入一次'));
+  const applied = await store.completeTask(task.id,await output('只写入一次',task.id));
   const originalCursor = await cursorOf(a,connection);
   await api.disconnectSource({connectionId:connection.id});
   const manual = await store.saveGraph(a.id,applied.revision,{kind:'edit',id:applied.graph.nodes[0].id,title:'保留恢复前手改',mark:'⏸'});
   await writeFile(taskFile,pending,'utf8');
-  const replayed = await store.completeTask(task.id,output('不得出现第二次'));
+  const replayed = await store.completeTask(task.id,await output('不得出现第二次',task.id));
   assert.deepEqual(replayed,manual);
   assert.equal((await store.getTaskStatus(task.id)).resultRevision,applied.revision);
   assert.equal((await store.getTaskStatus(task.id)).status,'completed');
@@ -305,7 +310,7 @@ test('长历史先提炼后一次成稿，取消恢复不重读，当前边界�
   const prompt = await store.taskPrompt(publish.task.id);
   assert.match(prompt.system,/8–16/); assert.match(prompt.user,/愿景/);
   assert.doesNotMatch(prompt.user,/导入期间才出现/);
-  await store.completeTask(publish.task.id,output('先验证再开发'));
+  await store.completeTask(publish.task.id,await output('先验证再开发',publish.task.id));
   assert.equal((await store.getView(a.id)).graph.nodes.length,1);
   assert.deepEqual(await cursorOf(a,connection),{offset:5});
   assert.deepEqual((await store.sourceEvents(a.id))[0].inputs.map(m=>m.id),['1','2','3','4','5']);
@@ -352,7 +357,7 @@ test('断开真实来源后，完整备份携带未命中主题的材料，导�
   await store.saveDoc(copy.id,copy.revision,'## 主题\n只记录摄影展');
   const redraw = await store.createTask(copy.id,'redraw');
   assert.match((await store.taskPrompt(redraw.id)).user,/摄影展预算500元/);
-  const view = await store.completeTask(redraw.id,'<doc>\n## 展览\n### ◇ 摄影展预算500元\n待核对。\n</doc>');
+  const view = await store.completeTask(redraw.id,'<doc>\n## 展览\n### ◇ 摄影展预算500元\n待核对。\n</doc>\n<prose domain="展览" refs="d1">摄影展预算500元，目前仍待核对实际支出。</prose>');
   assert.equal(view.scope,'只记录摄影展');
   assert.equal(view.graph.nodes.length,1);
   const after = await store.getTopic(copy.id);

@@ -131,12 +131,42 @@ export interface GenerateLike {
   docMarks?: Array<{ anchor: string; to: WhiteboxMark; reason: string }>;
 }
 
+/** 只用于新 AI 产出；历史账和人工编辑不受生成格式约束。 */
+function assertChapterCoverage(
+  entries: Array<{ id: string; domain: string }>,
+  prose: Array<{ domain: string; text: string; refs?: string[] }>,
+  changed: Set<string>,
+  resolve: (ref: string) => string | undefined,
+) {
+  const chapters = new Map<string, Set<string>>();
+  for (const block of prose) {
+    if (chapters.has(block.domain)) throw new Error(`「${block.domain}」出现重复章节正文，已保留原图文。`);
+    const refs = new Set<string>();
+    if (!block.text.trim()) throw new Error(`「${block.domain}」缺少章节正文，已保留原图文。`);
+    for (const ref of block.refs ?? []) {
+      const id = resolve(ref);
+      if (!id || !entries.some(j => j.id === id && j.domain === block.domain)) {
+        throw new Error(`「${block.domain}」正文或判断引用无效，已保留原图文。`);
+      }
+      refs.add(id);
+    }
+    chapters.set(block.domain, refs);
+    if (block.domain !== '主线' && block.domain !== '主题') changed.add(block.domain);
+  }
+  for (const domain of changed) {
+    const chapter = entries.filter(j => j.domain === domain);
+    if (chapter.length && (!chapters.has(domain) || chapter.some(j => !chapters.get(domain)!.has(j.id)))) {
+      throw new Error(`「${domain}」缺少覆盖本章全部判断的连贯正文，已保留原图文。请按章节补齐正文及 refs 后重试。`);
+    }
+  }
+}
+
 /** 生成/更新结果 → 账行。重画＝先写「重画」行（旧判断与走向整代作废），再写新内容；
  *  provenanceSource＝按 Log 重画：独立记录原始来源锚，保留来源顺序与连接 */
 export function linesFromGenerate(
   st: LedgerState,
   result: GenerateLike,
-  opts: { isUpdate: boolean; source: string; note: string; at: number; provenance?: boolean; provenanceSource?: LedgerState },
+  opts: { isUpdate: boolean; source: string; note: string; at: number; provenance?: boolean; provenanceSource?: LedgerState; requireChapterDoc?: boolean },
 ): { lines: string[]; rawLines: string[]; idMap: Map<string, string>; newIds: string[]; sourceIncomplete: boolean } {
   const lines: string[] = [sessionLine(opts.at, opts.source, opts.note)];
   const alloc = allocator(st);
@@ -207,6 +237,18 @@ export function linesFromGenerate(
   const generated = parseLedger(lines.join('\n'));
   const chapterEntries = [...(opts.isUpdate ? liveJudgments(st) : []), ...liveJudgments(generated)];
   const chapterProse = [...(opts.isUpdate ? liveProse(st) : []), ...liveProse(generated)];
+  if (opts.requireChapterDoc) {
+    const changed = new Set(liveJudgments(generated).map(j => j.domain));
+    for (const segment of result.docSegments ?? []) {
+      if (segment.domain !== '主题' && segment.domain !== '主线') changed.add(segment.domain);
+    }
+    for (const mark of result.docMarks ?? []) {
+      const entry = chapterEntries.find(j => j.id === mark.anchor);
+      if (entry) changed.add(entry.domain);
+    }
+    assertChapterCoverage(chapterEntries, (result.docSegments ?? []).filter(seg => seg.refs !== undefined), changed,
+      ref => /^d\d+$/.test(ref) ? allEntryIds[Number(ref.slice(1)) - 1] : ref);
+  }
   const chapters = new Map((result.docSegments ?? []).filter(seg => seg.refs !== undefined).map(seg => [seg.domain, seg]));
   for (const [domain, seg] of chapters) {
     if (domain === '主题' || !seg.text.trim()) continue;
@@ -258,7 +300,7 @@ export function tidyInput(st: LedgerState, unreadIds: Set<string>, raw?: LedgerS
 }
 
 /** 新整理的操作流 → 账行：合并＝新判断「合并自」；去掉＝删；改锐利＝改；走向＝改该域第一段、删其余段 */
-export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerState, scopeIds?: ReadonlySet<string>): { lines: string[]; newIds: string[]; merged: number; dropped: number; linked: number; unlinked: number } {
+export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerState, scopeIds?: ReadonlySet<string>, options?: { requireChapterDoc?: boolean }): { lines: string[]; newIds: string[]; merged: number; dropped: number; linked: number; unlinked: number } {
   if (scopeIds?.size === 0) return { lines: [], newIds: [], merged: 0, dropped: 0, linked: 0, unlinked: 0 };
   for (const op of ops) {
     assertTidyScopeIds(op.kind === 'merge' ? op.memberIds : op.kind === 'revise' || op.kind === 'drop' ? [op.id] : op.kind === 'prose' || op.kind === 'add' ? [] : [op.from, op.to], scopeIds);
@@ -374,6 +416,10 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerSta
   }
   // 先确定最终章节再写导语；同章最后一份说明生效，始终位于首条判断前。
   const prose = new Map(ops.filter(op => op.kind === 'prose').map(op => [op.domain, op]));
+  if (options?.requireChapterDoc) {
+    assertChapterCoverage(chapterEntries, ops.filter(op => op.kind === 'prose'), changedChapters,
+      ref => mergedRefs.get(ref) ?? ref);
+  }
   if (scopeIds) {
     for (const [domain, op] of prose) {
       if (domain === '主题' || domain === '主线' || !allowedChapters.has(domain)) throw new Error('局部整理包含选区外的章节，已保留原图文。');

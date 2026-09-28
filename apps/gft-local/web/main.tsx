@@ -11,6 +11,7 @@ import {Materials,addMaterial} from './Materials';
 import { AccountDialog } from './AccountDialog';
 import { createLocalRuntime, localRequest, type UpdateSource } from './localRuntime';
 import { ConnectionActions, ConnectionManager, LocalDialog as Modal } from './ConnectionManager';
+import { ExportMenu } from '../../../src/component/focus/MapDocActions';
 import '../../../src/style/index.css';
 import './styles.css';
 
@@ -23,6 +24,7 @@ const messageOf = (error: unknown) => error instanceof Error ? error.message : S
 const actionNames: Record<string, string> = { update: '更新', tidy: '整理', redraw: '重画', refine: '润色', theme: '推荐主题', compact: '提炼历史' };
 const statusNames: Record<string, string> = { pending: '等待 Agent', queued: '等待 Agent', running: '处理中', completed: '已完成', failed: '失败', cancelled: '已取消' };
 const isActive = (task: Task) => task.status === 'pending' || task.status === 'queued' || task.status === 'running';
+const executorReady = (value: RuntimeStatus | null) => value?.mode === 'automatic' && ['ready', 'running'].includes(value.executor?.status || '');
 const Workspace = memo(ThinkingMapWorkspace);
 
 function HistoryDialog({ projectId, onClose }: { projectId: string; onClose(): void }) {
@@ -47,6 +49,8 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const [connectionError, setConnectionError] = useState('');
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [executorError, setExecutorError] = useState('');
   const menuRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -84,8 +88,29 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     } catch (error) { setError(messageOf(error)); }
     finally { setCancelling(null); }
   };
+  const connectExecutor = async () => {
+    if (connecting) return;
+    setConnecting(true); setExecutorError('');
+    try {
+      const next = await localRequest<RuntimeStatus>('/api/runtime/executor', { agent: status?.agent || 'codex' });
+      setStatus(next);
+    } catch (error) {
+      setExecutorError(messageOf(error));
+      try { setStatus(await localRequest<RuntimeStatus>('/api/runtime')); } catch { /* polling will retry */ }
+    } finally { setConnecting(false); }
+  };
+  const executorUnavailable = status !== null && !executorReady(status);
   return <>
-    <Materials key={projectId||'none'} topicId={projectId}/>
+    <Materials key={projectId||'none'} topicId={projectId} hideWhenEmpty />
+    <span className="gft-local-transfer-actions" aria-label={tr('导入与导出')}>
+      <button className="gft-local-transfer-button" onClick={() => open('import')} title={tr('从文件或粘贴内容导入脉络')}>
+        <span aria-hidden="true">↑</span>{tr('导入')}
+      </button>
+      <ExportMenu className="gft-local-transfer-button" icon="↓" disableWhenUnavailable />
+    </span>
+    {executorUnavailable && <button className="gft-local-executor-trigger" onClick={() => open('tasks')} title={tr('连接本机 Agent 后才能执行页面任务')}>
+      {connecting ? tr('正在连接…') : status?.agent ? tr('重试连接') : tr('启用 Codex')}
+    </button>}
     <details className="gft-local-menu" ref={menuRef}>
       <summary aria-label={tr('设置')} title={tr('设置')} onKeyDown={event=>{if(event.key==='Escape' && menuRef.current) menuRef.current.open=false;}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9.5 3-.5 2a8 8 0 0 0-2 1.2L5 5.6 3 9l1.5 1.4a8 8 0 0 0 0 2.4L3 14.2l2 3.4 2-.6a8 8 0 0 0 2 1.2l.5 2h4l.5-2a8 8 0 0 0 2-1.2l2 .6 2-3.4-1.5-1.4a8 8 0 0 0 0-2.4L20 9l-2-3.4-2 .6a8 8 0 0 0-2-1.2l-.5-2Z"/><circle cx="11.5" cy="11.6" r="3.1"/></svg>
@@ -96,7 +121,6 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
         <div className="gft-local-appearance"><span>{tr('外观')}</span><div role="group" aria-label={tr('外观')}>{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label])=><button key={value} aria-pressed={theme===value} onClick={()=>{setTheme(value);setThemePref(value);}}>{tr(label)}</button>)}</div></div>
         <button onClick={() => open('tasks')}>{tr('任务')}{active > 0 ? ` · ${active} ${tr('处理中')}` : ''}</button>
         <button disabled={!projectId} onClick={() => open('history')}>Log</button>
-        <button onClick={() => open('import')}>{tr('导入脉络')}</button>
         <button onClick={() => open('account')}>{tr('GFT 账号')}</button>
       </div>
     </details>
@@ -116,6 +140,11 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
       {connectionError && <p role="alert" className="gft-local-error">{tr(connectionError)}</p>}
       {status?.executor?.model && <p className="gft-local-note">{tr('执行模型：{model} · 思考强度：{effort}（自动）', {model:status.executor.model, effort:status.executor.effort || tr('执行器默认')})}</p>}
       {status?.executor?.lastError && <p className="gft-local-error">{typeof status.executor.lastError === 'string' ? status.executor.lastError : status.executor.lastError.message}</p>}
+      {!executorReady(status) && <div className="gft-local-executor-recovery">
+        <p className="gft-local-note">{tr(status?.agent ? '页面 Agent 当前不可用，可以重新检查连接。' : '页面任务需要本机 Agent；连接 Codex 后，当前脉络和已保存材料不会改变。')}</p>
+        {executorError && <p role="alert" className="gft-local-error">{tr(executorError)}</p>}
+        <button className="gft-local-primary" disabled={connecting} onClick={() => { void connectExecutor(); }}>{connecting ? tr('正在连接…') : status?.agent ? tr('重新检查') : tr('连接 Codex')}</button>
+      </div>}
       {tasks.length === 0 ? <p className="gft-local-note">{tr('还没有任务。')}</p> : <ul className="gft-local-tasks">{tasks.map(task => <li key={task.id}>
         <div><strong>{tr(actionNames[task.action] || task.action)}</strong><span>{projects.find(project => project.id === task.topicId)?.name || tr('已归档脉络')}</span>{task.error && <p className="gft-local-error">{tr(task.error)}</p>}</div>
         <span>{tr(cancelling === task.id ? '正在取消…' : task.mode === 'compute' && task.status === 'completed' ? '模型已返回' : statusNames[task.status] || task.status)}</span>
@@ -164,7 +193,7 @@ function App() {
   }, [runtime]);
   const closeUpdate = (input: string | null) => { updateRequest?.resolve(input); setUpdateRequest(null); };
   return <ThinkingMapRuntimeProvider store={runtime.store} host={runtime.host} memoryControl={memoryControl}>
-    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} secondaryActions={actions} /> : <div className="gft-local-loading">{tr(error || '正在打开本地脉络…')}{error && <button onClick={() => window.location.reload()}>{tr('重新打开')}</button>}</div>}</main>
+    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} showExport={false} secondaryActions={actions} /> : <div className="gft-local-loading">{tr(error || '正在打开本地脉络…')}{error && <button onClick={() => window.location.reload()}>{tr('重新打开')}</button>}</div>}</main>
     {ready && error && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {sourceRequest && sourceRequest.topicId === runtime.host.getSnapshot().currentProjectId && <ConnectionManager key={sourceRequest.topicId} runtime={runtime} topicId={sourceRequest.topicId} projects={runtime.host.getSnapshot().projects} purpose="update" onClose={source => { sourceRequest.resolve(source); setSourceRequest(null); }} />}
     {updateRequest && <Modal title={tr('更新脉络')} wide onClose={() => closeUpdate(null)}><form onSubmit={event => { event.preventDefault(); if (updateDraft.trim()) closeUpdate(updateDraft.trim()); }}>

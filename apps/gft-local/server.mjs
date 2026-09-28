@@ -13,8 +13,9 @@ import {pendingNotices,acknowledgeNotices} from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
 import {programVersion,installationId} from './version.mjs';
 import { prepareImport, parseImportSummary, redrawSummaryInput } from './dist/core.mjs';
+import { loadExecutorConfig, saveExecutorConfig, agents as executorAgents } from './executor-config.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const agents = ['codex', 'codex-acp', 'claude-acp'];
+const agents = [...executorAgents];
 
 export async function createRunner(agent = 'codex', options) {
   if (agent === 'codex') return createCodexRunner(options);
@@ -32,7 +33,9 @@ async function body(req) {
 export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs } = {}) {
   if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
   await store.recover();
-  const runner = agent && !execute ? await createRunner(agent, runnerOptions) : null;
+  let activeAgent = agent;
+  let activeRunnerOptions = runnerOptions;
+  let runner = activeAgent && !execute ? await createRunner(activeAgent, activeRunnerOptions) : null;
   let startupError = null;
   if (runner) try { await runner.check(); } catch (error) { startupError = {message:error.message,code:error.code,at:new Date().toISOString()}; }
   const version = await programVersion();
@@ -57,7 +60,8 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
     return runner.run(request,{directory:path.join(store.homeDir(),'runs',`material-${request.materialId}-${Date.now()}`),signal});
   }});
   await materialWorker.recover();
-  const runtime = () => ({ product:'gft-map',version,installationId,pid:process.pid,agent, mode: agent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: agent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
+  let executorCheckPromise = null;
+  const runtime = () => ({ product:'gft-map',version,installationId,pid:process.pid,agent:activeAgent, mode: activeAgent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: activeAgent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
   const server = http.createServer(async (req,res) => {
     const send = (status,data) => { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(data)); };
     try {
@@ -120,7 +124,36 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else throw store.fail('接口不存在',404);
       } else if(req.method === 'POST') {
         const data = await body(req);
-        if(group === 'upgrade' && id === 'prepare') {
+        if(group === 'runtime' && id === 'executor') {
+          const requested = data?.agent;
+          if (!agents.includes(requested)) throw store.fail(`执行器应为 ${agents.join('、')}`);
+          if (closed) throw store.fail('本地服务正在关闭，请重新打开页面后重试。',409);
+          if (activeAgent && activeAgent !== requested) throw store.fail(`当前服务已选择 ${activeAgent}，不能在运行中切换执行器。`,409);
+          if (busy || activeTaskId || (await store.listTasks()).some(item => ['pending','running'].includes(item.status)) || (await materials.list()).some(item => ['uploading','queued','running'].includes(item.state))) throw store.fail('当前有任务或材料正在处理，请完成或暂停后再连接执行器。',409);
+          if (executorCheckPromise) value = await executorCheckPromise;
+          else {
+            executorCheckPromise = (async () => {
+              const saved = await loadExecutorConfig();
+              const options = activeRunnerOptions || (saved?.agent === requested ? saved.runnerOptions : undefined);
+              const candidate = await createRunner(requested, options);
+              try {
+                await candidate.check();
+                runner = candidate;
+                activeAgent = requested;
+                activeRunnerOptions = options;
+                lastError = null;
+                await saveExecutorConfig({ agent: requested, runnerOptions: options });
+                return runtime();
+              } catch (error) {
+                lastError = { message: error.message, code: error.code || null, at: new Date().toISOString() };
+                throw store.fail(error.message, 503);
+              }
+            })();
+            try { value = await executorCheckPromise; }
+            finally { executorCheckPromise = null; }
+          }
+        }
+        else if(group === 'upgrade' && id === 'prepare') {
           if(data.installationId !== installationId) throw store.fail('此服务属于另一份安装，未停止。',409);
           if(busy || (await store.listTasks()).some(t=>['pending','running'].includes(t.status)) || (await materials.list()).some(j=>['queued','running'].includes(j.state))) throw store.fail('请等待任务完成或暂停后再更新。',409);
           closed=true;
@@ -156,12 +189,12 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else if(group === 'topics' && action === 'sources') { await store.saveSourceEvent(id,data.event); value = {saved:true}; }
         else if(group === 'topics' && action === 'clear-sources') { await store.clearSourceEvents(id); value = {saved:true}; }
         else if(group === 'topics' && action === 'compute') {
-          if (!agent) throw store.fail('本地执行器尚未启用，请选择 codex、codex-acp 或 claude-acp，并用 serve --agent 启动服务。', 503);
+          if (!activeAgent) throw store.fail('本地执行器尚未启用，请选择 codex、codex-acp 或 claude-acp，并用 serve --agent 启动服务。', 503);
           value = await store.createComputation(id,data.baseRevision,data.request);
         }
         else if(group === 'topics' && action === 'tasks') value = await store.createTask(id,data.action,data.input);
         else if(group === 'topics' && action === 'update-from-chat') {
-          if (!agent) throw store.fail('本地执行器尚未启用，请用 serve --agent 启动服务后再更新。',503);
+          if (!activeAgent) throw store.fail('本地执行器尚未启用，请用 serve --agent 启动服务后再更新。',503);
           value = await connections.createSourceUpdate(id,{connectionId:data.connectionId,continuous:data.continuous === true,until:data.until});
         }
         else if(group === 'tasks' && action === 'cancel') { value = await store.setTaskStatus(id,'cancelled'); if (activeTaskId === id) activeController?.abort('cancelled'); }
@@ -173,7 +206,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
     } catch(e) { if(res.headersSent)res.destroy(e);else send(e.status || 500,{error:e.message}); }
   });
   async function tick() {
-    if(busy || closed || !agent) return;
+    if(busy || closed || !activeAgent) return;
     busy = true; let task, claimed = false, cancellation;
     try {
       task = (await store.listTasks()).filter(t=>t.status === 'pending').at(-1);

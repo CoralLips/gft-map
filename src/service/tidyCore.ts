@@ -1,5 +1,6 @@
 /** 共享整理核心：完整提示词、操作解析与范围校验；不调用模型。 */
 import type { LedgerMark } from './ledger/types';
+import { MAP_DOC_RULES, readTagAttributes, validateMapDocOutput } from './mapDocContract';
 
 export const TIDY_CUT_RATIO = 0.3;
 export const TIDY_MIN_CUT = 2;
@@ -85,7 +86,7 @@ function serialize(input: TidyInput): { text: string; alias: Map<string, string>
 
 function buildPrompt(target: number, count: number): string {
   return `一次整理要同时交付两个结果，两者同样重要：
-1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；这些细节放进合并后的 body 和章节正文，不必各占一个节点。只改标题、章节、连线或正文不等于完成收拢。只有剩余每条都是不能合并的独立判断时才允许高于目标，不能为凑数删除关键转折或条件。
+1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；body 留下理解判断所必需的关键依据与边界，展开细节和共同背景放进章节正文，不必各占一个节点。只改标题、章节、连线或正文不等于完成收拢。只有剩余每条都是不能合并的独立判断时才允许高于目标，不能为凑数删除关键转折或条件。
 2. Doc：按读者要弄懂的具体问题重新组织章节，把相关判断连接成能独立读懂的当前理解说明。节点更少、文字更短，不能代替讲清楚；为补足解释，正文可以比整理前更长。即使 Map 无需再合并，Doc 仍可能需要重写。
 
 # Doc 怎样讲清楚
@@ -104,8 +105,8 @@ function buildPrompt(target: number, count: number): string {
 <unlink from="n1" to="n3" reason="原连接为什么不成立" evidence="材料中能说明误接的连续原句，至少8字"/>
 （遍历当前判断，结合完整表述和原始 Log 回查：从哪里出发、什么理由促成推进或转向。补漏接、断误接；已有正确的边不重复输出。from/to 只能用当前判断的 n 编号，Log 的 ^jN 只用于回查。只按真实推导、反驳或问题回答连接，不能因为时间相邻、同域或用词相似就连；不确定就保留独立。link 只许早→晚，不能颠倒时间来强接。）
 
-<merge title="≤16字的判断" body="保留必要的依据、边界和取舍，长度以说清楚为准" members="n2,n3" domain="实际章节名"/>
-（合并编号连续、表达同一判断或补充该判断的理由、示例、展开说明的 ≥2 条。不是只能合并同义句。例如“先验证再开发”“先找三人访谈”“访谈要记录拒绝原因”若后两条仅是前一决定的执行与验证说明，可合为“先访谈验证需求”，把人数和记录要求完整保留在 body 与正文。若验证步骤本身是独立取舍，或包含新的决定、反驳和转向，则分开保留。主题相近本身不是合并理由；不得跳过中间节点跨段打包，或合掉明确的转折与分叉。）
+<merge title="≤16字的判断" body="这条判断的关键依据与不能省略的边界" members="n2,n3" domain="实际章节名"/>
+（合并编号连续、表达同一判断或补充该判断的理由、示例、展开说明的 ≥2 条。不是只能合并同义句。例如“先验证再开发”“先找三人访谈”“访谈要记录拒绝原因”若后两条仅是前一决定的执行与验证说明，可合为“先访谈验证需求”，把人数和记录要求完整保留在章节正文；决定判断含义的条件仍须在 body 交代。若验证步骤本身是独立取舍，或包含新的决定、反驳和转向，则分开保留。主题相近本身不是合并理由；不得跳过中间节点跨段打包，或合掉明确的转折与分叉。）
 
 <add id="new1" title="新判断的短句" body="依据和条件" mark="◇" domain="实际章节名" evidence="当前文稿支持这项判断的原句"/>
 （仅全局整理可用，id 为本轮唯一 new 编号；refs 可引用 new1。没有明确确认就用 ◇，问题用 ？；已有判断不要重复 add。）
@@ -131,38 +132,34 @@ function buildPrompt(target: number, count: number): string {
 - 表述不是短句的复述：body 写依据、边界、为什么，写不出就留空
 - 不发明：title、body、正文只能依据当前文稿、现有判断与 Log；一条判断最多进一个 merge/drop/revise 操作，prose 引用不受此限制。关系操作必须附 reason 与可回查的 evidence，引用内容本身必须支持这对判断的关系
 - 新补的承接或转向，同时在后继判断的 body（revise）或章节正文（prose）中说明缘由，让 Doc 也能顺着读
-- 顺序上更早、已经定了的先合；最近的一两条允许留着`;
+- 顺序上更早、已经定了的先合；最近的一两条允许留着
+
+${MAP_DOC_RULES}`;
 }
 
 /** 确定性解析：别名映射回真实 id；问号只和问号合（混了按多数一边，少数留下）；一条判断只进一个操作 */
-export function parseTidyOps(text: string, alias: Map<string, string>, items: TidyItem[], domains: Set<string>, sourceDoc = '', scopeIds?: ReadonlySet<string>, draftText = ''): TidyAiOp[] {
+export function parseTidyOps(text: string, alias: Map<string, string>, items: TidyItem[], domains: Set<string>, sourceDoc = '', scopeIds?: ReadonlySet<string>, draftText = '', options?: { requireChapterDoc?: boolean }): TidyAiOp[] {
+  if (options?.requireChapterDoc) validateMapDocOutput(text);
   const byId = new Map(items.map(i => [i.id, i]));
   const used = new Set<string>();
   const ops: TidyAiOp[] = [];
-  const attrsOf = (raw: string): Record<string, string> => {
-    const attrs: Record<string, string> = {};
-    const re = /(\w+)="([^"]*)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(raw)) !== null) attrs[m[1]] = m[2].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-    return attrs;
-  };
   const idsOf = (raw: string | undefined): string[] =>
     [...new Set((raw ?? '').split(',').map(s => alias.get(s.trim())).filter((v): v is string => !!v))].filter(id => !used.has(id));
-  const tagRe = /<(merge|add|drop|revise|link|unlink|noop)\s*([^>]*?)\/?>|<prose\s+([^>]*?)>([\s\S]*?)<\/prose>/g;
+  const tagRe = /<(merge|add|drop|revise|link|unlink|noop)\s*([^>]*?)\/?>|<prose\s+([^>]*?)>([\s\S]*?)<\/prose\s*>/g;
   let m: RegExpExecArray | null;
   while ((m = tagRe.exec(text)) !== null) {
     if (m[3] !== undefined) {
-      const attrs = attrsOf(m[3]);
+      const attrs = readTagAttributes(m[3]);
       const domain = attrs.domain && oneLine(attrs.domain).replace(/[[\]]/g, '').trim();
       const body = m[4].trim();
       if (scopeIds && (domain === '主题' || domain === '主线')) throw new Error('局部整理不能改主题或主线，已保留原图文。');
-      const refs = [...new Set((attrs.refs ?? '').split(/[\s,，]+/).filter(Boolean).map(ref => alias.get(ref) ?? ref).filter(id => scopeIds || byId.has(id) || /^new\d+$/.test(id)))];
-      if (domain && body) ops.push({ kind: 'prose', domain, text: body, ...(refs.length ? { refs } : {}) });
+      const refs = attrs.refs === undefined ? undefined : [...new Set(attrs.refs.split(/[\s,，]+/).filter(Boolean).map(ref => alias.get(ref) ?? ref))];
+      if (domain && body) ops.push({ kind: 'prose', domain, text: body, ...(refs !== undefined ? { refs } : {}) });
       continue;
     }
     const kind = m[1];
     if (kind === 'noop') continue;
-    const attrs = attrsOf(m[2]);
+    const attrs = readTagAttributes(m[2]);
     if (scopeIds && kind === 'add') throw new Error('局部整理不新增判断，请使用全局整理。');
     if (scopeIds) {
       const refs = kind === 'merge' ? (attrs.members ?? '').split(',') : kind === 'link' || kind === 'unlink' ? [attrs.from, attrs.to] : [attrs.id];
@@ -207,6 +204,11 @@ export function parseTidyOps(text: string, alias: Map<string, string>, items: Ti
       used.add(id);
       ops.push({ kind: 'revise', id, ...(title ? { title } : {}), ...(body ? { body } : {}), ...(domain ? { domain } : {}) });
     }
+  }
+  // refs 可以先于 add 出现；完成全部操作解析后再核验，不能把未知引用悄悄过滤成部分正文。
+  const availableRefs = new Set([...byId.keys(), ...ops.flatMap(op => op.kind === 'add' ? [op.id] : [])]);
+  if (ops.some(op => op.kind === 'prose' && op.refs?.some(id => !availableRefs.has(id)))) {
+    throw new Error(`${scopeIds ? '局部整理' : '整理'}的章节正文引用了不存在或未成功新增的判断，已保留原图文。`);
   }
   // 等文字操作解析完再认章节，允许模型先写新章节说明、后写改域操作。
   const available = new Set([...domains, '主线', '主题', ...items.map(j => j.domain)]);

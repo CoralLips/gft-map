@@ -4,6 +4,7 @@ import * as store from './store.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, createRunner } from './server.mjs';
+import { loadExecutorConfig, saveExecutorConfig } from './executor-config.mjs';
 const [command, ...args] = process.argv.slice(2);
 const values = key => args.flatMap((s,i)=>s===`--${key}` ? [args[i+1]] : []);
 const arg = key => values(key).at(-1);
@@ -94,11 +95,17 @@ try {
   } else if(command === 'serve') {
     const port = arg('port') ? Number(arg('port')) : 4317;
     if(!Number.isInteger(port) || port < 1 || port > 65535) throw store.fail('端口无效');
-    const agent = arg('agent') || null;
-    const server = await startServer({port,agent,runnerOptions:runnerOptions(agent)});
-    console.log(`GFT Map: http://127.0.0.1:${server.address().port}\n数据目录: ${store.homeDir()}\n执行器: ${arg('agent') || '当前 Agent 经 Skill 处理待办'}\n按 Ctrl+C 停止。`);
+    const explicitAgent = arg('agent') || null;
+    if (explicitAgent && args.includes('--manual')) throw store.fail('--manual 不能与 --agent 同时使用');
+    const manual = args.includes('--manual');
+    const saved = !explicitAgent && !manual ? await loadExecutorConfig() : null;
+    const agent = explicitAgent || saved?.agent || null;
+    const options = explicitAgent ? runnerOptions(explicitAgent) : saved?.runnerOptions;
+    const server = await startServer({port,agent,runnerOptions:options});
+    if (explicitAgent && server.runtime().executor.status === 'ready') await saveExecutorConfig({agent: explicitAgent, runnerOptions: options});
+    console.log(`GFT Map: http://127.0.0.1:${server.address().port}\n数据目录: ${store.homeDir()}\n执行器: ${agent || '当前 Agent 经 Skill 处理待办'}\n按 Ctrl+C 停止。`);
     if (agent) print(server.runtime());
-    else console.log('如需网页自动执行，选择 codex、codex-acp 或 claude-acp 后用 serve --agent 启动；可先用 doctor --agent 检查。');
+    else console.log('当前为手动模式；网页中可选择“连接 Codex”进行检查。已配置的执行器会在下次省略 --agent 启动时恢复。');
     for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{void server.shutdown().then(()=>process.exit(0),()=>process.exit(1));});
   } else if(command === 'list' && args.includes('--remote')) {
     const {createLocalClient}=await import('./dist/mcp.mjs');
@@ -134,5 +141,5 @@ try {
     print({saved:filename});
   }
   else if(command === 'import') print(await store.importTopic(JSON.parse(await readFile(need('file'),'utf8'))));
-  else {console.log('连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\n材料: import-file --project ID --file FILE [--id MATERIAL] | materials --project ID | material --id ID | pause-material --id ID | resume-material --id ID | read-material --id ID --start BYTE_OFFSET\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。默认手工处理任务，只有 --agent 才启用自动执行。'); if(command && command !== 'help') process.exitCode=1;}
+  else {console.log('连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\n材料: import-file --project ID --file FILE [--id MATERIAL] | materials --project ID | material --id ID | pause-material --id ID | resume-material --id ID | read-material --id ID --start BYTE_OFFSET\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--manual] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。serve 默认恢复上次成功连接的执行器；需要纯手动模式时使用 --manual。'); if(command && command !== 'help') process.exitCode=1;}
 } catch(e) {console.error(JSON.stringify({error:e.message,status:e.status || 500}));process.exitCode=1;}

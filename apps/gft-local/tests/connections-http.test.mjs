@@ -32,7 +32,7 @@ test('双入口通过同一 HTTP 连接；真实更新事务独立消费两个�
     getChatHead:async()=>({position:messages.length}),
     readChatDelta:async(selected,cursor)=>{assert.equal(selected.id,source.id);reads.push(cursor?.position||0);return {messages:messages.slice(cursor?.position||0),cursor:{position:messages.length},hasMore:false};},
   };
-  let run=async()=>'<doc>\n## 验证\n### ◇ 各主题独立保存\n两个主题分别消费明确来源的消息。\n</doc>';
+  let run=async()=>'<doc>\n## 验证\n### ◇ 各主题独立保存\n两个主题分别消费明确来源的消息。\n</doc>\n<prose domain="验证" refs="d1">各主题独立保存，只消费明确连接到自己的来源消息。</prose>';
   const server=await startServer({port:0,agent:'codex',execute:task=>run(task),sourceReaders:readers});
   const base=`http://127.0.0.1:${server.address().port}`;
   const request=async(url,data)=>{

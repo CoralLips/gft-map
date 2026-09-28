@@ -13,7 +13,7 @@ const entry = fileURLToPath(new URL('../web/localRuntime.ts',import.meta.url));
 const nodePath = fileURLToPath(new URL('../node_modules',import.meta.url));
 const cacheRoot = path.join(nodePath,'.cache');
 const baseLedger = '[场次 2026-09-06T10:00:00Z · 合成回放]\n走向 p3 [主题]\n只处理合成验证材料。\n◆ j1 [验证] 原判断\n先保留原文。\n⏸ j2 [验证] 暂缓扩展\n最小闭环验证后再决定。\n← j2 j1';
-const output = '<revise id="n1" title="整理后的合成判断"/>';
+const output = '<revise id="n1" title="整理后的合成判断"/>\n<prose domain="验证" refs="n1,n2">先保留原文，完成最小闭环验证后再决定是否扩展。</prose>';
 const deferred = () => {let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
 async function waitFor(read,accept,timeout=10000) {
   const end=Date.now()+timeout;let last;
@@ -124,7 +124,7 @@ test('新建失败恢复原主题；新建成功后列表刷新失败不撤销�
 
 test('空主题首次手工更新直接生成主题和图文，保留来源，不多跑推荐',async()=>{
   let calls=0;
-  const answer='<doc>\n## 主题\n社区图书角的试运营。\n## 主线\n先确认许可再试办。\n## 试办\n### ◆ 先取得场地许可\n取得书面许可后才能开展。\n</doc>';
+  const answer='<doc>\n## 主题\n社区图书角的试运营。\n## 主线\n先确认许可再试办。\n## 试办\n### ◆ 先取得场地许可\n取得书面许可后才能开展。\n</doc>\n<prose domain="试办" refs="d1">先取得场地许可，收到书面许可后再开展社区图书角试办。</prose>';
   await fixture(async prompt=>{calls++;assert.equal(prompt.action,'update');return answer;},async({local,errors})=>{
     const id=await local.host.createProject('新脉络');
     await local.requestManualUpdate();
@@ -150,7 +150,7 @@ test('改主题后重画读取被旧范围过滤的源消息，不扫描其他�
     assert.match(prompt.system,/图书角的志愿者安排/);
     assert.match(prompt.user,/之前未入图：至少两名志愿者/);
     assert.doesNotMatch(prompt.user,/另一主题私有材料/);
-    return '<doc>\n## 主线\n人员不足时暂停试办。\n## 人员\n### ◆ 至少两名志愿者\n不足两名就暂停。\n</doc>';
+    return '<doc>\n## 主线\n人员不足时暂停试办。\n## 人员\n### ◆ 至少两名志愿者\n不足两名就暂停。\n</doc>\n<prose domain="人员" refs="d1">试办至少需要两名志愿者，不足两名就暂停。</prose>';
   },async({local,a,b,errors})=>{
     await backend.saveSourceEvent(a.id,{id:'source',layer:'L0->L1',sourceMeta:{sessionId:'source-a'},inputs:[{id:'excluded',role:'user',content:'之前未入图：至少两名志愿者，不足就暂停。'}],outputs:[]});
     await backend.saveSourceEvent(b.id,{id:'other',layer:'L0->L1',inputs:[{id:'private',role:'user',content:'另一主题私有材料'}],outputs:[]});
@@ -176,7 +176,7 @@ test('整篇编辑 Log 通过真实面板保存：图文和水位保留，旧快
     assert.match(prompt.user,/三名志愿者/);
     assert.match(prompt.user,/第二段移到前面/);
     assert.doesNotMatch(prompt.user,/旧规则只需一名|后来补存的过期快照/);
-    return '<doc>\n## 主线\n按人工修订后的人员规则试办。\n## 人员\n### ◆ 三名志愿者到齐才试办\n不足三人时暂停。\n</doc>';
+    return '<doc>\n## 主线\n按人工修订后的人员规则试办。\n## 人员\n### ◆ 三名志愿者到齐才试办\n不足三人时暂停。\n</doc>\n<prose domain="人员" refs="d1">按人工修订后的规则，三名志愿者到齐才试办，不足三人时暂停。</prose>';
   },async({local,a,b,errors,directory,browserCache})=>{
     await backend.saveSourceEvent(a.id,{id:'old-original',layer:'L0->L1',
       inputs:[{id:'old-message',role:'user',name:null,content:'旧规则只需一名志愿者。',ts:1}],
@@ -280,7 +280,7 @@ test('源消息存在但 Log 没有节点仍可重画；长来源先提炼，中
     if(prompt.system.includes('"summary"')) return JSON.stringify({summary:'社区图书角至少两名志愿者，不足就暂停。'});
     assert.match(prompt.user,/至少两名志愿者/);
     assert.ok(prompt.user.length<20000);
-    return '<doc>\n## 主线\n先落实人员。\n## 人员\n### ◆ 两名志愿者才能试办\n不足就暂停。\n</doc>';
+    return '<doc>\n## 主线\n先落实人员。\n## 人员\n### ◆ 两名志愿者才能试办\n不足就暂停。\n</doc>\n<prose domain="人员" refs="d1">两名志愿者才能试办，先落实人员，不足就暂停。</prose>';
   },async({local,errors})=>{
     localRef=local;
     const id=await local.host.createProject('重画空图');
@@ -371,9 +371,11 @@ test('多轮整理的中间轮只计算，最后一次提交保存；选区仍�
   await fixture(async task=>{
     calls++;
     assert.equal((await backend.getTopic(task.topicId)).revision,task.baseRevision);
-    return calls===1
+    const refs=[...task.user.matchAll(/^(n\d+) \[/gm)].map(match=>match[1]).join(',');
+    const merge=calls===1
       ? '<merge title="合并前两判断" body="保留两条合成依据。" members="n1,n2"/>'
       : '<merge title="再合并相邻判断" body="保留原始三条依据。" members="n1,n2"/>';
+    return `${merge}\n<prose domain="验证" refs="${refs}">先保留原文和最小闭环的依据，再核对其余独立合成依据；本轮只合并相邻两条，后续判断仍按各自依据继续验证。</prose>`;
   },async({local,a})=>{
     const extra=Array.from({length:5},(_,i)=>`◇ j${i+4} [验证] 合成判断${i+4}\n独立合成依据${i+4}`).join('\n');
     local.store.getState().updateLedger(`${baseLedger.replace('⏸ j2','◇ j2')}\n${extra}`);
@@ -395,7 +397,7 @@ test('第一轮只改正文时追加一次明确收拢请求，归并补充说�
     if(calls===1) return '<prose domain="验证" refs="n1,n2,n3,n4,n5,n6">先验证需求，随后再评估开发。保留三位访谈对象与记录拒绝原因的要求。</prose>';
     assert.match(task.user,/上一轮尚未完成收拢/);
     assert.match(task.system,/补充理由、示例/);
-    return '<merge title="先访谈验证需求" body="先找三位访谈对象并记录拒绝原因。" members="n1,n2,n3"/>';
+    return '<merge title="先访谈验证需求" body="先找三位访谈对象并记录拒绝原因。" members="n1,n2,n3"/>\n<prose domain="验证" refs="n1,n2,n3,n4,n5,n6">先找三位访谈对象并记录拒绝原因，验证需求后再评估开发；其余独立依据仍保留，不能当作需求已获验证。</prose>';
   },async({local})=>{
     local.store.getState().updateLedger('[场次 2026-09-18T10:00:00Z · 合成验证]\n走向 p1 [主题]\n仅记录需求验证。\n'+Array.from({length:6},(_,i)=>`◇ j${i+1} [验证] 合成判断${i+1}\n保留依据${i+1}`).join('\n'));
     const report=await local.store.getState().tidyWhitebox();
@@ -445,7 +447,7 @@ test('计算中切换主题即取消旧任务，迟到输出不能写旧主题�
 test('材料批次先落盘，随后保存人的编辑：批次与手改都保留且页面继续刷新',async()=>{
   await fixture(async()=>output,async({local,a,browserCache})=>{
     const before=await backend.getTopic(a.id);
-    await backend.commitMaterialBatch(a.id,before.revision,{id:'synthetic-material',start:0,end:100},'<doc>\n## 分批来源\n### ◆ 后台新判断\n来自文件首段。\n</doc>');
+    await backend.commitMaterialBatch(a.id,before.revision,{id:'synthetic-material',start:0,end:100},'<doc>\n## 分批来源\n### ◆ 后台新判断\n来自文件首段。\n</doc>\n<prose domain="分批来源" refs="d1">后台新判断来自文件首段，与这一批材料的进度一起保存。</prose>');
     local.store.getState().updateNode('j1',{title:'人的最新决定'});local.store.getState().flushDoc();
     await waitFor(()=>JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),entry=>entry.pending===false&&entry.revision>=3);
     const view=await backend.getView(a.id);

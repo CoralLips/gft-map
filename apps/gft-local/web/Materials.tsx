@@ -35,7 +35,7 @@ export async function addMaterial(file:File,topicId:string,existingId?:string) {
   }finally{uploads.delete(job.id);window.dispatchEvent(new Event('gft-materials'));}
 }
 
-export function Materials({topicId}:{topicId:string|null}) {
+export function Materials({topicId, hideWhenEmpty = false}:{topicId:string|null; hideWhenEmpty?:boolean}) {
   const tr=useT();
   const [jobs,setJobs]=useState<Material[]>([]),[opened,setOpened]=useState(false),[error,setError]=useState('');
   const [page,setPage]=useState<Page|null>(null),[text,setText]=useState(''),[trail,setTrail]=useState<number[]>([]);
@@ -96,7 +96,7 @@ export function Materials({topicId}:{topicId:string|null}) {
   const selected=jobs.find(j=>j.id===page?.id);
   return <>
     <span className="gft-material-control">
-      <button disabled={!topicId} onClick={()=>setOpened(true)}>{tr('材料')}{active?` · ${progress}%`:jobs.length?` · ${jobs.length}`:' ＋'}</button>
+      {(!hideWhenEmpty || jobs.length > 0) && <button disabled={!topicId} onClick={()=>setOpened(true)}>{tr('材料')}{active?` · ${progress}%`:jobs.length?` · ${jobs.length}`:''}</button>}
       {active&&<button aria-label={tr(processing?'暂停':'继续')} onClick={()=>void controlAll()}>{tr(processing?'暂停':active.state==='uploading'?'续传':'继续')}</button>}
     </span>
     {opened&&<LocalDialog title={tr('主题材料')} wide onClose={()=>{void save().then(ok=>{if(ok){setOpened(false);setPage(null);}});}}>

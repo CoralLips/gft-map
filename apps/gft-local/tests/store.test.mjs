@@ -18,12 +18,12 @@ process.env.GFT_LOCAL_HOME = sandbox;
 
 test('首次更新填充原有空主题记录，之后更新和重画保留用户主题', async () => {
   const topic = await store.createTopic('空主题回归','');
-  const answer = '<doc>\n## 主题\n只收录社区图书角的试办。\n## 试办\n### ◇ 先取得许可\n书面许可后开展。\n</doc>';
+  const answer = '<doc>\n## 主题\n只收录社区图书角的试办。\n## 试办\n### ◇ 先取得许可\n书面许可后开展。\n</doc>\n<prose domain="试办" refs="d1">先取得许可，确认书面许可后再开展社区图书角试办。</prose>';
   const task = await store.createTask(topic.id,'update','合成的社区试办材料');
   const generated = await store.completeTask(task.id,answer);
   assert.equal(generated.scope,'只收录社区图书角的试办。');
   const next = await store.createTask(topic.id,'update','继续试办');
-  const updated = await store.completeTask(next.id,answer.replace('只收录社区图书角的试办。','模型擅自改的范围').replace('先取得许可','暂缓收费'));
+  const updated = await store.completeTask(next.id,answer.replace('只收录社区图书角的试办。','模型擅自改的范围').replace('先取得许可','暂缓收费').replace('refs="d1"',`refs="${generated.graph.nodes[0].id},d1"`).replace('先取得许可，确认书面许可后再开展社区图书角试办。','先取得书面许可后再试办；本轮暂缓收费，后续根据试办情况评估。'));
   assert.equal(updated.scope,generated.scope);
   const redraw = await store.createTask(topic.id,'redraw');
   const rebuilt = await store.completeTask(redraw.id,answer.replace('只收录社区图书角的试办。','再次擅自改的范围'));
@@ -52,6 +52,7 @@ const modelOutput = `<doc>
 ### ⏸ 暂缓跨设备同步
 当前先验证单机流程。
 </doc>
+<prose domain="本地保存" refs="d1,d2,d3,d4,d5">保存结论和依据，支持在文档与图中继续编辑。先用文件验证单机流程，并发编辑要保护较新的版本；无关聊天不入库，跨设备同步暂缓。</prose>
 <edge from="保留完整判断" to="文件足以验证"/>
 <edge from="文件足以验证" to="如何处理并发"/>`;
 

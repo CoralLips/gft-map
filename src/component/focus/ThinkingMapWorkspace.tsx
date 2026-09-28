@@ -8,7 +8,7 @@ import styles from '../../page/FocusLab.module.css';
 import { useT } from '../../i18n';
 
 /** The original FocusLab right pane, shared without changing its markup or styles. */
-export function ThinkingMapWorkspace({ showLogTab = true, secondaryActions }: { showLogTab?: boolean; secondaryActions?: ReactNode }) {
+export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, secondaryActions }: { showLogTab?: boolean; showExport?: boolean; secondaryActions?: ReactNode }) {
   const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const projects = useThinkingMapHost(s => s.projects);
@@ -53,7 +53,7 @@ export function ThinkingMapWorkspace({ showLogTab = true, secondaryActions }: { 
     {importState && <div role="status" style={{ padding: '8px 16px', fontSize: 12 }}>{tr(importState)}<button onClick={() => setImportState('')} aria-label={tr('关闭导入提示')}> × </button></div>}
     <div className={styles.networkContent}>
       <div className={styles.networkContentInner}>
-        {rightView === 'doc' ? <WhiteboxDocPanel /> : rightView === 'source' ? <LedgerSourcePanel /> : <ThinkingMapPanel />}
+        {rightView === 'doc' ? <WhiteboxDocPanel showExport={showExport} /> : rightView === 'source' ? <LedgerSourcePanel showExport={showExport} /> : <ThinkingMapPanel showExport={showExport} />}
       </div>
     </div>
   </div>;

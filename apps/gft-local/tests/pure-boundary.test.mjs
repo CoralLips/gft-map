@@ -41,6 +41,7 @@ test('共享核心的完整 TypeScript 依赖闭包可独立检查，不经过�
     'src/service/whiteboxDoc.ts',
     'src/service/sourceLog.ts',
     'src/service/sourceCompaction.ts',
+    'src/service/mapDocContract.ts',
   ]);
   const sources = program.getSourceFiles().filter(file => !file.isDeclarationFile).map(file => path.relative(root, file.fileName).replaceAll('\\', '/'));
   for (const file of sources) {
@@ -60,7 +61,7 @@ test('宿主共用生成请求与最终解析，重画和增量使用同一套�
   assert.equal(request.user, '新材料原文');
   assert.match(request.system, /旧判断一律不重新输出/);
   assert.match(request.system, /只记录验证方法/);
-  const nextRaw = `<doc>\n## 验证\n### ？ 需要多少样本？\n仍未决定。\n</doc>\n<edge from="n1" to="d1"/><doc-mark anchor="${first.nodes[0].id}" to="◇">仍待验证</doc-mark><digest>样本数尚未决定。</digest>`;
+  const nextRaw = `<doc>\n## 验证\n### ？ 需要多少样本？\n仍未决定。\n</doc>\n<edge from="n1" to="d1"/><doc-mark anchor="${first.nodes[0].id}" to="◇">仍待验证</doc-mark><digest>样本数尚未决定。</digest>\n<prose domain="验证" refs="j1,d1">先验证问题的方向仍待检验，所需样本数也尚未决定。</prose>`;
   const ctx = core.createBuildCtx();
   const preview = core.parseGenerateResponse(nextRaw, options, ctx, { streaming: true });
   const result = core.parseGenerateResponse(nextRaw, options, ctx);

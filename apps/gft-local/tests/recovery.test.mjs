@@ -9,7 +9,7 @@ import { setImmediate as nextTurn } from 'node:timers/promises';
 import * as store from '../store.mjs';
 import { startServer } from '../server.mjs';
 
-const output = '<doc>\n## 本地恢复\n### ◆ 只应用一次\n中断恢复不能重复追加已经保存的判断。\n</doc>';
+const output = '<doc>\n## 本地恢复\n### ◆ 只应用一次\n中断恢复不能重复追加已经保存的判断。\n</doc>\n<prose domain="本地恢复" refs="d1">已经保存的判断只应用一次；中断后根据提交记录恢复，避免重复追加。</prose>';
 
 async function isolated(run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'gft-local-recovery-'));

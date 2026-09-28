@@ -17,10 +17,15 @@ const output = `<doc>
 ### ⏸ 暂缓跨端同步
 先完成单机编辑，后续再评估同步。
 </doc>
+<prose domain="方向" refs="d1,d2,d3,d4,d5">本地编辑要立即反馈，材料仍归用户持有。文件方案可能更简单，但并发覆盖尚待验证；因此放弃等待网络的方案，先完成单机闭环，跨端同步暂缓。</prose>
 <edge from="保留本地编辑" to="文件可能更简单"/>
 <edge from="文件可能更简单" to="如何避免覆盖"/>`;
 // Explicit legacy fixture: old installs stored extracted judgments as raw.
-const seeded = () => { const topic = advance(blank(), applyTask(blank(), 'update', output)); return {...topic,raw:topic.ledger}; };
+const seeded = () => {
+  const topic = blank();
+  const ledger = `${topic.ledger}\n[场次 2026-01-01T00:00:00Z · local-agent]\n◆ j2 [方向] 保留本地编辑\n材料归用户持有，修改应立即在本地可见。\n◇ j3 [方向] 文件可能更简单\n文件无需额外账户，但仍需验证并发保存。\n？ j4 [方向] 如何避免覆盖\n不同窗口同时编辑时的取舍尚未确定。\n✗ j5 [方向] 不再等待网络\n等待网络往返造成编辑迟滞，所以取消该方案。\n⏸ j6 [方向] 暂缓跨端同步\n先完成单机编辑，后续再评估同步。\n← j3 j2\n← j4 j3`;
+  return advance(topic, {ledger, raw: ledger});
+};
 
 test('首次图文同时命名：默认名称才请求，手改不覆盖，无内容和坏名称不命名',()=>{
   const topic={...blank(),name:'新脉络'};
@@ -89,7 +94,7 @@ test('手工新增与正文中的账本语法不能覆盖旧判断，raw 保持�
 
 test('更新复用增量协议：旧判断改档、新判断承接旧锚，共同正文同轮保存', () => {
   const topic = seeded(), first = viewTopic(topic).graph.nodes[0];
-  const result = `<doc>\n## 验证\n### ◇ 先加冲突检测\n基于已有本地编辑约束。\n</doc>\n<prose domain="验证" refs="d1">这一判断约束保存动作。</prose>\n<edge from="^${first.id}" to="d1"/>\n<doc-mark anchor="${first.id}" to="◇">仍待验证</doc-mark>`;
+  const result = `<doc>\n## 验证\n### ◇ 先加冲突检测\n基于已有本地编辑约束。\n</doc>\n<prose domain="验证" refs="d1">这一判断约束保存动作。</prose>\n<edge from="^${first.id}" to="d1"/>\n<doc-mark anchor="${first.id}" to="◇">仍待验证</doc-mark>\n<prose domain="方向" refs="${viewTopic(topic).graph.nodes.map(node=>node.id).join(',')}">本地编辑方案仍待验证，文件可减少账户负担，但并发覆盖尚未确定；等待网络已放弃，跨端同步暂缓。</prose>`;
   const updated = advance(topic, applyTask(topic, 'update', result)), view = viewTopic(updated);
   assert.equal(view.graph.nodes.length, 6);
   assert.equal(view.graph.nodes[0].mark, '◇');
@@ -116,7 +121,7 @@ test('重画回放使用 Log 来源锚并继承原承接，旧工作内容退休
   let topic = seeded();
   const originals = viewTopic(topic).graph.nodes;
   topic = advance(topic, editGraph(topic, { kind: 'edit', id: originals[0].id, title: '临时手改标题' }));
-  const reply = `<doc>\n## 主线\n先完成本地闭环，再验证存储和覆盖。\n## 本地闭环\n${originals.map(node => `### ${node.mark} ${node.title} ^${node.id}\n${node.content}`).join('\n')}\n</doc>`;
+  const reply = `<doc>\n## 主线\n先完成本地闭环，再验证存储和覆盖。\n## 本地闭环\n${originals.map(node => `### ${node.mark} ${node.title} ^${node.id}\n${node.content}`).join('\n')}\n</doc>\n<prose domain="本地闭环" refs="d1,d2,d3,d4,d5">材料归用户持有，本地修改要立即可见。文件方案可减少账户负担，但并发覆盖仍未解决；等待网络已放弃，跨端同步暂缓，先完成单机编辑验证。</prose>`;
   const updated = advance(topic, applyTask(topic, 'redraw', reply)), view = viewTopic(updated);
   assert.equal(updated.raw, topic.raw);
   assert.equal(view.graph.nodes.length, 5);

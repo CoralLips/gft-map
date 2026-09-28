@@ -18,7 +18,7 @@ const LiveEditor = React.lazy(() => import('../LiveEditor'));
 /** 账里定位某条判断/走向段的行：行首五档、⊃ 或「走向」，紧跟 id */
 const lineOf = (id: string): RegExp => new RegExp(`^(?:[◆◇？?✗⏸]|⊃|走向)\\s*${id}(?![0-9])`);
 
-export function LedgerSourcePanel(): JSX.Element {
+export function LedgerSourcePanel({ showExport = true }: { showExport?: boolean }): JSX.Element {
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
   const raw = useThinkingMapStore(s => s.raw);
@@ -83,7 +83,7 @@ export function LedgerSourcePanel(): JSX.Element {
         <MapStats />
         <span className={styles.btnGroup}>
           <AiMemoryToggle />
-          <ExportMenu />
+          {showExport && <ExportMenu />}
         </span>
       </div>
 

@@ -306,7 +306,7 @@ export function AiMemoryToggle(): JSX.Element | null {
 }
 
 /** 文稿用于阅读分享；完整 GFT 文件用于迁移当前脉络。 */
-export function ExportMenu(): JSX.Element {
+export function ExportMenu({ className = '', icon = '⇪', disableWhenUnavailable = false }: { className?: string; icon?: string; disableWhenUnavailable?: boolean } = {}): JSX.Element {
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
   const hasDoc = useThinkingMapStore(s => (s.docDraft ?? s.doc).trim().length > 0);
@@ -384,12 +384,13 @@ export function ExportMenu(): JSX.Element {
   return (
     <span ref={rootRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
-        className={styles.addNodeBtn}
-        disabled={busy}
+        className={`${styles.addNodeBtn} ${className}`.trim()}
+        data-transfer-action="export"
+        disabled={busy || (disableWhenUnavailable && (!currentProjectId || isHydrating))}
         aria-expanded={open}
         onClick={() => setOpen(v => !v)}
         title={note ?? tr('导出当前脉络的文稿或完整 GFT 文件')}
-      >{busy ? tr('正在导出…') : note ?? `⇪ ${tr('导出')}`}</button>
+      >{busy ? tr('正在导出…') : note ?? `${icon} ${tr('导出')}`}</button>
       {open && (
         <span className={ownStyles.menu}>
           <button className={ownStyles.menuItem} disabled={disabled || !hasDoc} title={tr('复制当前 Doc，包含主题和正文')} onClick={() => void copyDoc()}>{tr('复制')}</button>

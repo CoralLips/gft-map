@@ -107,7 +107,7 @@ test('large source: bounded upload, durable visible checkpoints, pause/restart a
     let calls=0;
     worker=materials.createWorker({run:async request=>{
       assert.ok(request.user.length<60000);
-      return ++calls%2===1 ? JSON.stringify({summary:'决定：保留来源与人的编辑。'}) : '<doc>\n## 验收\n### ◆ 保留原始来源\n可以追溯。\n</doc>';
+      return ++calls%2===1 ? JSON.stringify({summary:'决定：保留来源与人的编辑。'}) : '<doc>\n## 验收\n### ◆ 保留原始来源\n可以追溯。\n</doc>\n<prose domain="验收" refs="d1">保留原始来源，后续编辑仍可回查它所依据的材料。</prose>';
     }});
     await worker.tick();
     job=await materials.get(job.id);
@@ -156,7 +156,7 @@ test('checkpoint wins after crash between topic and job writes; interrupted uplo
     await assert.rejects(materials.finish(job.id),/尚未接收完整/);
     await materials.upload(job.id,1000,bytes.subarray(1000));await materials.finish(job.id);
     const first=await materials.page(job.id,0);
-    await store.commitMaterialBatch(topic.id,1,{id:job.id,start:0,end:first.end},'<doc>\n## 验收\n### ◆ 已保存首段\n进度和图文同一事务。\n</doc>');
+    await store.commitMaterialBatch(topic.id,1,{id:job.id,start:0,end:first.end},'<doc>\n## 验收\n### ◆ 已保存首段\n进度和图文同一事务。\n</doc>\n<prose domain="验收" refs="d1">已保存首段，进度和图文一起提交，恢复时可从下一段继续。</prose>');
     let firstPrompt='';
     worker=materials.createWorker({run:async request=>{firstPrompt ||= request.user;return request.stage==='extract'?'{"summary":"恢复后的第二段"}':'<noop/>';}});
     await worker.recover();await worker.tick();

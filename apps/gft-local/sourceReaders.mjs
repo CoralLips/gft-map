@@ -16,6 +16,7 @@ export class SourceReaderError extends Error {
 }
 
 function fail(code, message) { throw new SourceReaderError(code, message); }
+function briefProcessError(value) { return String(value || '').replace(/\u001b\[[0-9;]*m/g, '').replace(/\s+/g, ' ').trim().slice(-1200); }
 function providerOf(provider) {
   if (provider !== 'codex' && provider !== 'claude') fail('SOURCE_UNSUPPORTED', '目前只支持本机 Codex 和 Claude Code 会话。');
   return provider;
@@ -84,6 +85,7 @@ export async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN 
   });
   let sequence = 0;
   let stopped = false;
+  let stderr = '';
   const pending = new Map();
   const lines = createInterface({ input: child.stdout });
   const rejectAll = error => {
@@ -98,11 +100,14 @@ export async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN 
     child.kill();
     rejectAll(new SourceReaderError('SOURCE_CONNECTION_CLOSED', '本地会话读取连接已关闭。'));
   };
-  child.stderr.on('data', () => {}); // Drain diagnostics without exposing transcript/config contents.
+  child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-4000); }); // Drain diagnostics without exposing transcript/config contents.
   child.stdin.on('error', () => {});
   child.once('error', error => rejectAll(new SourceReaderError('SOURCE_CAPABILITY_MISSING', '无法启动本地 Codex 只读接口，请检查 Codex 安装。', error)));
   child.once('exit', () => {
-    rejectAll(new SourceReaderError('SOURCE_CONNECTION_CLOSED', 'Codex 只读接口提前退出。'));
+    const detail = /readonly database|attempt to write a readonly database|拒绝访问|access is denied/i.test(stderr)
+      ? 'Codex 本地状态库不可写；请从有权限的本机终端启动 GFT，或先修复 Codex 的状态库权限。GFT 数据没有被修改。'
+      : 'Codex 只读接口提前退出。';
+    rejectAll(new SourceReaderError('SOURCE_CONNECTION_CLOSED', detail, briefProcessError(stderr)));
     lines.close();
   });
   lines.on('line', line => {

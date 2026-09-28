@@ -1,4 +1,5 @@
 import { IMPORT_COMPACT_THRESHOLD, sourceChunks, prepareSourceSummary } from '../../src/service/sourceCompaction';
+import { validateMapDocOutput } from '../../src/service/mapDocContract';
 export { createTopicBundle, parseTopicBundle, bundleToMap, mapToBundle, topicSummary } from '../../src/service/topicBundle';
 import { recordDocumentInput } from '../../src/service/ledger/docEdit';
 import { appendSourceLog, renderSourceLog, hasSourceLog, isEditedSourceLog, sourceRecordsFromEvents, type SourceEvent } from '../../src/service/sourceLog';
@@ -206,15 +207,15 @@ export function prepareTask(topic: Topic, action: TaskAction, input = '', overvi
 
 export function applyTask(topic: Topic, action: TaskAction, output: string) {
   if (typeof output !== 'string' || !output.trim()) throw new Error('模型返回空内容，已保留原图文。');
-  if (/<doc\s*>/.test(output) && !/<\/doc\s*>/.test(output)) throw new Error('模型返回不完整文档，已保留原图文。');
+  validateMapDocOutput(output);
   const state = stateOf(topic);
   if (action === 'tidy') {
     const input = tidyContext(topic, state);
     const request = buildTidyRequest(input);
     const evidence = [input.sourceDoc ?? '', ...input.prose.map(prose => prose.text)].join('\n\n');
-    const ops = parseTidyOps(output, request.alias, input.judgments, new Set(input.prose.map(prose => prose.domain)), evidence, undefined, input.prose.map(p=>p.text).join('\n'));
+    const ops = parseTidyOps(output, request.alias, input.judgments, new Set(input.prose.map(prose => prose.domain)), evidence, undefined, input.prose.map(p=>p.text).join('\n'), { requireChapterDoc: true });
     for (const op of ops) if ((op.kind === 'merge' || op.kind === 'revise') && op.title) safeTitle(op.title);
-    const result = tidyOpsToLines(state, ops, parseLedger(topic.raw));
+    const result = tidyOpsToLines(state, ops, parseLedger(topic.raw), undefined, { requireChapterDoc: true });
     if (!result.lines.length) {
       if (/^\s*<noop\s*\/>\s*$/.test(output)) return finish(topic, []);
       throw new Error('模型没有返回可执行的整理结果，已保留原图文。');
@@ -239,7 +240,7 @@ export function applyTask(topic: Topic, action: TaskAction, output: string) {
     : parsed.nodes.length ? buildFreshMap(parsed, undefined, { rewrite: action === 'redraw' })
       : { nodes: [], edges: [], newIds: [], docEntryNodeIds: [] };
   const generated = linesFromGenerate(state, { ...result, docSegments: parsed.docSegments, docMarks: usableMarks }, {
-    isUpdate: action === 'update', source: SOURCE, note: action === 'redraw' ? '重画（按 Log 重写）' : '更新', at: Date.now(),
+    isUpdate: action === 'update', source: SOURCE, note: action === 'redraw' ? '重画（按 Log 重写）' : '更新', at: Date.now(), requireChapterDoc: true,
     ...(action === 'redraw' ? { provenanceSource: parseLedger(topic.raw) } : {}),
   });
   if (generated.lines.length < 2) throw new Error('模型没有返回新的有效内容，已保留原图文。');

@@ -14,7 +14,7 @@ import { UpdateMapButton, AiMemoryToggle, ExportMenu, RedrawButton, TidyButton, 
 import { themeOf } from '../../../service/ledger';
 import { useT } from '../../../i18n';
 
-export function ThinkingMapPanel(): JSX.Element {
+export function ThinkingMapPanel({ showExport = true }: { showExport?: boolean }): JSX.Element {
   const tr = useT();
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const error = useThinkingMapStore(s => s.error);
@@ -46,7 +46,7 @@ export function ThinkingMapPanel(): JSX.Element {
         {/* 右区=拿走成品（与左侧"改图"操作拉开——改 vs 拿走两种心态）。共享组件（Doc 视图同款） */}
         <span className={styles.btnGroup} style={{ position: 'relative' }}>
           <AiMemoryToggle />
-          <ExportMenu />
+          {showExport && <ExportMenu />}
         </span>
       </div>
       {error && (

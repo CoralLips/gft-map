@@ -112,15 +112,21 @@ node scripts/cli.mjs complete --id TASK_ID --file MODEL_OUTPUT_FILE
 
 ## 页面与待办
 
+安装本 Skill 只让 Agent 获得这份说明和脚本，不会自动常驻本地网页服务。用户要求打开面板时，先确认 `http://127.0.0.1:4317` 是否已有本服务；没有就先执行 `doctor --agent codex`，再用原端口和原数据目录执行 `serve --port 4317 --agent codex`，最后把服务返回的地址交给用户。已有服务时复用它，不要再启动第二个实例；浏览器直接打开地址出现 `ERR_CONNECTION_REFUSED` 只表示服务未运行，不要新建数据目录。
+
 ```text
 node scripts/cli.mjs serve --port 4317
 node scripts/cli.mjs tasks
 node scripts/cli.mjs task --id TASK_ID
 ```
 
-打开 `serve` 返回的本地地址。默认页面支持查看和编辑，模型任务由当前对话通过 CLI 创建、生成输出并提交。页面里的模型按钮需要启用执行器；不能宣称它们会自动唤醒当前聊天。`tasks` 和 `task --id` 用于核对已创建任务。
+打开 `serve` 返回的本地地址。页面支持查看和编辑，模型任务由当前对话通过 CLI 创建、生成输出并提交。页面任务需要启用本机执行器；不能宣称它们会自动唤醒当前聊天。`tasks` 和 `task --id` 用于核对已创建任务。
 
 用户明确要求启用页面处理并已选择 Agent 时，直接先 `doctor --agent AGENT`，再 `serve --port 4317 --agent AGENT`。支持 `codex-acp`、`claude-acp` 和原有 `codex`，不重复索要启用许可。ACP 的可执行路径和参数见 [ACP 配置](references/acp.md)。`codex` 入口使用执行器默认模型与思考强度，任务采用 ephemeral，不继承当前聊天或仓库指令、不保存新的聊天历史；这不能套用到所有 ACP 适配器。
+
+启动后的验收以 `/api/runtime` 为准：必须看到所选 `agent`、`mode: automatic`，以及执行器为 `ready` 或正在处理。若页面显示 `agent: null` / `mode: manual`，优先让用户在任务页点击“连接 Codex”；它会在当前服务中检查并保存成功的选择，不改变数据。首次启动或更换执行器时，才用相同端口、`GFT_LOCAL_HOME` 和 `serve --agent AGENT`。不要新建数据目录，也不要把“页面能打开”当成“Agent 已连接”。
+
+如果登录检查通过但 Codex 报本地状态库不可写，说明当前服务继承了受限 Agent 沙箱权限；不要删除 GFT 数据或凭证。让用户从有权限的本机终端，用原端口和原 `GFT_LOCAL_HOME` 重启服务，再在任务页“重新检查”，并以 `/api/runtime.executor.status` 为准。
 
 ACP 负责执行任务；聊天来源另行适配 Codex 和 Claude Code，不能据 ACP 握手宣称所有 Agent 都已支持。页面“更新”未连接时先选择会话，连接后按进度读取。读取仅针对已选会话，不调用模型；Claude SDK 可能在本机解析该会话整个文件，但不会把全部历史重复发送模型。执行器另起进程、使用其登录与额度，也不保证一次任务只调用模型一次。页面不能主动在任意原聊天里弹窗或自动注入记忆。失败时保留内容和读取进度，不擅自修改登录或全局配置。
 

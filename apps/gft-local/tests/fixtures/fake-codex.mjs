@@ -40,7 +40,7 @@ else if (mode === 'hang' || mode === 'hang-tree') {
   event({ type: 'item.completed', item: { id: 'fixture-tool', type: 'mcp_tool_call', server: '模拟工具', tool: 'inspect', status: 'completed', result: '不应进入指标' } });
   event({ type: 'turn.completed', usage: { input_tokens: 120, cached_input_tokens: 30, output_tokens: 24 } });
   if (mode !== 'missing-output') {
-    const output = mode === 'empty-output' ? '' : mode === 'invalid-output' ? '没有协议内容' : '<doc>\n## 真实进程回放\n### ◇ 子进程结果已回填\n这是合成材料，没有调用真实模型。\n</doc>';
+    const output = mode === 'empty-output' ? '' : mode === 'invalid-output' ? '没有协议内容' : '<doc>\n## 真实进程回放\n### ◇ 子进程结果已回填\n这是合成材料，没有调用真实模型。\n</doc>\n<prose domain="真实进程回放" refs="d1">子进程结果已回填，本次仅回放合成材料，没有调用真实模型。</prose>';
     await writeFile(outputFile, output, 'utf8');
   }
 }

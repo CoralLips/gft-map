@@ -49,7 +49,13 @@ After installing, reopen your agent conversation and ask:
 
 > Use gft-map to check my environment, start the local panel with Update, Tidy, and Redraw enabled, and open the page for me.
 
+Installing the skill provides the agent's instructions and scripts; it does not keep a web server running by itself. The request above starts the local Node panel when needed. Before opening `127.0.0.1:4317` directly, make sure that service is still running. If the browser shows `ERR_CONNECTION_REFUSED`, the service is simply stopped; send the request above again without creating a new data directory.
+
 The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent returns. To change the panel language, open **Settings → Language**.
+
+Check the panel's **Tasks** section after it starts. If the executor is disconnected, click **Connect Codex**. This checks the local login in the current service without creating a new data directory or changing your maps. A successfully selected executor is restored on later restarts; use `serve --port 4317 --agent codex` with the same data directory only for the first setup or when changing executors.
+
+If login succeeds but the check reports that the Codex local state database is not writable, the service was started from a restricted agent sandbox. Do not delete your GFT data. Restart the same installation from a normal local terminal with the same `GFT_LOCAL_HOME`, then click **Recheck** in **Tasks**.
 
 <a id="update-your-installation"></a>
 
@@ -67,7 +73,7 @@ Pause file processing and finish or cancel other running tasks before updating. 
 
 Later, click **Update** again to bring in only new messages. Long conversations, including oversized individual messages, are processed in batches. Cancel at any time; the next update resumes after the completed batches.
 
-**Already have a file?** Open **Materials → Add file** in the panel to add UTF-8 text, Markdown, or chat records. Once the original is saved, it is processed by topic in batches. Each completed batch appears in Doc/Map and is checkpointed. **Pause or continue** at any time. Restarting the service resumes unfinished work; paused tasks stay paused. If an upload is interrupted, select the same file to resume. [Large-file details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
+**Already have a file?** Click **Import** at the top right of the map to add UTF-8 text, Markdown, or chat records. Once the original is saved, it is processed by topic in batches. Each completed batch appears in Doc/Map and is checkpointed. **Pause or continue** at any time. Restarting the service resumes unfinished work; paused tasks stay paused. If an upload is interrupted, select the same file to resume. [Large-file details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
 
 ### 3. Continue with your agent
 
@@ -94,7 +100,7 @@ Edit the topic, document, or Log directly. Click outside the editor or press Ctr
 **Take your work with you**
 
 - **Copy**: copy the current Doc for someone else or another agent.
-- **Download**: save the complete map file. Use **Settings → Import maps** in another GFT Map installation to keep working.
+- **Download**: save the complete map file. Use the top-right **Import** button in another GFT Map installation to keep working.
 
 No GFT account is needed for local use. Optionally sign in to the [GFT platform](https://gitforthought.com) in Settings for automatic two-way sync. [Sync details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
 
