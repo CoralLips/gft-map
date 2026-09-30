@@ -109,7 +109,7 @@ export const EN: Record<string, string> = {
   '第 {round} 轮': 'Round {round}',
   '整理选中': 'Tidy selection',
   '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回': 'Tidy selected judgments and related text only. Cancel without saving, or Ctrl+Z to undo.',
-  '整理主题表述、当前文稿和节点：保留收录范围，归并重复，提炼文稿中的新判断。来源保留在 Log；Ctrl+Z 整次退回': 'Tidy the topic wording, document, and nodes: preserve scope, merge duplicates, and extract new judgments from the document. Sources remain in Log; Ctrl+Z to undo.',
+  '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回': 'Tidy the document and nodes within the topic: keep the existing topic text unchanged, merge duplicates, and extract relevant new judgments. Sources remain in Log; Ctrl+Z to undo.',
   '判断条数 · 白盒文档字数': 'Judgment count · document characters',
   '{count} 条 · {chars} 字': '{count} nodes · {chars} chars',
 

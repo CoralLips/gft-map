@@ -94,7 +94,7 @@ Edit the topic, document, or Log directly. Click outside the editor or press Ctr
 | What you want to do | Action |
 |---|---|
 | Bring in new progress from a conversation | **Update**: receive new messages and update Doc / Map. |
-| Clarify your notes and combine repeated ideas | **Tidy**: organize the current topic, document, and nodes. |
+| Clarify your notes and combine repeated ideas | **Tidy**: organize the document and nodes within the topic; keep the existing topic text unchanged. |
 | Change the focus and revisit existing material | Edit the topic, then **Redraw**: generate Doc / Map from Log using the current topic. |
 
 **Take your work with you**

@@ -642,11 +642,13 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           if (run !== tidyRun) return null; // 取消、切图或重新开始后，旧结果不再有权落账
           if (get().boundProjectId !== bound) { set({ isTidying: false, tidyRound: null }); return null; } // 期间切图 → 丢弃
           const r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+          // 主题提案被共享写入层忽略后，不重试模型，也不制造空整理场次或撤销记录。
+          if (!r.lines.length && themeOf(cur) && ops.length && ops.every(op => op.kind === 'prose' && op.domain === '主题')) break;
           lines.push(...r.lines);
           newIds.push(...r.newIds);
           merged += r.merged;
           dropped += r.dropped;
-          applied += ops.length;
+          applied += r.lines.length;
           text = appendLines(text, r.lines);
           cur = parseLedger(text);
           if (scope) {

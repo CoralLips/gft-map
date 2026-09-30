@@ -218,6 +218,10 @@ export function applyTask(topic: Topic, action: TaskAction, output: string) {
     const result = tidyOpsToLines(state, ops, parseLedger(topic.raw), undefined, { requireChapterDoc: true });
     if (!result.lines.length) {
       if (/^\s*<noop\s*\/>\s*$/.test(output)) return finish(topic, []);
+      // 仅忽略完整的主题提案；解析器可能跳过无效节点操作，不能因此把混合坏输出当作成功。
+      const onlyThemeProse = ops.length > 0 && ops.every(op => op.kind === 'prose' && op.domain === '主题')
+        && !output.replace(/<prose\s+[^>]*>[\s\S]*?<\/prose\s*>/g, '').trim();
+      if (themeOf(state) && onlyThemeProse) return finish(topic, []);
       throw new Error('模型没有返回可执行的整理结果，已保留原图文。');
     }
     return finish(topic, [sessionLine(Date.now(), SOURCE, '整理'), ...result.lines]);

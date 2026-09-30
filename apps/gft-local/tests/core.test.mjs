@@ -105,8 +105,9 @@ test('更新复用增量协议：旧判断改档、新判断承接旧锚，共�
 
 test('整理回放执行真实 merge/revise/prose 协议并保留外部承接与暂缓状态', () => {
   const topic = seeded();
-  const reply = '<merge members="n1,n2" title="先验证本地文件" body="本地保存先行，仍需验证文件方案。"/>\n<revise id="n5" title="跨端同步暂缓"/>\n<prose domain="方向" refs="n1,n2,n3,n4,n5">先完成本地闭环，再解决并发覆盖问题；跨端仍暂缓。</prose>';
+  const reply = '<prose domain="主题">记录产品取舍和制作过程</prose>\n<merge members="n1,n2" title="先验证本地文件" body="本地保存先行，仍需验证文件方案。"/>\n<revise id="n5" title="跨端同步暂缓"/>\n<prose domain="方向" refs="n1,n2,n3,n4,n5">先完成本地闭环，再解决并发覆盖问题；跨端仍暂缓。</prose>';
   const updated = advance(topic, applyTask(topic, 'tidy', reply)), view = viewTopic(updated);
+  assert.equal(view.scope, '仅记录产品取舍');
   assert.equal(view.graph.nodes.length, 4);
   const merged = view.graph.nodes.find(node => node.title === '先验证本地文件');
   const question = view.graph.nodes.find(node => node.mark === '？');
@@ -131,6 +132,44 @@ test('重画回放使用 Log 来源锚并继承原承接，旧工作内容退休
   assert.ok(view.graph.nodes.every(node => !originals.some(old => node.id === old.id)));
   assert.doesNotMatch(view.sourceDoc, /临时手改标题/);
   assert.equal(view.scope, '仅记录产品取舍');
+});
+
+test('整理仅返回已有主题改写时无损完成，不掩盖混合响应中的无效操作', () => {
+  const topic = seeded(), before = JSON.stringify(topic);
+  const proposal = '<prose domain="主题">记录产品取舍和制作过程</prose>';
+  assert.deepEqual(applyTask(topic, 'tidy', proposal), { ledger: topic.ledger, raw: topic.raw });
+  for (const invalid of [
+    '<revise id="n999" title="不存在"/>',
+    '<prose domain="方向" refs="n1">未完成',
+    '<doc>未完成',
+  ]) assert.throws(() => applyTask(topic, 'tidy', `${proposal}\n${invalid}`));
+  assert.equal(JSON.stringify(topic), before);
+});
+
+test('无主题脉络可通过整理初始化收录范围，不改变已有判断或来源', () => {
+  const topic = { ...blank(), scope: '', ledger: '◆ j1 [验证] 先验证小样\n只有一周，先用小样验证。', raw: '' };
+  const before = viewTopic(topic);
+  const theme = '只记录验证路径，不收录写稿流程。';
+  const updated = advance(topic, applyTask(topic, 'tidy', `<prose domain="主题">${theme}</prose>`));
+  const view = viewTopic(updated);
+  assert.equal(view.scope, theme);
+  assert.deepEqual(view.graph, before.graph);
+  assert.equal(updated.raw, topic.raw);
+});
+
+test('整理迁出历史主题章中的判断，仍逐字保留收录范围', () => {
+  const theme = '只记录验证路径，不收录写稿流程。';
+  const topic = { ...blank(), scope: theme, ledger: `走向 p1 [主题]\n${theme}\n◆ j2 [主题] 先验证小样\n只有一周，先用小样验证。`, raw: '' };
+  const reply = '<revise id="n1" domain="验证"/>\n<prose domain="验证" refs="n1">只有一周，因此先用小样验证。</prose>';
+  const updated = advance(topic, applyTask(topic, 'tidy', reply));
+  const view = viewTopic(updated);
+  assert.equal(view.scope, theme);
+  assert.equal(view.graph.nodes.length, 1);
+  assert.equal(view.graph.nodes[0].domain, '验证');
+  assert.equal(view.graph.nodes[0].title, '先验证小样');
+  assert.equal(view.graph.nodes[0].content, '只有一周，先用小样验证。');
+  assert.match(view.doc, /只有一周，因此先用小样验证。/);
+  assert.equal(updated.raw, topic.raw);
 });
 
 test('准备任务复用完整规则，整理和重画读取原始资料，主题过滤不保留无关散文', () => {

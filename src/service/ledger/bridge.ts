@@ -436,6 +436,8 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerSta
   const explained = new Set<string>();
   for (const [domain, op] of prose) {
     if (!op.text.trim()) continue;
+    // 与生成/更新一致：已有主题属于用户的收录边界，普通整理不能改写；空主题仍可初始化。
+    if (domain === '主题' && themeOf(st)) continue;
     const refs = [...new Set((op.refs ?? []).map(id => mergedRefs.get(id) ?? id))]
       .filter(id => chapterEntries.some(j => j.id === id && j.domain === domain));
     refs.forEach(id => explained.add(id));
@@ -453,6 +455,8 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerSta
   }
   // 整章迁出且新正文已经承接全部判断时，收掉旧章导语，避免新正文后又重复旧版。
   for (const domain of new Set(liveJudgments(st).map(j => j.domain))) {
+    // 历史/导入数据可能把判断放在主题章；迁出这些判断也不能连带删除收录边界。
+    if (domain === '主题') continue;
     if (chapterEntries.some(j => j.domain === domain) || prose.has(domain)) continue;
     const moved = liveJudgments(st).filter(j => j.domain === domain).map(j => mergedRefs.get(j.id) ?? j.id)
       .filter(id => chapterEntries.some(j => j.id === id));

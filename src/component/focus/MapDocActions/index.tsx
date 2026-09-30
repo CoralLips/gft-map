@@ -257,7 +257,7 @@ export function TidyButton(): JSX.Element | null {
       className={styles.addNodeBtn}
       onClick={() => void handleTidy()}
       disabled={isGenerating || isRefining}
-      title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '整理主题表述、当前文稿和节点：保留收录范围，归并重复，提炼文稿中的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
+      title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
     >{selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}${note ? ` · ${note}` : ''}` : note ?? `🧹 ${tr('整理')}`}</button>
   );
 }
