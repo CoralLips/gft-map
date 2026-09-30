@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConfirmDialog } from '../../../src/component/common/ConfirmDialog';
 import { ThinkingMapWorkspace } from '../../../src/component/focus/ThinkingMapWorkspace';
@@ -9,7 +9,7 @@ import { initTheme, getThemePref, setThemePref, type ThemePref } from '../../../
 import { ImportDialog } from './ImportDialog';
 import {Materials,addMaterial} from './Materials';
 import { AccountDialog } from './AccountDialog';
-import { createLocalRuntime, localRequest, type UpdateSource } from './localRuntime';
+import { createLocalRuntime, type UpdateSource } from './localRuntime';
 import { ConnectionActions, ConnectionManager, LocalDialog as Modal } from './ConnectionManager';
 import { ExportMenu } from '../../../src/component/focus/MapDocActions';
 import '../../../src/style/index.css';
@@ -46,13 +46,14 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [dialog, setDialog] = useState<'tasks' | 'history' | 'import' | 'account' | null>(null);
   const [error, setError] = useState('');
-  const [connectionError, setConnectionError] = useState('');
+  const service = useSyncExternalStore(runtime.service.subscribe, runtime.service.getSnapshot);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [executorError, setExecutorError] = useState('');
   const menuRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
+    if (service.phase !== 'connected') return;
     const controller = new AbortController();
     let polling = false;
     const poll = async () => {
@@ -60,17 +61,17 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
       polling = true;
       try {
         const [nextTasks, nextStatus] = await Promise.all([
-          localRequest<Task[]>('/api/tasks', undefined, controller.signal),
-          localRequest<RuntimeStatus>('/api/runtime', undefined, controller.signal),
+          runtime.request<Task[]>('/api/tasks', undefined, controller.signal),
+          runtime.request<RuntimeStatus>('/api/runtime', undefined, controller.signal),
         ]);
-        if (!controller.signal.aborted) { setTasks(nextTasks); setStatus(nextStatus); setConnectionError(''); }
-      } catch (error) { if (!controller.signal.aborted) setConnectionError(messageOf(error)); }
+        if (!controller.signal.aborted) { setTasks(nextTasks); setStatus(nextStatus); }
+      } catch { /* The shared connection status owns background failures. */ }
       finally { polling = false; }
     };
     void poll();
     const timer = setInterval(() => { void poll(); }, 2500);
     return () => { controller.abort(); clearInterval(timer); };
-  }, []);
+  }, [runtime, service.phase]);
   useEffect(() => {
     const close = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) menuRef.current.open = false;
@@ -83,7 +84,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const cancel = async (task: Task) => {
     setCancelling(task.id);
     try {
-      await localRequest(`/api/tasks/${task.id}/cancel`, {});
+      await runtime.request(`/api/tasks/${task.id}/cancel`, {});
       setTasks(current => current.map(item => item.id === task.id ? { ...item, status: 'cancelled' } : item));
     } catch (error) { setError(messageOf(error)); }
     finally { setCancelling(null); }
@@ -92,11 +93,11 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     if (connecting) return;
     setConnecting(true); setExecutorError('');
     try {
-      const next = await localRequest<RuntimeStatus>('/api/runtime/executor', { agent: status?.agent || 'codex' });
+      const next = await runtime.request<RuntimeStatus>('/api/runtime/executor', { agent: status?.agent || 'codex' });
       setStatus(next);
     } catch (error) {
       setExecutorError(messageOf(error));
-      try { setStatus(await localRequest<RuntimeStatus>('/api/runtime')); } catch { /* polling will retry */ }
+      try { setStatus(await runtime.request<RuntimeStatus>('/api/runtime')); } catch { /* polling will retry */ }
     } finally { setConnecting(false); }
   };
   const executorUnavailable = status !== null && !executorReady(status);
@@ -132,12 +133,10 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
     }} onClose={()=>setDialog(null)} />}
     {dialog === 'account' && <AccountDialog onClose={() => setDialog(null)} />}
     {error && !dialog && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
-    {connectionError && !dialog && <div className="gft-local-banner" role="alert">{tr(connectionError)}<button aria-label={tr('关闭提示')} onClick={() => setConnectionError('')}>×</button></div>}
     {dialog === 'history' && projectId && <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />}
     {dialog === 'tasks' && <Modal title={tr('任务')} wide onClose={() => setDialog(null)}>
       <p className="gft-local-note">{!status ? tr('正在读取执行状态…') : status.agent ? tr('当前由本机 {agent} 处理页面任务。', {agent:status.agent}) : tr('未启用自动 Agent。排队任务需由当前 Agent 对话通过 Skill 读取并处理。')}</p>
       {error && <p role="alert" className="gft-local-error">{tr(error)}</p>}
-      {connectionError && <p role="alert" className="gft-local-error">{tr(connectionError)}</p>}
       {status?.executor?.model && <p className="gft-local-note">{tr('执行模型：{model} · 思考强度：{effort}（自动）', {model:status.executor.model, effort:status.executor.effort || tr('执行器默认')})}</p>}
       {status?.executor?.lastError && <p className="gft-local-error">{typeof status.executor.lastError === 'string' ? status.executor.lastError : status.executor.lastError.message}</p>}
       {!executorReady(status) && <div className="gft-local-executor-recovery">
@@ -158,7 +157,6 @@ function App() {
   const tr = useT();
   const lang = useLangStore(s => s.lang);
   useEffect(() => { document.title = lang === 'en' ? 'GFT Map · Local' : 'GFT Map · 本地脉络'; }, [lang]);
-  const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [updateRequest, setUpdateRequest] = useState<UpdateRequest | null>(null);
   const [sourceRequest, setSourceRequest] = useState<SourceRequest | null>(null);
@@ -168,6 +166,9 @@ function App() {
     onRequestSource: topicId => new Promise(resolve => setSourceRequest({ topicId, resolve })),
     onError: setError,
   }));
+  const service = useSyncExternalStore(runtime.service.subscribe, runtime.service.getSnapshot);
+  const ready = service.hasConnected;
+  const [saving, setSaving] = useState(false);
   const [actions] = useState(() => <LocalActions runtime={runtime} />);
   const [memoryControl] = useState(() => <ConnectionActions runtime={runtime} />);
   useEffect(() => {
@@ -182,18 +183,22 @@ function App() {
     });
   }, [runtime]);
   useEffect(() => {
-    let alive = true;
-    void runtime.start().then(() => { if (alive) setReady(true); }).catch(error => { if (alive) setError(messageOf(error)); });
+    void runtime.start();
     const flush = () => { runtime.store.getState().flushDocEdits(); runtime.store.getState().flushDoc(); };
     const dispose = () => runtime.dispose();
     // A cancelled navigation must leave the live runtime intact.
     window.addEventListener('beforeunload', flush);
     window.addEventListener('pagehide', dispose);
-    return () => { alive = false; window.removeEventListener('beforeunload', flush); window.removeEventListener('pagehide', dispose); runtime.dispose(); };
+    return () => { window.removeEventListener('beforeunload', flush); window.removeEventListener('pagehide', dispose); runtime.dispose(); };
   }, [runtime]);
   const closeUpdate = (input: string | null) => { updateRequest?.resolve(input); setUpdateRequest(null); };
   return <ThinkingMapRuntimeProvider store={runtime.store} host={runtime.host} memoryControl={memoryControl}>
-    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} showExport={false} secondaryActions={actions} /> : <div className="gft-local-loading">{tr(error || '正在打开本地脉络…')}{error && <button onClick={() => window.location.reload()}>{tr('重新打开')}</button>}</div>}</main>
+    <main className="gft-local-shell">{ready ? <Workspace showLogTab={false} showExport={false} secondaryActions={actions} /> : <div className="gft-local-loading" role="status">{tr(service.phase === 'disconnected' ? '暂时无法连接本地服务，正在自动重试…' : '正在打开本地脉络…')}{service.phase === 'disconnected' && <button disabled={service.checking} onClick={() => { void runtime.service.retry(); }}>{tr(service.checking ? '正在重连…' : '立即重试')}</button>}</div>}</main>
+    {ready && service.phase !== 'connected' && <div className="gft-local-service-status" role="status"><span>{tr('连接已中断，当前内容和未保存修改已保留。正在自动重连…')}</span><button disabled={service.checking} onClick={() => { void runtime.service.retry(); }}>{tr(service.checking ? '正在重连…' : '立即重试')}</button></div>}
+    {ready && service.phase === 'connected' && service.pending && service.saveFailed && <div className="gft-local-service-status" role="status"><span>{tr('连接正常，尚有本地修改未保存。')}</span><button disabled={saving} onClick={() => {
+      setSaving(true);
+      void runtime.service.savePending().catch(error => setError(messageOf(error))).finally(() => setSaving(false));
+    }}>{tr(saving ? '正在保存…' : '重试保存')}</button></div>}
     {ready && error && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {sourceRequest && sourceRequest.topicId === runtime.host.getSnapshot().currentProjectId && <ConnectionManager key={sourceRequest.topicId} runtime={runtime} topicId={sourceRequest.topicId} projects={runtime.host.getSnapshot().projects} purpose="update" onClose={source => { sourceRequest.resolve(source); setSourceRequest(null); }} />}
     {updateRequest && <Modal title={tr('更新脉络')} wide onClose={() => closeUpdate(null)}><form onSubmit={event => { event.preventDefault(); if (updateDraft.trim()) closeUpdate(updateDraft.trim()); }}>

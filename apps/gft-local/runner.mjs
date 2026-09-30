@@ -16,7 +16,7 @@ const configOverrides = [
   'memories.use_memories=false', 'memories.generate_memories=false',
 ];
 const errorOf = (code, message, execution) => Object.assign(new Error(message), { code, ...(execution ? { execution } : {}) });
-const brief = text => String(text || '').replace(/\u001b\[[0-9;]*m/g, '').replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').trim().slice(-1200);
+const brief = text => (typeof text === 'string' ? text : '').replace(/\u001b\[[0-9;]*m/g, '').replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').trim().slice(-1200);
 
 /** Stop the owned process tree, including wrappers and descendants holding pipes. */
 async function stopTree(child) {
@@ -126,39 +126,60 @@ export function createCodexRunner({ binary = process.env.GFT_CODEX_BIN || 'codex
     if (signal?.aborted) abort();
     const timer = setTimeout(() => stop('RUNNER_TIMEOUT', `Codex 执行超过 ${Math.ceil(timeoutMs / 1000)} 秒，已停止，当前内容保留。`), timeoutMs);
     function eventLine(line) {
-      if (!line.trim()) return;
-      let event;
-      try { event = JSON.parse(line); }
-      catch { stop('RUNNER_PROTOCOL', 'Codex 返回了无法解析的 JSON 事件，已停止。'); return; }
-      if (!event || typeof event.type !== 'string') return;
-      sawEvent = true;
-      execution.eventCounts[event.type] = (execution.eventCounts[event.type] || 0) + 1;
-      if (event.type === 'thread.started' && typeof event.thread_id === 'string') execution.threadId = event.thread_id;
-      if (event.type === 'turn.completed' && event.usage) {
-        const usage = {};
-        for (const name of ['input_tokens', 'cached_input_tokens', 'output_tokens', 'reasoning_output_tokens']) {
-          if (Number.isFinite(event.usage[name]) && event.usage[name] >= 0) usage[name] = event.usage[name];
+      if (interrupted) return;
+      try {
+        if (!line.trim()) return;
+        let event;
+        try { event = JSON.parse(line); }
+        catch { stop('RUNNER_PROTOCOL', 'Codex 返回了无法解析的 JSON 事件，已停止。'); return; }
+        if (!event || typeof event.type !== 'string') return;
+        sawEvent = true;
+        execution.eventCounts[event.type] = (execution.eventCounts[event.type] || 0) + 1;
+        if (event.type === 'thread.started' && typeof event.thread_id === 'string') execution.threadId = event.thread_id;
+        if (event.type === 'turn.completed' && event.usage) {
+          const usage = {};
+          for (const name of ['input_tokens', 'cached_input_tokens', 'output_tokens', 'reasoning_output_tokens']) {
+            if (Number.isFinite(event.usage[name]) && event.usage[name] >= 0) usage[name] = event.usage[name];
+          }
+          if (Object.keys(usage).length) {
+            execution.usage ||= {};
+            for (const [name, value] of Object.entries(usage)) execution.usage[name] = (execution.usage[name] || 0) + value;
+          }
         }
-        if (Object.keys(usage).length) {
-          execution.usage ||= {};
-          for (const [name, value] of Object.entries(usage)) execution.usage[name] = (execution.usage[name] || 0) + value;
+        if (event.type === 'turn.failed' || event.type === 'error') {
+          const message = event.error?.message ?? event.message ?? '模型执行失败';
+          if (typeof message !== 'string') throw errorOf('RUNNER_PROTOCOL', 'Codex 返回的错误事件 message 字段无效，已停止，当前内容保留。');
+          eventError = brief(message);
         }
-      }
-      if (event.type === 'turn.failed' || event.type === 'error') eventError = brief(event.error?.message || event.message || '模型执行失败');
-      const item = event.item;
-      if (item && toolTypes.has(item.type)) {
-        const id = String(item.id || `${item.type}:${execution.toolEvents.length}`);
-        tools.add(id); execution.toolCallCount = tools.size;
-        if (execution.toolEvents.length < 200) execution.toolEvents.push({ event: event.type, id, type: item.type, ...(typeof item.status === 'string' ? { status: item.status } : {}), ...(typeof item.tool === 'string' ? { tool: item.tool } : {}), ...(typeof item.server === 'string' ? { server: item.server } : {}) });
+        const item = event.item;
+        if (item && toolTypes.has(item.type)) {
+          if (item.id != null && typeof item.id !== 'string' && !(typeof item.id === 'number' && Number.isFinite(item.id))) {
+            throw errorOf('RUNNER_PROTOCOL', 'Codex 返回的工具事件 id 字段无效，已停止，当前内容保留。');
+          }
+          const id = item.id == null || item.id === '' ? `${item.type}:${execution.toolEvents.length}` : typeof item.id === 'string' ? item.id : String(item.id);
+          tools.add(id); execution.toolCallCount = tools.size;
+          if (execution.toolEvents.length < 200) execution.toolEvents.push({ event: event.type, id, type: item.type, ...(typeof item.status === 'string' ? { status: item.status } : {}), ...(typeof item.tool === 'string' ? { tool: item.tool } : {}), ...(typeof item.server === 'string' ? { server: item.server } : {}) });
+        }
+      } catch (error) {
+        stop('RUNNER_PROTOCOL', error.code === 'RUNNER_PROTOCOL' ? error.message : 'Codex 返回的执行事件字段无效，已停止，当前内容保留。');
       }
     }
     child.stdout.on('data', chunk => {
-      buffer += decoder.write(chunk);
-      if (buffer.length > 4 * MAX_OUTPUT) { stop('RUNNER_PROTOCOL', 'Codex 单条事件过大，已停止。'); return; }
-      let end;
-      while ((end = buffer.indexOf('\n')) !== -1) { eventLine(buffer.slice(0, end)); buffer = buffer.slice(end + 1); }
+      if (interrupted) return;
+      try {
+        buffer += decoder.write(chunk);
+        if (buffer.length > 4 * MAX_OUTPUT) { stop('RUNNER_PROTOCOL', 'Codex 单条事件过大，已停止。'); return; }
+        let end;
+        while (!interrupted && (end = buffer.indexOf('\n')) !== -1) { eventLine(buffer.slice(0, end)); buffer = buffer.slice(end + 1); }
+      } catch { stop('RUNNER_PROTOCOL', 'Codex 执行事件读取失败，已停止，当前内容保留。'); }
     });
-    child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-4000); });
+    child.stderr.on('data', chunk => {
+      if (interrupted) return;
+      try { stderr = (stderr + chunk.toString('utf8')).slice(-4000); }
+      catch { stop('RUNNER_PROTOCOL', 'Codex 错误输出读取失败，已停止，当前内容保留。'); }
+    });
+    child.stdout.on('error', () => stop('RUNNER_PROTOCOL', 'Codex 执行事件流中断，已停止，当前内容保留。'));
+    child.stderr.on('error', () => stop('RUNNER_PROTOCOL', 'Codex 错误输出流中断，已停止，当前内容保留。'));
     child.stdin.on('error', () => {});
     child.stdin.end(task.user);
     try {

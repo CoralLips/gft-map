@@ -9,6 +9,7 @@ import { mergeLedgerPair } from '../../../src/service/ledger/merge';
 import { buildGenerateRequest, parseGenerateResponse, buildRefinePrompt, parseRefineTags } from '../../../src/service/thinkingMapCore';
 import { buildTidyRequest, parseTidyOps } from '../../../src/service/tidyCore';
 import { t } from '../../../src/i18n';
+import { createReconnectMonitor, type ServiceConnectionSnapshot } from './reconnect';
 
 interface LocalTopic { id: string; name: string; scope: string; revision: number; ledger: string; raw: string; panel?: PersistedThinkingMap; materialRevision?:number }
 interface TopicSnapshot { topic: LocalTopic }
@@ -31,13 +32,29 @@ interface LocalRuntimeOptions {
   onError(message: string): void;
 }
 export class LocalApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+export class LocalConnectionError extends Error { constructor() { super(t('本地服务连接中断，当前内容和未保存修改已保留。')); } }
 export async function localRequest<T>(url: string, body?: unknown, signal?: AbortSignal, keepalive = false): Promise<T> {
-  const response = await fetch(url, { method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body), signal, keepalive });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new LocalApiError(data.error ? t(data.error) : t('请求失败（{status}）', {status:response.status}), response.status);
-  return data as T;
+  // Bound reads so a stalled socket cannot block reconnect checks indefinitely.
+  const controller = body === undefined ? new AbortController() : undefined;
+  const abort = () => controller?.abort();
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
+  const timeout = controller ? setTimeout(abort, 10000) : undefined;
+  try {
+    const response = await fetch(url, { method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal || signal, keepalive });
+    const data = await response.json().catch(error => {
+      if (controller?.signal.aborted || signal?.aborted) throw error;
+      if (response.ok) throw new LocalConnectionError();
+      return {};
+    });
+    if (!response.ok) throw new LocalApiError(data.error ? t(data.error) : t('请求失败（{status}）', {status:response.status}), response.status);
+    return data as T;
+  } catch (error) {
+    if (!signal?.aborted && (error instanceof TypeError || controller?.signal.aborted)) throw new LocalConnectionError();
+    throw error;
+  } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
 }
 const messageOf = (error: unknown) => t(error instanceof Error ? error.message : String(error));
 const abortError = () => new DOMException(t('任务已取消，当前内容保留。'), 'AbortError');
@@ -62,6 +79,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   const listeners = new Set<() => void>(), cache = new Map<string, CachedMap>();
   const remoteVersions = new WeakMap<PersistedThinkingMap, number>();
   const saveQueues = new Map<string, Promise<PersistedThinkingMap | null>>();
+  const failedSaves = new Set<string>();
   const sourceQueues = new Map<string, Promise<void>>();
   const activeTasks = new Map<string, () => Promise<void>>();
   const pendingCreates = new Map<string, { name: string; promise: Promise<LocalTopic> }>();
@@ -73,10 +91,13 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   let connectionSnapshot: ConnectionSnapshot = { topicId: null, revision: null, connections: [], status: 'ready', error: '', operation: null };
   let connectionEpoch = 0;
   let chatUpdate: { topicId: string; controller: AbortController; cancel?: () => Promise<void> } | null = null;
-  let serial = 0, disposed = false, poll: ReturnType<typeof setInterval> | undefined;
+  let serial = 0, disposed = false;
+  let startupLoadError: string | null = null;
+  const serviceListeners = new Set<() => void>();
+  let serviceSnapshot: ServiceConnectionSnapshot & { pending: boolean; saveFailed: boolean } = { phase: 'connecting', checking: false, hasConnected: false, pending: false, saveFailed: false };
   let snapshot: MapHostSnapshot = { projects: [], currentProjectId: null, currentSession: null, chatHistory: [], sourceLabel: '所选会话', showMemoryToggle: false,
     redrawDescription: '保留当前主题，基于 Log 已接收的来源重新生成图文。不读取原聊天，更新进度不变；旧记录只使用实际保存的材料。完成后可 Ctrl+Z 撤销。' };
-  const publish = (change: Partial<MapHostSnapshot>) => { snapshot = { ...snapshot, ...change }; listeners.forEach(listener => listener()); };
+  const publish = (change: Partial<MapHostSnapshot>) => { snapshot = { ...snapshot, ...change }; listeners.forEach(listener => listener()); publishService(); };
   const publishConnections = (change: Partial<ConnectionSnapshot>) => { connectionSnapshot = { ...connectionSnapshot, ...change }; connectionListeners.forEach(listener => listener()); };
   const readCache = (id: string) => {
     if (cache.has(id)) return cache.get(id)!;
@@ -87,8 +108,16 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   };
   const writeCache = (id: string, entry: CachedMap) => {
     cache.set(id, entry); storage.set(keyOf(id), JSON.stringify(entry));
+    publishService();
     if (connectionSnapshot.topicId === id && connectionSnapshot.revision !== entry.revision) publishConnections({ revision: entry.revision });
   };
+  async function request<T>(url: string, body?: unknown, signal?: AbortSignal, keepalive = false): Promise<T> {
+    try { return await localRequest<T>(url, body, signal, keepalive); }
+    catch (error) {
+      if (error instanceof LocalConnectionError || error instanceof LocalApiError && error.status >= 500) monitor.disconnected();
+      throw error;
+    }
+  }
   const mapOf = (topic: LocalTopic): PersistedThinkingMap => {
     const unread = new Set((topic.panel?.nodes || []).filter(node => node.unread).map(node => node.id));
     const derived = deriveCaches(parseLedger(topic.ledger), topic.id, unread);
@@ -98,7 +127,10 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   };
   const load = async (id: string) => {
     await pendingCreates.get(id)?.promise;
-    const bundle = await localRequest<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`);
+    const bundle = await request<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`).catch(error => {
+      if (!serviceSnapshot.hasConnected) startupLoadError = messageOf(error);
+      throw error;
+    });
     const name = pendingNames.get(id) || bundle.topic.name;
     if (!disposed && bundle.topic.revision >= (readCache(id)?.revision ?? 0)
       && snapshot.projects.some(project => project.id === id && project.name !== name)) {
@@ -123,8 +155,9 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       let rebased = false;
       for (let attempt = 0; ; attempt++) {
         try {
-          const saved = await localRequest<{ revision: number }>(`/api/topics/${encodeURIComponent(id)}/state`, { baseRevision: entry.revision, map: entry.map });
+          const saved = await request<{ revision: number }>(`/api/topics/${encodeURIComponent(id)}/state`, { baseRevision: entry.revision, map: entry.map });
           const latest = readCache(id)!;
+          failedSaves.delete(id);
           writeCache(id, { ...latest, base:{ledger:entry.map.ledger || '',raw:entry.map.raw || ''}, revision: Math.max(latest.revision,saved.revision), pending: latest.serial !== entry.serial });
           if (rebased && latest.serial === entry.serial) {
             remoteVersions.set(entry.map, saved.revision);
@@ -133,7 +166,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
           return null;
         } catch (error) {
           if (!(error instanceof LocalApiError) || error.status !== 409 || attempt >= 2) throw error;
-          const remote = (await localRequest<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`)).topic;
+          const remote = (await request<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`)).topic;
           const latest = readCache(id)!;
           const base = latest.base;
           let merged;
@@ -150,7 +183,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
           rebased = true;
         }
       }
-    });
+    }).catch(error => { failedSaves.add(id); publishService(); throw error; });
     saveQueues.set(id, queued);
     void queued.finally(() => { if (saveQueues.get(id) === queued) saveQueues.delete(id); }).catch(() => {});
     return queued;
@@ -166,7 +199,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     const epoch = ++connectionEpoch;
     try {
       await pendingCreates.get(id)?.promise;
-      const connections = await localRequest<ChatConnection[]>(`/api/connections?topicId=${encodeURIComponent(id)}`);
+      const connections = await request<ChatConnection[]>(`/api/connections?topicId=${encodeURIComponent(id)}`);
       if (!disposed && snapshot.currentProjectId === id && epoch === connectionEpoch) publishConnections({ topicId: id, revision: readCache(id)?.revision ?? null, connections: connections.filter(item => !disconnecting.has(item.id)), status: 'ready', error: '' });
       return connections;
     } catch (error) {
@@ -194,7 +227,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     if (batch > 0 && (store.getState().docDraft !== null || readCache(id)?.pending)) throw new Error(t('已保留完成的批次。请先保存当前编辑，再继续更新。'));
     publishConnections({ operation: { phase: 'reading', message: t('正在检查第 {batch} 批待读取材料…', {batch:batch + 1}) } });
     // Keep the short enqueue request alive until we have the task ID for cancellation.
-    const response = await localRequest<{ task?: { id: string }; unchanged?: boolean; message?: string; hasMore?: boolean; until?: unknown; messageCount?: number; stage?: 'distill' | 'publish' }>(`/api/topics/${encodeURIComponent(id)}/update-from-chat`, { connectionId, continuous: true, ...(until === undefined ? {} : { until }) });
+    const response = await request<{ task?: { id: string }; unchanged?: boolean; message?: string; hasMore?: boolean; until?: unknown; messageCount?: number; stage?: 'distill' | 'publish' }>(`/api/topics/${encodeURIComponent(id)}/update-from-chat`, { connectionId, continuous: true, ...(until === undefined ? {} : { until }) });
     until = response.until ?? until;
     batch++;
     const progress = () => t('第 {batch} 批', {batch}) + (response.messageCount ? ` · ${t('{count} 条消息', {count:response.messageCount})}` : '');
@@ -208,7 +241,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       return;
     }
     let cancellation: Promise<void> | undefined;
-    const cancel = () => cancellation ||= localRequest(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, {}, undefined, true).then(() => {}, () => {});
+    const cancel = () => cancellation ||= request(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, {}, undefined, true).then(() => {}, () => {});
     operation.cancel = cancel; activeTasks.set(taskId, cancel);
     signal.addEventListener('abort', cancel, { once: true });
     try {
@@ -216,7 +249,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       publishConnections({ operation: { phase: 'running', message: `${progress()} · ${t(activity)}…`, taskId } });
       for (;;) {
         if (!current()) throw abortError();
-        const task = await localRequest<{ status: string; error?: string }>(`/api/tasks/${encodeURIComponent(taskId)}/status`, undefined, signal);
+        const task = await request<{ status: string; error?: string }>(`/api/tasks/${encodeURIComponent(taskId)}/status`, undefined, signal);
         if (!current()) throw abortError();
         if (task.status === 'failed') throw new Error(t(task.error || '更新失败，原内容已保留。'));
         if (task.status === 'cancelled') throw abortError();
@@ -236,7 +269,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     }
   }
   async function refreshProjects() {
-    const projects = await localRequest<Array<{ id: string; name: string; status?: 'active' | 'archived' }>>('/api/topics');
+    const projects = await request<Array<{ id: string; name: string; status?: 'active' | 'archived' }>>('/api/topics');
     for (const [id, pending] of pendingCreates) if (!projects.some(project => project.id === id)) projects.unshift({ id, name: pending.name });
     if (!disposed) publish({ projects: projects.map(project => ({ ...project, name: pendingNames.get(project.id) || project.name, status: project.status || 'active' })) });
     const current=snapshot.currentProjectId, state=store.getState();
@@ -278,7 +311,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   }
   async function sources(id: string, alive?: Set<string>): Promise<SourceBatch[]> {
     await sourceQueues.get(id);
-    const events = await localRequest<CondensationEvent[]>(`/api/topics/${encodeURIComponent(id)}/sources`);
+    const events = await request<CondensationEvent[]>(`/api/topics/${encodeURIComponent(id)}/sources`);
     const seen = new Set<string>();
     return events.filter(event => event.layer === 'L0->L1' && Array.isArray(event.inputs))
       .map(event => ({ nodeIds: event.outputs, sessionTitle: event.sourceMeta?.sessionTitle || '', messages: Array.isArray(event.inputs) ? event.inputs : [] }))
@@ -290,7 +323,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   }
   function writeSource(id: string, action: 'sources' | 'clear-sources', body: unknown) {
     const operation = (sourceQueues.get(id) || Promise.resolve()).then(async () => {
-      try { await localRequest(`/api/topics/${encodeURIComponent(id)}/${action}`,body); }
+      try { await request(`/api/topics/${encodeURIComponent(id)}/${action}`,body); }
       catch(error) { options.onError(t('来源记录尚未保存：{error}', {error:messageOf(error)})); }
     });
     sourceQueues.set(id,operation);
@@ -301,7 +334,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     async downloadBundle() {
       const id=snapshot.currentProjectId;if(!id)return;
       store.getState().flushDocEdits();store.getState().flushDoc();await flushPending(id);
-      const files=await localRequest<{state:string;received:number;size:number;sha256?:string}[]>(`/api/materials?topicId=${encodeURIComponent(id)}`);
+      const files=await request<{state:string;received:number;size:number;sha256?:string}[]>(`/api/materials?topicId=${encodeURIComponent(id)}`);
       if(files.some(file=>file.received!==file.size||!file.sha256))throw new Error(t('原文件尚未接收完整，请完成续传后下载'));
       if(files.some(file=>['running','queued'].includes(file.state)))throw new Error(t('请先暂停材料整理，再下载完整存档'));
       const anchor=document.createElement('a');anchor.href=`/api/topics/${encodeURIComponent(id)}/download`;anchor.download='';document.body.appendChild(anchor);anchor.click();anchor.remove();
@@ -312,7 +345,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       if (creating) return creating;
       const id = crypto.randomUUID(), previousId = snapshot.currentProjectId;
       const title = name.trim() || '新脉络';
-      const promise = localRequest<LocalTopic>('/api/topics', { id, name: title, scope: '' });
+      const promise = request<LocalTopic>('/api/topics', { id, name: title, scope: '' });
       pendingCreates.set(id, { name: title, promise });
       writeCache(id, { revision: 1, serial: ++serial, pending: false,
         map: mapOf({ id, name: title, scope: '', revision: 1, ledger: '走向 p1 [主题]', raw: '' }) });
@@ -358,8 +391,8 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       const queued = (renameQueues.get(id) || Promise.resolve()).then(async () => {
         try {
           await flushPending(id);
-          const current = await localRequest<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`);
-          const saved = await localRequest<{revision:number}>(`/api/topics/${encodeURIComponent(id)}/rename`, { baseRevision: current.topic.revision, name });
+          const current = await request<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`);
+          const saved = await request<{revision:number}>(`/api/topics/${encodeURIComponent(id)}/rename`, { baseRevision: current.topic.revision, name });
           const entry = readCache(id); if(entry) writeCache(id, {...entry,revision:saved.revision});
         } catch (error) { options.onError(messageOf(error)); }
         finally {
@@ -374,8 +407,8 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     async deleteProject(id) {
       try {
       await flushPending(id);
-      const current = await localRequest<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`);
-      await localRequest(`/api/topics/${encodeURIComponent(id)}/archive`, { baseRevision: current.topic.revision });
+      const current = await request<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`);
+      await request(`/api/topics/${encodeURIComponent(id)}/archive`, { baseRevision: current.topic.revision });
       await refreshProjects();
       if (snapshot.currentProjectId === id) {
         cancelChatUpdate(); chatUpdate = null; connectionEpoch++;
@@ -436,17 +469,17 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     if (revision === undefined) throw new Error(t('脉络尚未读取，请重新打开后处理。'));
     // Do not abort the short queue request before receiving its task ID; otherwise
     // a cancel could leave a task running without a handle to stop it.
-    const task = await localRequest<{id:string}>(`/api/topics/${encodeURIComponent(id)}/compute`, {baseRevision:revision,request:{action,system,user}});
+    const task = await request<{id:string}>(`/api/topics/${encodeURIComponent(id)}/compute`, {baseRevision:revision,request:{action,system,user}});
     let cancellation: Promise<void> | undefined;
-    const cancel = () => cancellation ||= localRequest(`/api/tasks/${task.id}/cancel`, {}, undefined, true).then(() => {}, () => {});
+    const cancel = () => cancellation ||= request(`/api/tasks/${task.id}/cancel`, {}, undefined, true).then(() => {}, () => {});
     activeTasks.set(task.id, cancel);
     context.signal.addEventListener('abort', cancel, {once:true});
     if (context.signal.aborted || disposed) { cancel(); activeTasks.delete(task.id); throw abortError(); }
     try {
       for (;;) {
         if (context.signal.aborted || disposed) throw abortError();
-        const state = await localRequest<{status:string;error?:string}>(`/api/tasks/${task.id}/status`, undefined, context.signal);
-        if (state.status === 'completed') return (await localRequest<{output:string}>(`/api/tasks/${task.id}/result`, undefined, context.signal)).output;
+        const state = await request<{status:string;error?:string}>(`/api/tasks/${task.id}/status`, undefined, context.signal);
+        if (state.status === 'completed') return (await request<{output:string}>(`/api/tasks/${task.id}/result`, undefined, context.signal)).output;
         if (state.status === 'failed') throw new Error(t(state.error || '本地模型执行失败。'));
         if (state.status === 'cancelled') throw abortError();
         await pause(context.signal);
@@ -473,7 +506,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       // An empty or filtered map is not permission to discard saved original sources.
       clearCondensations: async () => {},
       async fetchSourceSnapshots(id,nodeIds) {
-        const fileSources=await localRequest<{text:string}>(`/api/material-evidence?${new URLSearchParams([['topicId',id],...nodeIds.map(node=>['node',node])])}`);
+        const fileSources=await request<{text:string}>(`/api/material-evidence?${new URLSearchParams([['topicId',id],...nodeIds.map(node=>['node',node])])}`);
         const text = fileSources.text+(await sources(id,new Set(nodeIds))).flatMap(batch=>batch.messages).map(message=>`${message.role==='user' ? message.name || '用户' : 'AI'}：${message.content}`).join('\n\n');
         return text.length > 8000 ? `${text.slice(0,8000)}…` : text;
       },
@@ -497,9 +530,31 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     },
   };
   const store = createThinkingMapStore(runtime);
+  const monitor = createReconnectMonitor(async () => {
+    await refreshProjects();
+    if (disposed) return;
+    // A recovered connection must not rehydrate/remount the current editor.
+    if (!snapshot.currentProjectId && !serviceSnapshot.hasConnected) {
+      const selected = storage.get('gft-local:selected');
+      const first = snapshot.projects.find(project => project.id === selected) || snapshot.projects[0];
+      if (first) await host.switchProject(first.id);
+    } else await store.getState().syncFromRemote();
+    if (!disposed && options.onRequestSource) await refreshConnections();
+  });
+  function publishService() {
+    const next = { ...monitor.getSnapshot(), pending: !!snapshot.currentProjectId && readCache(snapshot.currentProjectId)?.pending === true, saveFailed: !!snapshot.currentProjectId && failedSaves.has(snapshot.currentProjectId) };
+    if (Object.keys(next).every(key => next[key as keyof typeof next] === serviceSnapshot[key as keyof typeof next])) return;
+    if (next.hasConnected && !serviceSnapshot.hasConnected && startupLoadError) {
+      if (store.getState().error === startupLoadError) store.setState({ error: null });
+      startupLoadError = null;
+    }
+    serviceSnapshot = next;
+    serviceListeners.forEach(listener => listener());
+  }
+  monitor.subscribe(publishService);
   const dispose = () => {
     if (disposed) return;
-    disposed = true; clearInterval(poll);
+    disposed = true; monitor.dispose();
     cancelChatUpdate(); connectionEpoch++;
     store.getState().cancelGeneration(); store.getState().cancelTidy();
     for (const cancel of activeTasks.values()) void cancel();
@@ -507,9 +562,38 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     store.getState().resetLocal(); // Includes an in-flight node refinement and invalidates late responses.
     listeners.clear();
     connectionListeners.clear();
+    serviceListeners.clear();
   };
   return {
-    store,host,refreshProjects,dispose,requestManualUpdate,editScope,
+    store,host,refreshProjects,dispose,requestManualUpdate,editScope,request,
+    service: {
+      getSnapshot: () => serviceSnapshot,
+      subscribe(listener: () => void) { serviceListeners.add(listener); return () => { serviceListeners.delete(listener); }; },
+      retry: monitor.retry,
+      async savePending() {
+        const id = snapshot.currentProjectId;
+        if (!id) return;
+        // This is an explicit user retry, never part of the reconnect loop.
+        store.getState().flushDocEdits(); store.getState().flushDoc();
+        await saveQueues.get(id)?.catch(() => null);
+        const entry = readCache(id);
+        if (entry?.pending && failedSaves.has(id)) {
+          const remote = (await request<TopicSnapshot>(`/api/topics/${encodeURIComponent(id)}/snapshot`)).topic;
+          const unread = (map?: PersistedThinkingMap) => (map?.nodes || []).filter(node => node.unread).map(node => node.id).sort().join('\n');
+          // The write may have committed before its response was lost. Confirm it
+          // through a read before offering another write to the same revision.
+          if (readCache(id)?.serial === entry.serial && remote.ledger === (entry.map.ledger || '') && remote.raw === (entry.map.raw || '')
+            && JSON.stringify(remote.panel?.watermarks || {}) === JSON.stringify(entry.map.watermarks || {}) && unread(remote.panel) === unread(entry.map)) {
+            failedSaves.delete(id);
+            writeCache(id, { ...entry, revision: remote.revision, pending: false, base: { ledger: remote.ledger, raw: remote.raw } });
+            store.setState({ error: null });
+            return;
+          }
+        }
+        await flushPending(id);
+        store.setState({ error: null });
+      },
+    },
     connections: {
       getSnapshot: () => connectionSnapshot,
       subscribe(listener: () => void) { connectionListeners.add(listener); return () => { connectionListeners.delete(listener); }; },
@@ -517,23 +601,23 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       cancel: cancelChatUpdate,
       dismiss() { if (!chatUpdate) publishConnections({ operation: null }); },
       async connect(source: ChatSession, topicIds: string[], history: 'now' | 'all') {
-        const result = await localRequest<ChatConnection[]>('/api/connections/connect', { source, topicIds, history });
+        const result = await request<ChatConnection[]>('/api/connections/connect', { source, topicIds, history });
         await refreshConnections(); return result;
       },
       async disconnect(connectionId: string) {
         disconnecting.add(connectionId);
         publishConnections({ connections: connectionSnapshot.connections.filter(item => item.id !== connectionId) });
-        try { await localRequest('/api/connections/disconnect', { connectionId }); }
+        try { await request('/api/connections/disconnect', { connectionId }); }
         finally { disconnecting.delete(connectionId); await refreshConnections(); }
       },
       async disconnectAll(topicId: string) {
         const connections = await refreshConnections(topicId);
-        await Promise.all(connections.map(connection => localRequest('/api/connections/disconnect', { connectionId: connection.id })));
+        await Promise.all(connections.map(connection => request('/api/connections/disconnect', { connectionId: connection.id })));
         await refreshConnections(topicId);
       },
     },
     async importTopic(bundle: unknown) {
-      const topic = await localRequest<LocalTopic>('/api/import',bundle);
+      const topic = await request<LocalTopic>('/api/import',bundle);
       // Import is already durable. A later list refresh must not make retry create a duplicate.
       publish({ projects: [{ id: topic.id, name: topic.name, status: 'active' }, ...snapshot.projects] });
       if ((bundle as { format?: string })?.format === 'gft-document') store.getState().setRightView('doc');
@@ -541,16 +625,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       await refreshProjects().catch(error => options.onError(t('脉络已导入，列表刷新失败：{error}', {error:messageOf(error)})));
       return topic.id;
     },
-    async start() {
-      await refreshProjects();
-      const selected = storage.get('gft-local:selected');
-      const first = snapshot.projects.find(project=>project.id===selected) || snapshot.projects[0];
-      if (first) await host.switchProject(first.id);
-      poll = setInterval(() => {
-        if (!disposed) void store.getState().syncFromRemote().catch(error=>options.onError(messageOf(error)));
-        if (!disposed) void refreshProjects().catch(() => {});
-        if (!disposed && options.onRequestSource) void refreshConnections().catch(() => {});
-      },3000);
-    },
+    start: monitor.start,
   };
 }

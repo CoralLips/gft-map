@@ -4,6 +4,13 @@
  * 分组按界面区块排，方便对照排查。
  */
 export const EN: Record<string, string> = {
+  '本地服务连接中断，当前内容和未保存修改已保留。': 'Connection to the local service was interrupted. Your content and unsaved changes are preserved.',
+  '暂时无法连接本地服务，正在自动重试…': 'Cannot reach the local service. Retrying automatically…',
+  '连接已中断，当前内容和未保存修改已保留。正在自动重连…': 'Disconnected. Your content and unsaved changes are preserved. Reconnecting automatically…',
+  '正在重连…': 'Reconnecting…',
+  '立即重试': 'Retry now',
+  '连接正常，尚有本地修改未保存。': 'Connected. Some local changes have not been saved yet.',
+  '重试保存': 'Retry save',
   '无需登录也能使用。登录后，脉络自动与 GFT 双向同步；一端删除，另一端也会删除。': 'Use locally without signing in. Once signed in, maps sync both ways with GFT, including deletions.',
   '已同步': 'Synced',
   '重启本地服务后启用同步': 'Restart the local service to enable sync',

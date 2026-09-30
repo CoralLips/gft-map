@@ -20,13 +20,22 @@ const tools = [
 const result = value => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] });
 const query = values => new URLSearchParams(Object.entries(values).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])).toString();
 
-export function createLocalClient(address = process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317') {
+async function ensureLocalService(options) {
+  // The MCP bundle lives in dist, while the lifecycle keeps its own installation
+  // identity and CLI path in the scripts directory. Do not bundle this module.
+  const moduleUrl = new URL(new URL('.', import.meta.url).pathname.endsWith('/dist/') ? '../serviceLifecycle.mjs' : './serviceLifecycle.mjs', import.meta.url);
+  const { ensureService } = await import(moduleUrl.href);
+  return ensureService(options);
+}
+
+export function createLocalClient(address = process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317', { ensureService = ensureLocalService } = {}) {
   const url = new URL(address);
   if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('GFT_LOCAL_URL 必须是本机 http://127.0.0.1:端口 地址');
   return async (route, data) => {
+    await ensureService({url:url.origin});
     const response = await fetch(new URL(route, url), { method: data === undefined ? 'GET' : 'POST', headers: data === undefined ? undefined : { 'Content-Type': 'application/json' }, body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(45000) });
     const value = await response.json();
-    if (!response.ok) throw new Error(value.error || `GFT 请求失败（${response.status}）`);
+    if (!response.ok) throw Object.assign(new Error(value.error || `GFT 请求失败（${response.status}）`), {status:response.status});
     return value;
   };
 }

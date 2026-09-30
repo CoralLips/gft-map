@@ -54,7 +54,7 @@ node scripts/cli.mjs upgrade
 
 更新器从官方 GitHub Release 下载完整安装包并核对 SHA256，先检查新版能启动，再停止同一安装的本地服务。任务未结束时会提示先完成或取消。程序整目录替换；Windows 目录被宿主占用时，完整备份后清除旧程序文件再写入新版，过程中阻止启动，写入失败会恢复备份。不会叠加解压留下旧文件，也不会自动降级。
 
-随后按原来的端口和数据目录重启；已成功选择的执行器会从同一数据目录恢复，也可以首次用 `serve --agent codex` 明确指定。核对 `version` 与 `/api/runtime` 的版本，并查看原有脉络。刷新浏览器和 Agent 技能列表；MCP 常驻进程也需要重启。默认 `~/.gft-local/` 内的数据、连接、进度和登录不变；自定义 `GFT_LOCAL_HOME` 仍使用原值，不能把数据目录放进程序目录。
+随后用原端口和数据目录执行 `open`；已成功选择的执行器会从同一数据目录恢复。核对 `version` 与 `/api/runtime` 的版本，并查看原有脉络。刷新浏览器和 Agent 技能列表；MCP 常驻进程也需要重启。默认 `~/.gft-local/` 内的数据、连接、进度和登录不变；自定义 `GFT_LOCAL_HOME` 仍使用原值，不能把数据目录放进程序目录。
 
 **从 0.2.0 或更早版本升级：**旧版没有 `upgrade` 命令。先把最新完整 Release 包解压到新目录，让 Agent 确认并停止旧服务，再从新包执行 `node scripts/cli.mjs upgrade --directory 旧版Skill的绝对路径`。如果旧服务不支持身份核对，更新器会停止操作；不要因此关闭其他 Node 进程。
 
@@ -66,15 +66,17 @@ node scripts/cli.mjs upgrade
 
 ## 打开本地页面
 
-在已解压的技能目录中运行（若此前已成功启用过执行器，省略 `--agent` 会恢复它）：
+在 Agent 中说“打开 gft-map”，或在已解压的技能目录中运行：
 
 ```text
-node scripts/cli.mjs serve --port 4317
+node scripts/cli.mjs open
 ```
 
-打开 `http://127.0.0.1:4317`。页面支持查看、编辑、导入和导出；模型任务可由当前 Agent 通过 Skill 的 CLI 完成。若任务页显示未连接，点击“连接 Codex”即可在当前服务中检查并启用它；这不会唤醒当前 Agent 对话。
+命令会检查并复用同一安装、同一数据目录的面板；未运行时启动，确认可用后打开浏览器，通常为 `http://127.0.0.1:4317`。启动命令退出后面板仍可使用。原执行器会恢复，首次默认检查 Codex；纯手动使用传 `--manual`。如端口已被其他安装或数据目录占用，会明确提示，不会连接错数据或关闭其他程序。
 
-本机已安装并登录 Codex CLI 时，首次用 `node scripts/cli.mjs serve --port 4317 --agent codex` 启用页面 AI 操作；成功后普通重启会恢复选择。Claude 的页面执行配置见下一节。自行启动时保留终端，按 Ctrl+C 停止；服务停止后不能使用面板，但已保存内容仍会保留。
+服务没有闲置自动退出；关闭网页不停止后台。正常睡眠会暂停进程，唤醒后应继续运行；网页会重新检查连接。当前使用按需恢复，没有安装开机自启动或持续守护；服务已退出时，让 Agent 执行 `open` 恢复。真实睡眠／唤醒仍待实机验收，不能将已通过的进程退出恢复测试视作睡眠验收。
+
+只启动用 `start`，检查用 `status`，恢复页面用 `open`，重新启动用 `restart`，关闭用 `stop`；它们均支持 `--port`，默认也读取 `GFT_LOCAL_URL`。关闭、重启遇到未完成任务会保留任务并提示等待或取消；不会强制中断。已开始但中断的普通模型任务需先查状态，再按需重新发起；排队任务按原流程处理，请求失败后不自动重发。文件材料仍按已保存批次续接，主动暂停的保持暂停。需要前台排查时仍可用 `serve --port 4317`，按 Ctrl+C 退出。
 
 ## ACP 执行器
 
@@ -111,13 +113,13 @@ Agent 可先通过 `gft_local_connections` 查看本场所连主题的轻量索�
 
 Codex 使用本地 app-server 的只读会话接口；如找不到原生程序，可设置 `GFT_CODEX_BIN`。Claude Code 使用官方 SDK 的会话读取函数。搜索列出会话元数据，读取正文仅针对选中的会话；Claude SDK 可能在本地解析这一个会话文件，不会把所有会话发给模型。
 
-聊天内的原生确认表单由附带的 MCP 服务提供。先保持本地页面服务运行，再生成配置：
+聊天内的原生确认表单由附带的 MCP 服务提供。生成配置：
 
 ```text
 node scripts/cli.mjs mcp-config
 ```
 
-把输出中的 `gft-local` 服务添加到所用 Agent 的 MCP 设置；Codex 的配置格式由其客户端转换或手工录入。不要替换已有的云端 GFT 服务。Skill 指导 Agent 调用连接、读取、断开、更新及查询结果。支持 MCP 表单的客户端会显示原生选项；不支持时使用页面确认，不会静默建立连接。具体见 [连接说明](skill/references/connections.md)。
+把输出中的 `gft-local` 服务添加到所用 Agent 的 MCP 设置；配置保留当前数据目录和地址，每次使用前自动检查并按需启动本地面板。Codex 的配置格式由其客户端转换或手工录入。不要替换已有的云端 GFT 服务。Skill 指导 Agent 调用连接、读取、断开、更新及查询结果。支持 MCP 表单的客户端会显示原生选项；不支持时使用页面确认，不会静默建立连接。具体见 [连接说明](skill/references/connections.md)。
 
 页面不能自动唤醒原来的聊天，所以只在页面绑定时，原聊天尚未读取主题。回到 Agent 说“读取已连接的主题”才会返回记忆。已进入聊天的文字也不能通过断开撤回。连接管理窗口保留最近读取版本，标签不显示已读指示灯。
 
@@ -129,7 +131,7 @@ node scripts/cli.mjs mcp-config
 
 ```text
 node scripts/cli.mjs doctor
-node scripts/cli.mjs serve --port 4317 --agent codex
+node scripts/cli.mjs open --agent codex
 ```
 
 它使用现有登录和账户额度，另起一个临时 Codex CLI 进程。`--ephemeral` 不保存聊天记录；本次调用的 `model_instructions_file` 只包含 GFT 图文处理要求，替换默认编程任务说明。忽略用户配置、仓库规则和记忆，关闭工具、插件与派生任务，不经过 ACP 适配器的自动标题生成。临时说明文件在任务退出后清理，不修改用户的全局配置。默认通过 Codex 的只读模型列表获取当前默认模型和思考强度，每次新任务重新解析，不会跟随另一个聊天输入框。命令行 `--model MODEL` 保留作显式诊断覆盖，旧 `GFT_CODEX_MODEL` 环境变量不再固定页面默认值。原生程序路径使用 `GFT_CODEX_BIN`。

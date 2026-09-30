@@ -158,7 +158,12 @@ test('正常 shutdown 等待任务标记失败，执行器迟到结果不能写�
     await Promise.race([started, new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('执行器未及时开始')), 5000); })]);
     clearTimeout(timeout);
     assert.equal((await store.getTask(task.id)).status, 'running');
-    await server.shutdown();
+    let stopped = false;
+    const stopping = server.shutdown().then(() => { stopped = true; });
+    await nextTurn();
+    assert.equal(stopped, false, 'shutdown must wait until the in-flight executor settles');
+    release();
+    await stopping;
     assert.equal(server.listening, false);
     assert.equal((await store.getTask(task.id)).status, 'failed');
     assert.match((await store.getTask(task.id)).error, /服务已停止/);
@@ -169,8 +174,8 @@ test('正常 shutdown 等待任务标记失败，执行器迟到结果不能写�
     await assert.rejects(store.completeTask(task.id, output), { status: 409 });
   } finally {
     clearTimeout(timeout);
-    if (server.listening) await server.shutdown();
     release();
+    if (server.listening) await server.shutdown();
     await nextTurn();
   }
 }));

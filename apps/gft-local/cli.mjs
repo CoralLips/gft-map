@@ -3,6 +3,7 @@ import { readFile, writeFile, open, stat } from 'node:fs/promises';
 import * as store from './store.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { startServer, createRunner } from './server.mjs';
 import { loadExecutorConfig, saveExecutorConfig } from './executor-config.mjs';
 const [command, ...args] = process.argv.slice(2);
@@ -10,6 +11,31 @@ const values = key => args.flatMap((s,i)=>s===`--${key}` ? [args[i+1]] : []);
 const arg = key => values(key).at(-1);
 const need = key => { const v=arg(key); if(!v || v.startsWith('--')) throw store.fail(`缺少 --${key}`); return v; };
 const print = data => console.log(JSON.stringify(data,null,2));
+function serviceOptions() {
+  const agent = arg('agent');
+  const manual = args.includes('--manual');
+  if (manual && agent) throw store.fail('--manual 不能与 --agent 同时使用');
+  if (args.includes('--agent') && (!agent || agent.startsWith('--'))) throw store.fail('缺少 --agent');
+  if (!agent && ['model','timeout-seconds','acp-bin','acp-arg'].some(key => args.includes(`--${key}`))) throw store.fail('指定模型、超时或 ACP 参数时，需要同时指定 --agent');
+  const port = arg('port');
+  if (args.includes('--port') && (!port || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) throw store.fail('端口无效');
+  return {
+    ...(port ? {url: `http://127.0.0.1:${Number(port)}`} : {}),
+    ...(agent ? {agent, runnerOptions: runnerOptions(agent)} : {}),
+    ...(manual ? {manual: true} : {}),
+  };
+}
+async function openBrowser(address) {
+  const url = new URL(address);
+  if (url.protocol !== 'http:' || !['127.0.0.1','localhost'].includes(url.hostname)) throw store.fail('只能打开本机 GFT Map 地址');
+  const executable = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'rundll32.exe') : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const parameters = process.platform === 'win32' ? ['url.dll,FileProtocolHandler',url.href] : [url.href];
+  return new Promise(resolve => {
+    const child = spawn(executable,parameters,{stdio:'ignore',detached:true,windowsHide:true});
+    child.once('error',error=>resolve({browserOpened:false,browserError:`页面已可用，请打开 ${url.href}（${error.message}）`}));
+    child.once('spawn',()=>{child.unref();resolve({browserOpened:true});});
+  });
+}
 function runnerOptions(agent) {
   const timeoutMs = arg('timeout-seconds') ? Number(arg('timeout-seconds')) * 1000 : undefined;
   if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw store.fail('执行超时必须是正数');
@@ -27,7 +53,13 @@ function runnerOptions(agent) {
   return { ...(binary ? { binary } : {}), ...(prefixArgs.length ? { prefixArgs } : {}), ...(arg('model') ? { model: arg('model') } : {}), ...(timeoutMs ? { timeoutMs } : {}) };
 }
 try {
-  if(command === 'version') {
+  if(['open','start','status','stop','restart'].includes(command)) {
+    const lifecycle = await import('./serviceLifecycle.mjs');
+    const options = serviceOptions();
+    const action = command === 'status' ? lifecycle.serviceStatus : command === 'stop' ? lifecycle.stopService : command === 'restart' ? lifecycle.restartService : lifecycle.ensureService;
+    const service = await action(options);
+    print({...service,...(command === 'open' && !args.includes('--no-browser') ? await openBrowser(service.url) : {})});
+  } else if(command === 'version') {
     const {programVersion,installationId}=await import('./version.mjs');
     print({product:'gft-map',version:await programVersion(),installationId,dataDirectory:store.homeDir()});
   } else if(command === 'upgrade') {
@@ -47,8 +79,10 @@ try {
       if(job.size!==info.size||job.name!==path.basename(filename))throw store.fail('请选择同一份原文件继续上传');
       console.error(`材料 ID: ${job.id}`);
       if(job.state==='uploading'){
+        const {ensureService}=await import('./serviceLifecycle.mjs');
         const handle=await open(filename,'r'),buffer=Buffer.alloc(512*1024);
         try{for(let offset=0;offset<info.size;){const {bytesRead}=await handle.read(buffer,0,buffer.length,offset);if(!bytesRead)throw store.fail('文件在读取期间发生变化');
+          await ensureService();
           const response=await fetch(new URL(`/api/materials/${job.id}/upload?offset=${offset}`,process.env.GFT_LOCAL_URL||'http://127.0.0.1:4317'),{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:buffer.subarray(0,bytesRead),signal:AbortSignal.timeout(60000)});
           const value=await response.json();if(!response.ok)throw store.fail(value.error,response.status);offset+=bytesRead;
         }}finally{await handle.close();}
@@ -63,7 +97,7 @@ try {
     const { startMcp } = await import('./dist/mcp.mjs');
     await startMcp();
   } else if(command === 'mcp-config') {
-    print({ mcpServers: { 'gft-local': { command: process.execPath, args: [fileURLToPath(import.meta.url), 'mcp'], env: { GFT_LOCAL_URL: process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317' } } } });
+    print({ mcpServers: { 'gft-local': { command: process.execPath, args: [fileURLToPath(import.meta.url), 'mcp'], env: { GFT_LOCAL_URL: process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317', GFT_LOCAL_HOME: store.homeDir() } } } });
   } else if(['chat-sessions','connections','connect','disconnect','read-connected','sources-connected','update-connected'].includes(command)) {
     const { createLocalClient } = await import('./dist/mcp.mjs');
     const request = createLocalClient();
@@ -93,6 +127,8 @@ try {
       print(await request(`/api/topics/${encodeURIComponent(topicId)}/update-from-chat`,{connectionId:connection.id}));
     }
   } else if(command === 'serve') {
+    const {watchServiceProcess}=await import('./serviceLifecycle.mjs');
+    watchServiceProcess();
     const port = arg('port') ? Number(arg('port')) : 4317;
     if(!Number.isInteger(port) || port < 1 || port > 65535) throw store.fail('端口无效');
     const explicitAgent = arg('agent') || null;
@@ -101,12 +137,12 @@ try {
     const saved = !explicitAgent && !manual ? await loadExecutorConfig() : null;
     const agent = explicitAgent || saved?.agent || null;
     const options = explicitAgent ? runnerOptions(explicitAgent) : saved?.runnerOptions;
-    const server = await startServer({port,agent,runnerOptions:options});
+    const server = await startServer({port,agent,runnerOptions:options,managed:true});
     if (explicitAgent && server.runtime().executor.status === 'ready') await saveExecutorConfig({agent: explicitAgent, runnerOptions: options});
     console.log(`GFT Map: http://127.0.0.1:${server.address().port}\n数据目录: ${store.homeDir()}\n执行器: ${agent || '当前 Agent 经 Skill 处理待办'}\n按 Ctrl+C 停止。`);
     if (agent) print(server.runtime());
     else console.log('当前为手动模式；网页中可选择“连接 Codex”进行检查。已配置的执行器会在下次省略 --agent 启动时恢复。');
-    for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{void server.shutdown().then(()=>process.exit(0),()=>process.exit(1));});
+    for(const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{void server.shutdown(signal).then(()=>process.exit(0),()=>process.exit(1));});
   } else if(command === 'list' && args.includes('--remote')) {
     const {createLocalClient}=await import('./dist/mcp.mjs');
     print(await createLocalClient()('/api/topics'));
@@ -141,5 +177,5 @@ try {
     print({saved:filename});
   }
   else if(command === 'import') print(await store.importTopic(JSON.parse(await readFile(need('file'),'utf8'))));
-  else {console.log('连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\n材料: import-file --project ID --file FILE [--id MATERIAL] | materials --project ID | material --id ID | pause-material --id ID | resume-material --id ID | read-material --id ID --start BYTE_OFFSET\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--manual] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。serve 默认恢复上次成功连接的执行器；需要纯手动模式时使用 --manual。'); if(command && command !== 'help') process.exitCode=1;}
+  else {console.log('打开与关闭: open [--no-browser] | start | status | stop | restart [--port 4317] [--agent codex|codex-acp|claude-acp] [--manual]\n连接入口: mcp | mcp-config | install-hooks --provider codex|claude --project 工作目录 | chat-sessions --provider codex|claude [--query TEXT] | connections --provider PROVIDER --session ID | connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed | read-connected --provider PROVIDER --session ID --project TOPIC [--node ID] | sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR] | update-connected --provider PROVIDER --session ID --project TOPIC | disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed | task-status --id ID --remote\n材料: import-file --project ID --file FILE [--id MATERIAL] | materials --project ID | material --id ID | pause-material --id ID | resume-material --id ID | read-material --id ID --start BYTE_OFFSET\nGFT Map: list | create --name NAME --scope TEXT | link --session ID --project ID [--project ID] [--write ID] | read --session ID | task --project ID --action update|tidy|redraw [--input FILE] | tasks | task --id ID | task-status --id ID | complete --id ID --file FILE | cancel --id ID | history --project ID | export --project ID --file FILE | import --file FILE | recover | doctor [--agent codex|codex-acp|claude-acp] [--model MODEL] | serve [--port 4317] [--agent codex|codex-acp|claude-acp] [--manual] [--model MODEL] [--timeout-seconds 900]\nACP: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。open/start 自动启动或复用同一安装和数据的面板，默认恢复执行器，首次使用 Codex；stop/restart 遇到未完成任务时保留任务并提示。serve 保留前台运行；需要纯手动模式时使用 --manual。'); if(command && command !== 'help') process.exitCode=1;}
 } catch(e) {console.error(JSON.stringify({error:e.message,status:e.status || 500}));process.exitCode=1;}

@@ -16,11 +16,28 @@ const dir = path.dirname(outputFile);
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
 if (mode === 'select-by-input') mode = input.includes('RUN_NEXT_SUCCESS') ? 'success' : 'hang-tree';
+if (mode === 'protocol-by-input') mode = input.match(/PROTOCOL_CASE=([a-z-]+)/)?.[1] || 'success';
 const instructionsArg = args.find(value => value.startsWith('model_instructions_file='));
 const instructions = instructionsArg ? await readFile(JSON.parse(instructionsArg.slice('model_instructions_file='.length)), 'utf8') : '';
 await writeFile(path.join(dir, 'invocation.json'), JSON.stringify({ args, input, instructions, pid: process.pid }), 'utf8');
 if (mode === 'failure') { event({ type: 'turn.failed', error: { message: '合成执行错误' } }); process.exit(7); }
-if (mode === 'malformed-events') { console.log('not-json'); setInterval(() => {}, 1000); }
+const invalidEvents = {
+  'protocol-item-object': {type:'item.started',item:{type:'mcp_tool_call',id:{toString:null}}},
+  'protocol-item-array': {type:'item.started',item:{type:'mcp_tool_call',id:[{toString:null}]}},
+  'protocol-error-object': {type:'turn.failed',error:{message:{toString:null}}},
+  'protocol-message-object': {type:'error',message:{toString:null}},
+  'protocol-fragmented': {type:'item.started',item:{type:'mcp_tool_call',id:{toString:null},server:'模拟😀'}},
+  'protocol-tail': {type:'error',message:{toString:null}},
+};
+if (invalidEvents[mode]) {
+  const line=Buffer.from(JSON.stringify(invalidEvents[mode])+(mode==='protocol-tail'?'':'\n'));
+  if(mode==='protocol-fragmented') {
+    for(let offset=0;offset<line.length;offset+=7){process.stdout.write(line.subarray(offset,offset+7));await new Promise(resolve=>setTimeout(resolve,3));}
+  } else process.stdout.write(line);
+  // Exit even when testing an old runner that crashes on this event.
+  await new Promise(resolve=>setTimeout(resolve,100));
+}
+else if (mode === 'malformed-events') { console.log('not-json'); setInterval(() => {}, 1000); }
 else if (mode === 'hang' || mode === 'hang-tree') {
   event({ type: 'thread.started', thread_id: 'fixture-hanging' });
   if (mode === 'hang-tree') {

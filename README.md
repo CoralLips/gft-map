@@ -47,13 +47,13 @@ AI actions in the panel have been tested with Codex. With Claude Code, they requ
 
 After installing, reopen your agent conversation and ask:
 
-> Use gft-map to check my environment, start the local panel with Update, Tidy, and Redraw enabled, and open the page for me.
+> Open gft-map for me.
 
-Installing the skill provides the agent's instructions and scripts; it does not keep a web server running by itself. The request above starts the local Node panel when needed. Before opening `127.0.0.1:4317` directly, make sure that service is still running. If the browser shows `ERR_CONNECTION_REFUSED`, the service is simply stopped; send the request above again without creating a new data directory.
+Ask your agent to **open, restore, restart, or close GFT Map**. Opening it reuses the running service or starts it with your existing maps, settings, and executor. The service keeps running in the background when you close the page. Normal system sleep pauses it; waking should resume it. After a computer restart or an unexpected service exit, ask to open GFT Map again.
 
 The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent returns. To change the panel language, open **Settings → Language**.
 
-Check the panel's **Tasks** section after it starts. If the executor is disconnected, click **Connect Codex**. This checks the local login in the current service without creating a new data directory or changing your maps. A successfully selected executor is restored on later restarts; use `serve --port 4317 --agent codex` with the same data directory only for the first setup or when changing executors.
+Your previous executor is restored; first use checks Codex automatically. Check **Tasks** for its status and any login instructions. If work is unfinished, your agent asks whether to let it finish or cancel it before closing or restarting. AI tasks that had started but were interrupted are not replayed; inspect their status before starting them again. Queued tasks continue through the usual workflow.
 
 If login succeeds but the check reports that the Codex local state database is not writable, the service was started from a restricted agent sandbox. Do not delete your GFT data. Restart the same installation from a normal local terminal with the same `GFT_LOCAL_HOME`, then click **Recheck** in **Tasks**.
 

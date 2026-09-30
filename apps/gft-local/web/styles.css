@@ -54,6 +54,9 @@
 .gft-local-error { color: var(--poe-red-dark); font-size: 13px; overflow-wrap: anywhere; }
 .gft-local-banner { position: fixed; z-index: 900; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: min(640px, 90vw); display: flex; align-items: center; gap: 16px; padding: 10px 14px; color: var(--tone-red-strong); background: var(--tint-red-bg); border: 1px solid var(--tint-red-border); border-radius: 8px; font-size: 13px; box-shadow: 0 5px 20px #0001; }
 .gft-local-banner button { border: 0; background: transparent; color: inherit; font-size: 20px; cursor: pointer; }
+.gft-local-service-status { position: fixed; z-index: 950; left: 50%; top: 54px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 9px 13px; border: 1px solid var(--poe-gray-300); border-radius: 8px; background: var(--poe-surface); color: var(--poe-gray-700); box-shadow: 0 3px 14px #0001; font-size: 13px; }
+.gft-local-service-status button { flex: none; border: 0; border-radius: 5px; padding: 5px 8px; background: var(--poe-gray-100); color: var(--poe-blue-dark); font: inherit; cursor: pointer; }
+.gft-local-service-status button:disabled { opacity: .6; cursor: default; }
 .gft-local-tasks { list-style: none; padding: 0; margin: 0; }
 .gft-local-tasks li { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--poe-gray-200); font-size: 12px; }
 .gft-local-tasks li > div { flex: 1; min-width: 0; }
