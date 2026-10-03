@@ -48,3 +48,53 @@
   white-space: nowrap;
   padding: 0 8px;
 }
+
+/* A result occupies its own line without changing the action labels or widths. */
+.statusNote {
+  order: 1;
+  flex: 1 0 100%;
+  width: 0;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--poe-gray-500);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Map and Doc retain one toolbar DOM; only its layout follows the pane width. */
+@container (max-width: 560px) {
+  :global(div[data-gft-action-toolbar]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: center;
+  }
+
+  :global([data-gft-action-toolbar]) > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  :global([data-gft-action-toolbar]) > :last-child {
+    grid-column: 2;
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-end;
+  }
+
+  :global([data-gft-action-toolbar]) > :last-child > * {
+    max-width: 100%;
+  }
+
+  :global([data-gft-action-toolbar]) :global(.gft-local-connection-chip) {
+    max-width: 100%;
+  }
+
+  :global([data-gft-action-toolbar]) > :first-child:nth-last-child(2) + :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .stats {
+    padding: 0;
+    text-align: left;
+  }
+}

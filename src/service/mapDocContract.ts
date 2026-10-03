@@ -29,7 +29,7 @@ export function validateMapDocOutput(raw: string): void {
   const remainder = text.replace(pattern, (_, rawAttributes: string, body: string) => {
     const attributes = readTagAttributes(rawAttributes);
     const malformed = rawAttributes.replace(/([\w-]+)\s*=\s*(["'])([\s\S]*?)\2/g, '').trim();
-    if (malformed || !attributes.domain?.trim() || /[\[\]\r\n]/.test(attributes.domain)
+    if (malformed || !attributes.domain?.trim() || /[[\]\r\n]/.test(attributes.domain)
       || !body.trim() || /<\/?prose\b/.test(body)) {
       throw new Error('模型返回的章节正文格式不完整或无效，已保留原图文。');
     }

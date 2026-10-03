@@ -12,7 +12,7 @@ import type { JSX } from 'react';
 import ReactFlow, { Background, BaseEdge, getSmoothStepPath } from 'reactflow';
 import type { Node, Edge, NodeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
 import { layoutGraph, estimateNodeHeight, NODE_WIDTH, type MeasuredSizes } from './layout';
-import { unionBounds } from './viewport';
+import { nodeReadingBounds, unionBounds } from './viewport';
 import { useMapViewport } from './useMapViewport';
 import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
@@ -21,7 +21,7 @@ import { ExploreTreeNode, type ExploreNodeData } from '../ExploreTreeNode';
 import { EDGE_TYPE_META } from '../../../type/thinkingMap';
 import { timelineEdges } from '../../../service/ledger';
 import { isOpen } from '../../../util/mapGroups';
-import { t as tGlobal } from '../../../i18n';
+import { t as tGlobal, useT } from '../../../i18n';
 import 'reactflow/dist/style.css';
 import styles from './ThinkingMapView.module.css';
 
@@ -205,6 +205,7 @@ function RoutedOutlinedEdge(props: EdgeProps): JSX.Element {
 const MAP_EDGE_TYPES = Object.freeze({ outlined: RoutedOutlinedEdge });
 
 function ThinkingMapViewImpl(): JSX.Element {
+  const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const allNodes = useThinkingMapStore(s => s.nodes);
   const allEdges = useThinkingMapStore(s => s.edges);
@@ -361,9 +362,8 @@ function ThinkingMapViewImpl(): JSX.Element {
   const handleCancelEdit = useCallback((id: string) => {
     if (useThinkingMapStore.getState().editingNodeId !== id) return;
     setEditingNode(null);
-    // 新种的节点还没有 title → 取消即移除
-    const node = useThinkingMapStore.getState().nodes.find(n => n.id === id);
-    if (node && !node.title.trim()) deleteNode(id);
+    // editingNodeId 只用于尚未提交的新节点；默认标题「未命名」也属于占位内容。
+    deleteNode(id);
   }, [deleteNode, setEditingNode]);
 
 
@@ -401,16 +401,11 @@ function ThinkingMapViewImpl(): JSX.Element {
     setEditingNode(newId);
   }, [addNodeAction, setEditingNode]);
 
-  // 手动种独立节点(无 AI 路径的图上直接建:空态按钮 + 画布空白右键共用)
+  // 手动添加独立判断，通过可见入口发起。
   const handleSeedNode = useCallback(() => {
     const newId = addNodeAction({});
     setEditingNode(newId);
   }, [addNodeAction, setEditingNode]);
-
-  const handlePaneContextMenu = useCallback((e: React.MouseEvent | MouseEvent) => {
-    e.preventDefault(); // 空白画布右键=新建节点(不出浏览器菜单)
-    handleSeedNode();
-  }, [handleSeedNode]);
 
   const handleStartLinking = useCallback((id: string) => {
     setLinkingFromId(id);
@@ -565,7 +560,8 @@ function ThinkingMapViewImpl(): JSX.Element {
     });
     const bounds = unionBounds(boxes);
     // Routed edges can detour up to 32px beyond the rightmost node.
-    return mapEdges.length ? { ...bounds, width: bounds.width + 32 } : bounds;
+    const edgeBounds = mapEdges.length ? { ...bounds, width: bounds.width + 32 } : bounds;
+    return unionBounds([edgeBounds, ...boxes.map(nodeReadingBounds)]);
   }, [mapNodes, mapEdges.length, layoutPositions, measured]);
   const viewport = useMapViewport(containerRef, contentBounds, openPanelId, generation);
   const { centerOn, overview } = viewport;
@@ -577,8 +573,8 @@ function ThinkingMapViewImpl(): JSX.Element {
   // 07-11 上、07-12 卒；与 07-04 状态圈同款结局：常驻视觉花活在真机前活不过两天
 
   // ===== 聚焦跟随（「◎ 聚焦」开关的新语义，2026-07-12 用户定）=====
-  // 开着时：点开哪个节点，视野就 1:1 居中到「节点+右侧详情面板」的组合体（节点略偏左，
-  // 面板不出屏）；关着=现状（点开节点不动视野）。默认关——遵守视野保持定则，跟随主动开。
+  // 开着时：点开哪个节点，视野就 1:1 居中到「节点+详情面板」的实际组合体；
+  // 关着=点开节点不动视野。默认关——遵守视野保持定则，跟随主动开。
   const [focusFollowOn, setFocusFollowOn] = useState(() => {
     try { return localStorage.getItem('gft_map_focus_follow') === 'on'; } catch { return false; }
   });
@@ -588,17 +584,15 @@ function ThinkingMapViewImpl(): JSX.Element {
       return !v;
     });
   }, []);
-  /** 视野 1:1 对准「节点+详情面板」组合体（detailPanel: left=100%+14px、width 340px、
-   *  顶对齐节点、可向下伸至 420px）——横向组合体居中=节点略偏左；
-   *  纵向居中点下移 100（面板重心偏下）=节点视觉偏上，面板整体在屏内 */
+  /** The viewport measures the opened card before centering; no right-card estimates. */
   const centerOnOpenNode = useCallback((id: string) => {
     const pos = layoutPositions.get(id);
     if (!pos) return;
     const size = measured.get(id);
     const nodeW = size?.w ?? NODE_WIDTH;
     centerOn(
-      pos.x + (nodeW + 14 + 340) / 2,
-      pos.y + (size?.h ?? 80) / 2 + 100,
+      pos.x + nodeW / 2,
+      pos.y + (size?.h ?? 80) / 2,
       id,
     );
   }, [layoutPositions, measured, centerOn]);
@@ -933,7 +927,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         <p className={styles.emptyTitle}>还没有脉络</p>
         <p className={styles.emptyDesc}>{host.requestUpdate ? '点「更新」粘贴对话或材料，思考会在这里长成脉络' : '在左边聊你想弄清的事，点「更新」，思考会在这里长成脉络'}</p>
         <button type="button" className={styles.emptySeedBtn} onClick={handleSeedNode}>
-          ＋ 手动种下第一个节点
+          <span aria-hidden="true">+ </span>{tr('添加')}
         </button>
       </div>
     );
@@ -960,7 +954,13 @@ function ThinkingMapViewImpl(): JSX.Element {
           ? tGlobal('聚焦：开——点开节点时，视野移到该节点。点击关闭')
           : tGlobal('聚焦：关——点开节点不动视野。点击开启')}
       >{focusFollowOn ? `◎ ${tGlobal('聚焦')}` : `○ ${tGlobal('聚焦')}`}</button>
-
+      <button
+        type="button"
+        className={styles.addNodeBtn}
+        disabled={editingNodeId !== null}
+        onClick={() => { if (overview) viewport.toggleOverview(); handleSeedNode(); }}
+        title={tr('手动补充一个判断')}
+      ><span aria-hidden="true">+ </span>{tr('添加')}</button>
       {/* 连线态提示条:hover 到不可连目标时就地解释拒因(虚线同步变红) */}
       {linkingFromId && (
         <div className={`${styles.linkingHint} ${linkVerdict ? styles.linkingHintBad : ''}`}>
@@ -1037,7 +1037,6 @@ function ThinkingMapViewImpl(): JSX.Element {
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
         onPaneClick={handlePaneClick}
-        onPaneContextMenu={handlePaneContextMenu}
         onPaneMouseMove={handlePaneMouseMove}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}

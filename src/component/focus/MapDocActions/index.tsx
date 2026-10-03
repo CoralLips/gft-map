@@ -219,6 +219,9 @@ export function TidyButton(): JSX.Element | null {
   const cancelTidy = useThinkingMapStore(s => s.cancelTidy);
   const [note, setNote] = useState<string | null>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+  }, []);
 
   const tidyRound = useThinkingMapStore(s => s.tidyRound);
   const handleTidy = useCallback(async () => {
@@ -253,12 +256,16 @@ export function TidyButton(): JSX.Element | null {
     );
   }
   return (
-    <button
-      className={styles.addNodeBtn}
-      onClick={() => void handleTidy()}
-      disabled={isGenerating || isRefining}
-      title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
-    >{selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}${note ? ` · ${note}` : ''}` : note ?? `🧹 ${tr('整理')}`}</button>
+    <>
+      <button
+        className={styles.addNodeBtn}
+        onClick={() => void handleTidy()}
+        disabled={isGenerating || isRefining}
+        aria-label={selectedNodeIds.size > 0 ? `${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}` : undefined}
+        title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
+      >{selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} · ${selectedNodeIds.size}` : `🧹 ${tr('整理')}`}</button>
+      {note && <span className={ownStyles.statusNote} role="status" data-gft-tidy-feedback>{note}</span>}
+    </>
   );
 }
 

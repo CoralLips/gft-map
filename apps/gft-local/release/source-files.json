@@ -175,6 +175,8 @@
     "src/util/clipboard.ts",
     "src/util/datetime.ts",
     "src/util/mapGroups.ts",
-    "src/util/theme.ts"
+    "src/util/theme.ts",
+    "src/component/focus/ThinkingMapView/detailPlacement.ts",
+    "apps/gft-local/tests/detail-placement.test.mjs"
   ]
 }

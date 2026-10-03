@@ -413,6 +413,28 @@
   animation: detailPanelFade 0.12s ease-out;
 }
 
+/* Map supplies one placement per opening; the card remains part of its node. */
+.detailPanel[data-detail-placement] {
+  box-sizing: border-box;
+  left: var(--detail-left);
+  top: var(--detail-top);
+  width: var(--detail-width);
+  max-height: var(--detail-max-height);
+  overscroll-behavior: contain;
+  animation: none;
+}
+
+.detailPanel[data-detail-placement="above"] {
+  transform: translateY(-100%);
+}
+
+.detailPanel[data-detail-placement] .detailHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--poe-surface);
+}
+
 @keyframes detailPanelFade {
   from { opacity: 0; transform: translateX(-4px); }
   to   { opacity: 1; transform: translateX(0); }

@@ -98,7 +98,7 @@ export function WhiteboxDocPanel({ showExport = true }: { showExport?: boolean }
 
   return (
     <div className={styles.panel}>
-      <div className={styles.toolbar}>
+      <div className={styles.toolbar} data-gft-action-toolbar>
         <span className={styles.btnGroup}>
           <UpdateMapButton />
           <TidyButton />

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-let clampReadingViewport, readingExtent, overviewViewport, unionBounds, VIEWPORT_PADDING;
+let clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING;
 before(async () => {
   const entry = fileURLToPath(new URL('../../../src/component/focus/ThinkingMapView/viewport.ts', import.meta.url));
   const bundled = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
-  ({ clampReadingViewport, readingExtent, overviewViewport, unionBounds, VIEWPORT_PADDING } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
+  ({ clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
 });
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} should equal ${expected}`);
@@ -142,4 +142,45 @@ test('尚未测得尺寸或收到无效视窗数据时，几何结果保持有�
     assert.ok(readingExtent(bounds, size).flat().every(Number.isFinite));
   }
   assert.deepEqual(clampReadingViewport({ x: NaN, y: -300, zoom: 1 }, bounds, { width: 800, height: 600 }), { x: 124, y: -300, zoom: 1 });
+});
+
+test('短标题节点到达左右边界时，居中的悬浮工具条仍有完整留白', () => {
+  const size = { width: 580, height: 480 };
+  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 600, width: 208, height: 60 }];
+  const bounds = unionBounds(nodes.map(nodeReadingBounds));
+  for (const x of [-10000, 10000]) {
+    const viewport = clampReadingViewport({ x, y: 0, zoom: 1 }, bounds, size);
+    const node = x > 0 ? nodes[0] : nodes[1];
+    const toolbar = { x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
+      y: node.y + node.height + NODE_TOOLBAR_SPACE.gap,
+      width: NODE_TOOLBAR_SPACE.width, height: NODE_TOOLBAR_SPACE.height };
+    const screen = screenBounds(toolbar, viewport);
+    assert.ok(screen.left >= VIEWPORT_PADDING);
+    assert.ok(screen.right <= size.width - VIEWPORT_PADDING);
+  }
+});
+
+test('最下方节点拖到阅读末尾时，工具条与阴影留白都处于画布内', () => {
+  const node = { x: 0, y: 900, width: 44, height: 38 };
+  const bounds = unionBounds([{ x: 0, y: 0, width: 208, height: 60 }, nodeReadingBounds(node)]);
+  const size = { width: 580, height: 480 };
+  const viewport = clampReadingViewport({ x: 10000, y: -10000, zoom: 1 }, bounds, size);
+  const screen = screenBounds(node, viewport);
+  assert.equal(size.height - screen.bottom, VIEWPORT_PADDING + NODE_TOOLBAR_SPACE.gap + NODE_TOOLBAR_SPACE.height);
+});
+
+test('总览中的边缘工具条同样完整进入视窗', () => {
+  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 56, height: 60 }];
+  const bounds = unionBounds(nodes.map(nodeReadingBounds));
+  const size = { width: 580, height: 480 };
+  const viewport = overviewViewport(bounds, size);
+  for (const node of nodes) {
+    const toolbar = { x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
+      y: node.y + node.height + NODE_TOOLBAR_SPACE.gap,
+      width: NODE_TOOLBAR_SPACE.width, height: NODE_TOOLBAR_SPACE.height };
+    const screen = screenBounds(toolbar, viewport);
+    assert.ok(screen.left >= VIEWPORT_PADDING - 1e-8);
+    assert.ok(screen.right <= size.width - VIEWPORT_PADDING + 1e-8);
+    assert.ok(screen.bottom <= size.height - VIEWPORT_PADDING + 1e-8);
+  }
 });

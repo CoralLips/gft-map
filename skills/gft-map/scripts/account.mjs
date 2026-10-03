@@ -117,8 +117,12 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     attempt.server = server;
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     if (epoch !== generation) { server.close(); throw new Error('登录已取消'); }
-    attempt.url = `${base.origin}/connect-agent?port=${server.address().port}&state=${state}&client=gft-map&sync=1`;
-    attempt.timer = setTimeout(() => { if (pending === attempt) { error = '登录等待超时，请重新发起'; cancel(); } }, timeoutMs);
+    // The webpage needs the same deadline to stop offering an expired request.
+    // This is display metadata only; the callback's state and generation checks
+    // still decide whether a request may establish a session.
+    const expiresAt = Date.now() + timeoutMs;
+    attempt.url = `${base.origin}/connect-agent?port=${server.address().port}&state=${state}&client=gft-map&sync=1&expiresAt=${expiresAt}`;
+    attempt.timer = setTimeout(() => { if (pending === attempt) { error = '登录等待超时，请重新发起'; cancel(); } }, Math.max(0, expiresAt - Date.now()));
     attempt.timer.unref(); pending = attempt;
     return { url: attempt.url };
   }

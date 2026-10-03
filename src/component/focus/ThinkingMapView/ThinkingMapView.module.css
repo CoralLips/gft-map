@@ -134,6 +134,33 @@
   background: color-mix(in srgb, var(--poe-purple) 8%, var(--poe-surface));
 }
 
+/* 手动补充保持可发现，视觉层级低于更新与整理。 */
+.addNodeBtn {
+  position: absolute;
+  top: 78px;
+  right: 10px;
+  z-index: 10;
+  font-size: 12px;
+  color: var(--poe-gray-600);
+  background: var(--poe-surface);
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.addNodeBtn:hover:not(:disabled) {
+  color: var(--poe-gray-700);
+  background: var(--poe-gray-100);
+  border-color: var(--poe-gray-300);
+}
+
+.addNodeBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .container :global(.nowheel) {
   overscroll-behavior: contain;
 }
@@ -270,7 +297,7 @@
   background: var(--tint-red-bg);
 }
 
-/* 空态手动种节点按钮(无 AI 路径的入口;画布空白右键同功能) */
+/* 空态手动添加入口 */
 .emptySeedBtn {
   margin-top: 10px;
   padding: 8px 16px;

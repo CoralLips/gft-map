@@ -247,9 +247,11 @@
 .networkPanel {
   position: relative;
   height: 100%;
+  min-width: 0;
   background-color: var(--poe-gray-50);
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
 }
 
 /* 右侧标题栏 */
@@ -284,6 +286,43 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+/* Keep the same controls in two complete rows in a narrow GFT pane. */
+@container (max-width: 560px) {
+  .networkHeader {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .networkHeaderLeft {
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .networkHeaderLeft .projectDropdown {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .networkHeaderLeft .projectDropdownBtn {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .nodeCount,
+  .mapDocTabs {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .networkHeaderRight {
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 /* 右侧主视图切换 Map｜Doc（08-25 白盒轮）：尺寸对齐右上角实验按钮（比左边 Doc/Chat 紧一档） */

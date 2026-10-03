@@ -4,11 +4,26 @@ export type MapViewport = { x: number; y: number; zoom: number };
 
 export const VIEWPORT_PADDING = 24;
 
+// The five hover actions are wider than short titles and sit below the node.
+// Reserve their footprint before hover so revealing them never moves the map.
+export const NODE_TOOLBAR_SPACE = { width: 320, height: 36, gap: 8 } as const;
+
 const finite = (value: number, fallback = 0): number => Number.isFinite(value) ? value : fallback;
 const dimension = (value: number): number => Math.max(0, finite(value));
 
 function normalizeBounds(bounds: ContentBounds): ContentBounds {
   return { x: finite(bounds.x), y: finite(bounds.y), width: dimension(bounds.width), height: dimension(bounds.height) };
+}
+
+export function nodeReadingBounds(bounds: ContentBounds): ContentBounds {
+  const box = normalizeBounds(bounds);
+  const width = Math.max(box.width, NODE_TOOLBAR_SPACE.width);
+  return {
+    x: box.x - (width - box.width) / 2,
+    y: box.y,
+    width,
+    height: box.height + NODE_TOOLBAR_SPACE.gap + NODE_TOOLBAR_SPACE.height,
+  };
 }
 
 /** 小内容轴补足视窗大小，让 ReactFlow 的平移约束也保持左上留白。 */

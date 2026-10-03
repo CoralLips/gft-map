@@ -154,7 +154,8 @@
 
 /* 进行中按钮的可中止态（2026-07-12）：平时显示进度文案，hover 换「■ 中止」——
    点击即软中断（生成=回滚到生成前 / 整理=停在当前步） */
-.stopOnHover { cursor: pointer; position: relative; }
+.stopOnHover { cursor: pointer; position: relative; max-width: 100%; }
+.stopOnHover .runLabel { white-space: normal; overflow-wrap: anywhere; }
 .stopOnHover .stopLabel { display: none; }
 /* hover 换「■ 中止」但按钮尺寸纹丝不动：进度文案隐形保占位，中止字样绝对定位居中覆盖；颜色继承不另染 */
 .stopOnHover:hover .runLabel { visibility: hidden; }

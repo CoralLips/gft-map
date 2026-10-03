@@ -43,6 +43,28 @@ test('取消、过期回调不会建立登录；暂停授权时本地功能不�
   assert.equal((await account.status()).connected, false); assert.equal(calls.length, 0);
 }));
 
+test('授权链接传递同一等待期限，真实超时关闭回调并允许重新发起', async () => fixture(async ({ home, account, calls }) => {
+  const before = Date.now();
+  const first = await account.begin();
+  const deadline = Number(new URL(first.url).searchParams.get('expiresAt'));
+  assert.ok(deadline >= before + 150 && deadline <= Date.now() + 150);
+  assert.equal((await account.status()).pending, true);
+  await new Promise(resolve => setTimeout(resolve, Math.max(0, deadline - Date.now()) + 25));
+  const expired = await account.status();
+  assert.equal(expired.connected, false);
+  assert.equal(expired.pending, false);
+  assert.match(expired.error, /等待超时/);
+  await assert.rejects(callback(first.url));
+  assert.equal(calls.length, 0);
+  await assert.rejects(readFile(path.join(home, 'account.json')), { code: 'ENOENT' });
+  const second = await account.begin();
+  assert.notEqual(new URL(second.url).searchParams.get('state'), new URL(first.url).searchParams.get('state'));
+  assert.ok(Number(new URL(second.url).searchParams.get('expiresAt')) > deadline);
+  assert.equal((await account.status()).error, '');
+  assert.equal((await callback(second.url)).status, 200);
+  assert.equal((await account.status()).connected, true);
+}, { timeoutMs: 150 }));
+
 test('错误配置和凭证交换失败显示错误，不创建账号', async () => fixture(async ({ account }) => {
   const login = await account.begin();
   assert.equal((await callback(login.url)).status, 400);

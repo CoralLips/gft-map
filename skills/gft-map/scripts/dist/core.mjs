@@ -57,7 +57,7 @@ function validateMapDocOutput(raw) {
   const remainder = text.replace(pattern, (_, rawAttributes, body) => {
     const attributes = readTagAttributes(rawAttributes);
     const malformed = rawAttributes.replace(/([\w-]+)\s*=\s*(["'])([\s\S]*?)\2/g, "").trim();
-    if (malformed || !attributes.domain?.trim() || /[\[\]\r\n]/.test(attributes.domain) || !body.trim() || /<\/?prose\b/.test(body)) {
+    if (malformed || !attributes.domain?.trim() || /[[\]\r\n]/.test(attributes.domain) || !body.trim() || /<\/?prose\b/.test(body)) {
       throw new Error("\u6A21\u578B\u8FD4\u56DE\u7684\u7AE0\u8282\u6B63\u6587\u683C\u5F0F\u4E0D\u5B8C\u6574\u6216\u65E0\u6548\uFF0C\u5DF2\u4FDD\u7559\u539F\u56FE\u6587\u3002");
     }
     if (!["\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].includes(attributes.domain.trim()) && attributes.refs === void 0) {

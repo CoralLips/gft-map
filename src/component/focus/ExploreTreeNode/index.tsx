@@ -628,6 +628,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
         {isPanelOpen && !isEditing && !isCandidate && (
           <div
             className={`${styles.detailPanel} nopan nodrag nowheel`}
+            data-gft-detail=""
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >

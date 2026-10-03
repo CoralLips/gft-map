@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LocalDialog } from './ConnectionManager';
 import { localRequest } from './localRuntime';
 import { useT } from '../../../src/i18n';
@@ -10,19 +10,25 @@ export function AccountDialog({ onClose }: { onClose(): void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [url, setUrl] = useState('');
+  const actionEpoch = useRef(0);
   useEffect(() => {
     const controller = new AbortController(); let polling = false;
     const poll = async () => {
       if (polling) return;
       polling = true;
-      try { const value = await localRequest<Account>('/api/account', undefined, controller.signal); if (!controller.signal.aborted) setAccount(value); }
-      catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '无法读取账号'); }
+      const epoch = actionEpoch.current;
+      try {
+        const value = await localRequest<Account>('/api/account', undefined, controller.signal);
+        if (!controller.signal.aborted && epoch === actionEpoch.current) { setAccount(value); if (!value.pending) setUrl(''); }
+      }
+      catch (e) { if (!controller.signal.aborted && epoch === actionEpoch.current) setError(e instanceof Error ? e.message : '无法读取账号'); }
       finally { polling = false; }
     };
     void poll(); const timer = setInterval(() => void poll(), 2500);
     return () => { controller.abort(); clearInterval(timer); };
   }, []);
   const login = async () => {
+    actionEpoch.current++;
     setBusy(true); setError('');
     const tab = window.open('about:blank', '_blank'); if (tab) tab.opener = null;
     try {
@@ -33,6 +39,7 @@ export function AccountDialog({ onClose }: { onClose(): void }) {
     finally { setBusy(false); }
   };
   const act = async (action: 'logout' | 'cancel') => {
+    actionEpoch.current++;
     setBusy(true); setError('');
     try { setAccount(await localRequest<Account>(`/api/account/${action}`, {})); setUrl(''); }
     catch (e) { setError(e instanceof Error ? e.message : '操作失败'); }
@@ -46,7 +53,7 @@ export function AccountDialog({ onClose }: { onClose(): void }) {
     {account?.connected && account.sync?.error && <p role="alert" className="gft-local-error">{tr(account.sync.error)}</p>}
     {(error || account?.error) && <p role="alert" className="gft-local-error">{tr(error || account?.error || '')}</p>}
     <div className="gft-local-dialog-actions">
-      {account?.pending ? <>{url && <a href={url} target="_blank" rel="noreferrer">{tr('打开授权页')}</a>}<button disabled={busy} onClick={() => void act('cancel')}>{tr('取消登录')}</button></> : account?.connected ? <button disabled={busy} onClick={() => void act('logout')}>{tr('退出本地账号')}</button> : <button className="gft-local-primary" disabled={busy || !account} onClick={() => void login()}>{tr(busy ? '正在打开…' : '在 GFT 中登录')}</button>}
+      {account?.pending ? <>{url && <a href={url} target="_blank" rel="noreferrer">{tr('打开授权页')}</a>}<button disabled={busy} onClick={() => void act('cancel')}>{tr('取消登录')}</button></> : account?.connected ? <button disabled={busy} onClick={() => void act('logout')}>{tr('退出本地账号')}</button> : <button className="gft-local-primary" disabled={busy || !account} onClick={() => void login()}>{tr(busy ? '正在打开…' : account?.error ? '重新登录' : '在 GFT 中登录')}</button>}
     </div>
   </LocalDialog>;
 }
