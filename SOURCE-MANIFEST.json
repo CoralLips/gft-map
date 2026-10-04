@@ -2,9 +2,9 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "9964722166d7dbdc0354d49bb6cf39a93d6c0525",
+  "sourceRevision": "0dfc30e438e6dfeffb2fb3fef7b65b29dc4c83de",
   "sourceDirty": false,
-  "version": "0.3.8",
+  "version": "0.3.9",
   "files": [
     {
       "path": ".gitattributes",
@@ -114,12 +114,12 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "ae5570db827a25b6c2b3a7e51311e2702d18730ac37e05def702d03e6f18d3cc"
+      "sha256": "651b7a7d59ce3ee207edc5acf358637c031cb1882f0fc3155840bb3bc24b1741"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "448dc8410a62e8e52f74f340ec902b24b148b30447bcdb01f3dfc1a86f03b2ed"
+      "sha256": "00d64783b53efbdf3a773d48dc23ac0013f232f660abdd56673101296a1b4571"
     },
     {
       "path": "apps/gft-local/README_ZH.md",
@@ -619,12 +619,12 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "b882643cb9d5c6c7648d117b3b3030abad422ab5c13bb233adcc74ef7f8a07d2"
+      "sha256": "c4c87d92e96feb591e2caa8f3ecc428222f51bf0fe88485dbdeaa571c5d81d89"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "950e523349275983e39ab6e202c78b88baf5ef2cbad4681a3bb3ff1e359c84ba"
+      "sha256": "fe950e52ebe74e4b9fb55850587c7405b110cc177b4a3e0e6126a10e31ecfb60"
     },
     {
       "path": "README_ZH.md",
@@ -704,17 +704,17 @@
     {
       "path": "skills/gft-map/scripts/dist/version.json",
       "source": "generated:apps/gft-local",
-      "sha256": "4f4306621f1eb3bedc869a5a2709789cf902511d4a2cc6a320c47c81c7ad1ede"
+      "sha256": "f9c11e15d90122e75011e0080c0e195cff002a7053b0008de00b520ff03cb866"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.css",
       "source": "generated:apps/gft-local",
-      "sha256": "8c3c1cdb18da50e5b5f22938570827a768710f3a28ef6d7453fdb866ccead996"
+      "sha256": "e1c0f22f2217590cb85c10aad3fc68d45f00f0070bb95015e41c59ea1d9e8aa5"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "163693a49f72bdb6efbf67df5c657696930889866a0e65b3fbe58aa47b04e82d"
+      "sha256": "1100f28a5de5d7c02336a8d47c64599b443f1edd7b7b88843e2815d6bece3dc3"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -1244,7 +1244,7 @@
     {
       "path": "src/page/FocusLab.module.css",
       "source": "src/page/FocusLab.module.css",
-      "sha256": "109334bab341976571e3abb6bea1c85e280808999beedd2876e22b9d5004b3c0"
+      "sha256": "a3922a38b9497dc944642c951f94227235385ff65031b2935319de94dcc91ef2"
     },
     {
       "path": "src/page/FocusLab/ProjectDropdown.tsx",

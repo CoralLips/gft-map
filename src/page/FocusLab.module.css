@@ -257,6 +257,7 @@
 /* 右侧标题栏 */
 .networkHeader {
   display: flex;
+  box-sizing: border-box;
   min-height: 4rem;
   flex-shrink: 0;
   align-items: center;
@@ -265,16 +266,28 @@
   flex-wrap: wrap;
   border-bottom: 1px solid var(--poe-gray-200);
   background-color: var(--poe-surface);
-  padding: 0 1rem;
+  padding: 10px 12px;
 }
 
+/* Wrap complete groups only when their contents no longer fit together. */
 .networkHeaderLeft {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
+  gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
-  flex-wrap: wrap;
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.networkHeaderLeft .projectDropdown {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.networkHeaderLeft .projectDropdownBtn {
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .nodeCount {
@@ -282,47 +295,26 @@
   color: var(--poe-gray-500);
 }
 
+.networkHeaderLeft .nodeCount,
+.networkHeaderLeft .mapDocTabs {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .networkHeaderRight {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-/* Keep the same controls in two complete rows in a narrow GFT pane. */
-@container (max-width: 560px) {
-  .networkHeader {
-    gap: 8px;
-    padding: 10px 12px;
-  }
-
-  .networkHeaderLeft {
-    flex: 1 0 100%;
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-
-  .networkHeaderLeft .projectDropdown {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
-  .networkHeaderLeft .projectDropdownBtn {
-    box-sizing: border-box;
-    width: 100%;
-  }
-
-  .nodeCount,
-  .mapDocTabs {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  .networkHeaderRight {
-    flex: 1 0 100%;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
+.networkHeaderRight > * {
+  flex-shrink: 0;
 }
 
 /* 右侧主视图切换 Map｜Doc（08-25 白盒轮）：尺寸对齐右上角实验按钮（比左边 Doc/Chat 紧一档） */
