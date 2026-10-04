@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-let clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING;
+let clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, nodeToolbarSpace, resizeToolbarBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING;
 before(async () => {
   const entry = fileURLToPath(new URL('../../../src/component/focus/ThinkingMapView/viewport.ts', import.meta.url));
   const bundled = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
-  ({ clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
+  ({ clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, nodeToolbarSpace, resizeToolbarBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
 });
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} should equal ${expected}`);
@@ -147,7 +147,7 @@ test('尚未测得尺寸或收到无效视窗数据时，几何结果保持有�
 test('短标题节点到达左右边界时，居中的悬浮工具条仍有完整留白', () => {
   const size = { width: 580, height: 480 };
   const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 600, width: 208, height: 60 }];
-  const bounds = unionBounds(nodes.map(nodeReadingBounds));
+  const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
   for (const x of [-10000, 10000]) {
     const viewport = clampReadingViewport({ x, y: 0, zoom: 1 }, bounds, size);
     const node = x > 0 ? nodes[0] : nodes[1];
@@ -171,8 +171,8 @@ test('最下方节点拖到阅读末尾时，工具条与阴影留白都处于�
 
 test('总览中的边缘工具条同样完整进入视窗', () => {
   const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 56, height: 60 }];
-  const bounds = unionBounds(nodes.map(nodeReadingBounds));
   const size = { width: 580, height: 480 };
+  const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
   const viewport = overviewViewport(bounds, size);
   for (const node of nodes) {
     const toolbar = { x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
@@ -182,5 +182,63 @@ test('总览中的边缘工具条同样完整进入视窗', () => {
     assert.ok(screen.left >= VIEWPORT_PADDING - 1e-8);
     assert.ok(screen.right <= size.width - VIEWPORT_PADDING + 1e-8);
     assert.ok(screen.bottom <= size.height - VIEWPORT_PADDING + 1e-8);
+  }
+});
+
+test('320窄栏为两行工具条保留四边24px，底部按钮不被截断', () => {
+  const size = { width: 320, height: 480 };
+  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 208, height: 60 }];
+  const toolbar = nodeToolbarSpace(size);
+  assert.equal(toolbar.width, 272);
+  assert.equal(toolbar.height, 72);
+  const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
+  for (const [node, x, y] of [[nodes[0], 10000, 10000], [nodes[1], -10000, -10000]]) {
+    const viewport = clampReadingViewport({ x, y, zoom: 1 }, bounds, size);
+    const screen = screenBounds({ x: node.x + (node.width - toolbar.width) / 2,
+      y: node.y + node.height + toolbar.gap, width: toolbar.width, height: toolbar.height }, viewport);
+    assert.ok(screen.left >= VIEWPORT_PADDING);
+    assert.ok(screen.right <= size.width - VIEWPORT_PADDING);
+    assert.ok(screen.top >= VIEWPORT_PADDING);
+    assert.ok(screen.bottom <= size.height - VIEWPORT_PADDING);
+  }
+});
+
+test('工具条边界在宽窄切换时同步变化，宽屏保持原来的单行空间', () => {
+  const node = { x: 80, y: 40, width: 208, height: 60 };
+  for (const width of [367, 368, 369, 520, 900, 320, 900]) {
+    const size = { width, height: 480 };
+    const toolbar = nodeToolbarSpace(size);
+    assert.equal(toolbar.width, Math.min(320, width - 48));
+    assert.equal(toolbar.height, width < 368 ? 72 : 36);
+    const bounds = nodeReadingBounds(node, size);
+    assert.equal(bounds.width, Math.max(node.width, toolbar.width));
+    assert.equal(bounds.height, node.height + toolbar.gap + toolbar.height);
+    if (width >= 368) assert.deepEqual(toolbar, NODE_TOOLBAR_SPACE);
+  }
+  for (const size of [{ width: 0, height: 0 }, { width: NaN, height: 480 }, { width: 20, height: 20 }]) {
+    assert.ok(Object.values(nodeToolbarSpace(size)).every(value => Number.isFinite(value) && value >= 0));
+  }
+});
+
+test('总览宽窄切换更新工具条预留，不改变冻结节点或累计空白', () => {
+  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 44, height: 38 }];
+  for (const initialWidth of [320, 900]) {
+    const originalSize = { width: initialWidth, height: 480 };
+    const originalToolbar = nodeToolbarSpace(originalSize);
+    const originalBounds = Object.freeze(unionBounds(nodes.map(node => nodeReadingBounds(node, originalSize))));
+    for (const width of [900, 320, 520, initialWidth]) {
+      const size = { width, height: 480 };
+      const toolbar = nodeToolbarSpace(size);
+      const bounds = resizeToolbarBounds(originalBounds, originalToolbar, toolbar);
+      const viewport = overviewViewport(bounds, size);
+      for (const node of nodes) {
+        const screen = screenBounds({ x: node.x + (node.width - toolbar.width) / 2,
+          y: node.y + node.height + toolbar.gap, width: toolbar.width, height: toolbar.height }, viewport);
+        assert.ok(screen.left >= VIEWPORT_PADDING - 1e-8);
+        assert.ok(screen.right <= size.width - VIEWPORT_PADDING + 1e-8);
+        assert.ok(screen.bottom <= size.height - VIEWPORT_PADDING + 1e-8);
+      }
+      if (width === initialWidth) assert.deepEqual(bounds, originalBounds);
+    }
   }
 });

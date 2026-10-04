@@ -685,6 +685,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
               >×</button>
             </div>
 
+            <div className={styles.detailScroll} data-gft-detail-scroll="">
             {/* ⚔ AI 质疑块：理由 + 认账操作只在详情态出现——图上仅剩 ? 角标。
                 操作=小 ✓×，与图上 add 型提议同一套视觉（08-07 用户拍：别搞两种语言）；
                 语义靠语境+title 兜底：理由就在旁边，✓ 读作"认下质疑"。
@@ -1004,6 +1005,8 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                 </ul>
               </div>
             )}
+
+            </div>
 
             {/* Commit 弹窗：嵌入在 detailPanel 内部 */}
             {isCommitDialogOpen && (

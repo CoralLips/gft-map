@@ -329,6 +329,10 @@
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: var(--node-toolbar-width, none);
+  box-sizing: border-box;
   align-items: center;
   gap: 2px;
   background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
@@ -416,11 +420,13 @@
 /* Map supplies one placement per opening; the card remains part of its node. */
 .detailPanel[data-detail-placement] {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   left: var(--detail-left);
   top: var(--detail-top);
   width: var(--detail-width);
   max-height: var(--detail-max-height);
-  overscroll-behavior: contain;
   animation: none;
 }
 
@@ -429,10 +435,14 @@
 }
 
 .detailPanel[data-detail-placement] .detailHeader {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--poe-surface);
+  flex-shrink: 0;
+}
+
+.detailPanel[data-detail-placement] .detailScroll {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes detailPanelFade {
@@ -461,6 +471,7 @@
   white-space: nowrap;
 }
 .detailCloseBtn {
+  flex-shrink: 0;
   width: 22px;
   height: 22px;
   border: none;
@@ -482,6 +493,7 @@
 
 /* 极简复制按钮 — 跟 close 按钮风格一致，绿色 hover 表示"动作型" */
 .detailCopyBtn {
+  flex-shrink: 0;
   width: 22px;
   height: 22px;
   border: none;
@@ -983,6 +995,7 @@
 
 .detailHeaderTitleEdit {
   flex: 1;
+  min-width: 0;
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;

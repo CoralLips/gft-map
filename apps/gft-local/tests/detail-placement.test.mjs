@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-let chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_WIDTH, DETAIL_PANEL_MAX_HEIGHT, DETAIL_PANEL_BELOW_GAP;
+let chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_WIDTH, DETAIL_PANEL_MAX_HEIGHT, detailPanelBelowGap, nodeToolbarSpace;
 before(async () => {
   const entry = fileURLToPath(new URL('../../../src/component/focus/ThinkingMapView/detailPlacement.ts', import.meta.url));
   const bundled = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
-  ({ chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_WIDTH, DETAIL_PANEL_MAX_HEIGHT, DETAIL_PANEL_BELOW_GAP } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
+  ({ chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_WIDTH, DETAIL_PANEL_MAX_HEIGHT } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
+  const viewportEntry = fileURLToPath(new URL('../../../src/component/focus/ThinkingMapView/viewport.ts', import.meta.url));
+  const viewport = await build({ entryPoints: [viewportEntry], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
+  ({ detailPanelBelowGap, nodeToolbarSpace } = await import(`data:text/javascript;base64,${Buffer.from(viewport.outputFiles[0].text).toString('base64')}`));
 });
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} should equal ${expected}`);
@@ -46,7 +49,7 @@ test('窄栏下挂，正文与当前节点一起可见且不用缩小字号', ()
     const placement = chooseDetailPlacement(input);
     assert.equal(placement.side, 'below');
     assert.equal(placement.width, Math.min(374, width - 48));
-    close(cardBounds(input, placement).top - (input.node.y + input.node.height), DETAIL_PANEL_BELOW_GAP);
+    close(cardBounds(input, placement).top - (input.node.y + input.node.height), detailPanelBelowGap(input.size));
     assertFits(input, placement);
   }
 });
@@ -83,19 +86,22 @@ test('左右边缘只挪浮卡，仍保持节点与正文之间的垂直间距',
     const placement = chooseDetailPlacement(input);
     assert.equal(placement.side, 'below');
     assertFits(input, placement);
-    close(cardBounds(input, placement).top - (input.node.y + input.node.height), DETAIL_PANEL_BELOW_GAP);
+    close(cardBounds(input, placement).top - (input.node.y + input.node.height), detailPanelBelowGap(input.size));
   }
 });
 
 test('下挂正文为节点下的连线、整理、Doc和删除工具条留完整空间', () => {
-  for (const zoom of [1, 0.5]) {
-    const input = { node: { x: 24, y: 80, width: 208 * zoom, height: 60 * zoom }, size: { width: 360, height: 800 }, zoom };
-    // Keep the narrow layout under zoom as well, rather than selecting right.
-    const placement = fitDetailPlacement(input, 'below');
-    const toolbarBottom = input.node.y + input.node.height + (8 + 36) * zoom;
-    assert.ok(cardBounds(input, placement).top >= toolbarBottom + 8 * zoom,
-      'the card must leave the complete action footprint plus a separate gap');
-    assertFits(input, placement);
+  for (const width of [320, 520, 900]) {
+    for (const zoom of [1, 0.5]) {
+      const input = { node: { x: 24, y: 80, width: 208 * zoom, height: 60 * zoom }, size: { width, height: 800 }, zoom };
+      const toolbar = nodeToolbarSpace(input.size);
+      // Keep the below layout under zoom as well, rather than selecting right.
+      const placement = fitDetailPlacement(input, 'below');
+      const toolbarBottom = input.node.y + input.node.height + (toolbar.gap + toolbar.height) * zoom;
+      close(cardBounds(input, placement).top - toolbarBottom, toolbar.gap * zoom);
+      assertFits(input, placement);
+      if (width >= 368) close(placement.top - input.node.height / zoom, 52);
+    }
   }
 });
 

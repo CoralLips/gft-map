@@ -303,7 +303,7 @@
   }
 
   .networkHeaderLeft .projectDropdown {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
   }
 
@@ -579,6 +579,8 @@
   left: 0;
   min-width: 200px;
   max-width: 280px;
+  max-height: min(420px, calc(100vh - 140px));
+  overflow-y: auto;
   background: var(--poe-surface);
   border: 1px solid var(--poe-gray-200);
   border-radius: 8px;

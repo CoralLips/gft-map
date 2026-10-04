@@ -12,7 +12,7 @@ import type { JSX } from 'react';
 import ReactFlow, { Background, BaseEdge, getSmoothStepPath } from 'reactflow';
 import type { Node, Edge, NodeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
 import { layoutGraph, estimateNodeHeight, NODE_WIDTH, type MeasuredSizes } from './layout';
-import { nodeReadingBounds, unionBounds } from './viewport';
+import { nodeReadingBounds, nodeToolbarSpace, unionBounds, type ViewportSize } from './viewport';
 import { useMapViewport } from './useMapViewport';
 import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
@@ -561,7 +561,16 @@ function ThinkingMapViewImpl(): JSX.Element {
     const bounds = unionBounds(boxes);
     // Routed edges can detour up to 32px beyond the rightmost node.
     const edgeBounds = mapEdges.length ? { ...bounds, width: bounds.width + 32 } : bounds;
-    return unionBounds([edgeBounds, ...boxes.map(nodeReadingBounds)]);
+    let cachedToolbar = nodeToolbarSpace();
+    let cachedBounds = unionBounds([edgeBounds, ...boxes.map(box => nodeReadingBounds(box))]);
+    return (size: ViewportSize) => {
+      const toolbar = nodeToolbarSpace(size);
+      if (toolbar.width !== cachedToolbar.width || toolbar.height !== cachedToolbar.height) {
+        cachedToolbar = toolbar;
+        cachedBounds = unionBounds([edgeBounds, ...boxes.map(box => nodeReadingBounds(box, size))]);
+      }
+      return cachedBounds;
+    };
   }, [mapNodes, mapEdges.length, layoutPositions, measured]);
   const viewport = useMapViewport(containerRef, contentBounds, openPanelId, generation);
   const { centerOn, overview } = viewport;

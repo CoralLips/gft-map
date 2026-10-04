@@ -1,11 +1,9 @@
-import { NODE_TOOLBAR_SPACE, VIEWPORT_PADDING, type ContentBounds, type ViewportSize } from './viewport';
+import { detailPanelBelowGap, VIEWPORT_PADDING, type ContentBounds, type ViewportSize } from './viewport';
 
 // Preserve the existing card's outer dimensions while making its CSS border-box.
 export const DETAIL_PANEL_WIDTH = 374;
 export const DETAIL_PANEL_MAX_HEIGHT = 450;
 export const DETAIL_PANEL_GAP = 14;
-// Keep the existing hover actions usable between the node and its below card.
-export const DETAIL_PANEL_BELOW_GAP = NODE_TOOLBAR_SPACE.gap * 2 + NODE_TOOLBAR_SPACE.height;
 export const DETAIL_PANEL_MIN_READING_HEIGHT = 160;
 
 export type DetailSide = 'right' | 'below' | 'above';
@@ -33,7 +31,7 @@ function measure(input: DetailPlacementInput) {
   const size = { width: dimension(input.size.width), height: dimension(input.size.height) };
   const zoom = Number.isFinite(input.zoom) && input.zoom > 0 ? input.zoom : 1;
   const gap = Math.min(Number.MAX_VALUE, DETAIL_PANEL_GAP * zoom);
-  const belowGap = Math.min(Number.MAX_VALUE, DETAIL_PANEL_BELOW_GAP * zoom);
+  const belowGap = Math.min(Number.MAX_VALUE, detailPanelBelowGap(size) * zoom);
   const available = (space: number) => Math.max(0, finite(space));
   return {
     node, size, zoom,
@@ -77,6 +75,6 @@ export function fitDetailPlacement(input: DetailPlacementInput, side: DetailSide
   const rightLimit = Math.max(leftLimit, size.width - VIEWPORT_PADDING - screenWidth);
   const screenLeft = Math.max(leftLimit, Math.min(node.x, rightLimit));
   return { side, left: toCanvas(screenLeft - node.x),
-    top: side === 'above' ? -DETAIL_PANEL_GAP : toCanvas(node.height) + DETAIL_PANEL_BELOW_GAP,
+    top: side === 'above' ? -DETAIL_PANEL_GAP : toCanvas(node.height) + detailPanelBelowGap(size),
     width, maxHeight: Math.min(DETAIL_PANEL_MAX_HEIGHT, height / zoom) };
 }

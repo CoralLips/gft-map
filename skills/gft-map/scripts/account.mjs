@@ -46,15 +46,26 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     if (target.protocol !== 'https:' || !target.hostname.endsWith('.supabase.co') || target.pathname !== '/' || !config.anonKey) throw new Error('GFT 登录配置无效');
     return request(`${target.origin}/auth/v1/${route}`, { method: 'POST', headers: { apikey: config.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   }
+  function refreshSession(epoch) {
+    refresh ||= (async () => {
+      // Another caller may have saved a refresh while our first read was delayed.
+      const record = await read();
+      if (epoch !== generation || !record) throw new Error('登录已变化，请稍后重试同步');
+      if (record.accessToken && record.expiresAt >= Date.now() / 1000 + 60) return record;
+      const session = await auth(record.config, 'token?grant_type=refresh_token', { refresh_token: record.refreshToken });
+      return save(session, record.config, epoch);
+    })().finally(() => { refresh = null; });
+    return refresh;
+  }
   async function status() {
+    const epoch = generation;
     let record = await read();
+    if (epoch !== generation) record = null;
     if (record && record.expiresAt < Date.now() / 1000 + 30) {
-      const epoch = generation;
-      try {
-        refresh ||= auth(record.config, 'token?grant_type=refresh_token', { refresh_token: record.refreshToken }).then(session => save(session, record.config, epoch)).finally(() => { refresh = null; });
-        record = await refresh;
-      } catch (e) { error = e.message; record = null; }
+      try { record = await refreshSession(epoch); }
+      catch (e) { if (epoch === generation) error = e.message; record = null; }
     }
+    if (epoch !== generation) record = null;
     return { connected: !!record, account: record?.account || null, pending: !!pending, error, webUrl: base.origin };
   }
   function cancel() { generation++; requests.abort(); requests = new AbortController(); if (pending) { clearTimeout(pending.timer); pending.server.close(); pending = null; } }
@@ -64,8 +75,7 @@ export function createAccount({ home, webUrl = process.env.GFT_WEB_URL || 'https
     let record = await read();
     if (!record || epoch !== generation) return null;
     if (!record.accessToken || record.expiresAt < Date.now() / 1000 + 60) {
-      refresh ||= auth(record.config, 'token?grant_type=refresh_token', { refresh_token: record.refreshToken }).then(value => save(value, record.config, epoch)).finally(() => { refresh = null; });
-      record = await refresh;
+      record = await refreshSession(epoch);
     }
     if (epoch !== generation || !record.accessToken) throw new Error('登录已变化，请稍后重试同步');
     const target = new URL(record.config.url);

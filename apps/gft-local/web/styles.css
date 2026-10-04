@@ -44,7 +44,7 @@
 .gft-local-modal input, .gft-local-modal textarea { display: block; width: 100%; margin-top: 6px; padding: 9px 10px; border: 1px solid var(--poe-gray-300); border-radius: 8px; background: var(--poe-bg); color: var(--poe-gray-800); font: inherit; font-weight: 400; box-sizing: border-box; }
 .gft-local-modal textarea { resize: vertical; min-height: 90px; }
 .gft-local-modal input:focus, .gft-local-modal textarea:focus { outline: 2px solid var(--tint-blue-border); border-color: var(--poe-blue); }
-.gft-local-note { margin: 12px 0; color: var(--poe-gray-500); font-size: 13px; line-height: 1.65; }
+.gft-local-note { margin: 12px 0; color: var(--poe-gray-500); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
 .gft-local-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .gft-local-dialog-actions .gft-local-primary { background: var(--poe-blue-dark); color: var(--poe-on-accent); border-color: var(--poe-blue-dark); }
 .gft-local-dialog-actions .gft-local-primary:hover { background: var(--poe-blue); }

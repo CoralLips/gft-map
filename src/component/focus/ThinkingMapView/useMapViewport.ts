@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { ReactFlowInstance, Viewport } from 'reactflow';
-import { clampReadingViewport, overviewViewport, readingExtent, unionBounds, VIEWPORT_PADDING, type ContentBounds, type ViewportSize } from './viewport';
-import { chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_GAP, DETAIL_PANEL_BELOW_GAP, type DetailSide } from './detailPlacement';
+import { clampReadingViewport, detailPanelBelowGap, nodeToolbarSpace, overviewViewport, readingExtent, resizeToolbarBounds, unionBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING, type ContentBounds, type ViewportSize } from './viewport';
+import { chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_GAP, type DetailSide } from './detailPlacement';
 
 const sameViewport = (a: Viewport, b: Viewport) =>
   Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.zoom - b.zoom) < 1e-9;
@@ -9,18 +9,22 @@ const sameViewport = (a: Viewport, b: Viewport) =>
 /** Reading is always 1:1; overview is a frozen camera with a saved return position. */
 export function useMapViewport(
   containerRef: RefObject<HTMLDivElement>,
-  contentBounds: ContentBounds,
+  contentBounds: (size: ViewportSize) => ContentBounds,
   openPanelId: string | null,
   generation: number,
 ) {
   const [instance, setInstance] = useState<ReactFlowInstance | null>(null);
   const [overview, setOverview] = useState(false);
-  const [geometry, setGeometry] = useState({ bounds: contentBounds, size: { width: 0, height: 0 } });
+  const [geometry, setGeometry] = useState(() => {
+    const size = { width: 0, height: 0 };
+    return { bounds: contentBounds(size), size };
+  });
   const geometryRef = useRef(geometry);
   const camera = useRef<{
     reading: Viewport;
-    overview: { viewport: Viewport; bounds: ContentBounds; size: ViewportSize } | null;
-  }>({ reading: { x: 24 - contentBounds.x, y: 24 - contentBounds.y, zoom: 1 }, overview: null });
+    overview: { viewport: Viewport; bounds: ContentBounds; size: ViewportSize;
+      toolbar: ReturnType<typeof nodeToolbarSpace> } | null;
+  }>({ reading: { x: 24 - geometry.bounds.x, y: 24 - geometry.bounds.y, zoom: 1 }, overview: null });
   const pendingCenter = useRef<{ panelId: string } | null>(null);
   const measureRef = useRef<(() => void) | null>(null);
   const placedPanel = useRef<{ panel: HTMLElement; size: ViewportSize; zoom: number;
@@ -31,11 +35,12 @@ export function useMapViewport(
     // of briefly rendering the previous graph's camera before onInit fires.
     lastGeneration.current = generation;
     const size = geometryRef.current.size;
-    geometryRef.current = { bounds: contentBounds, size };
-    camera.current.reading = clampReadingViewport(camera.current.reading, contentBounds, size);
+    const bounds = contentBounds(size);
+    geometryRef.current = { bounds, size };
+    camera.current.reading = clampReadingViewport(camera.current.reading, bounds, size);
     if (camera.current.overview) {
-      camera.current.overview = { bounds: contentBounds, size,
-        viewport: overviewViewport(contentBounds, size) };
+      camera.current.overview = { bounds, size, toolbar: nodeToolbarSpace(size),
+        viewport: overviewViewport(bounds, size) };
     }
     pendingCenter.current = null;
   }
@@ -72,7 +77,9 @@ export function useMapViewport(
     const measure = () => {
       const size = { width: container.clientWidth, height: container.clientHeight };
       if (!size.width || !size.height) return;
-      const boxes = [contentBounds];
+      const toolbar = nodeToolbarSpace(size);
+      container.style.setProperty('--node-toolbar-width', toolbar.width < NODE_TOOLBAR_SPACE.width ? `${toolbar.width}px` : 'none');
+      const boxes = [contentBounds(size)];
       const panel = container.querySelector<HTMLElement>('.react-flow__node [data-gft-detail]');
       if (panel !== observedPanel) {
         if (observedPanel) observer.unobserve(observedPanel);
@@ -98,7 +105,7 @@ export function useMapViewport(
           panel.dataset.detailPlacement = placement.side;
           for (const [property, value] of Object.entries({
             left: placement.side === 'right' ? `calc(100% + ${DETAIL_PANEL_GAP}px)` : `${placement.left}px`,
-            top: placement.side === 'below' ? `calc(100% + ${DETAIL_PANEL_BELOW_GAP}px)` : `${placement.top}px`,
+            top: placement.side === 'below' ? `calc(100% + ${detailPanelBelowGap(size)}px)` : `${placement.top}px`,
             width: `${placement.width}px`, 'max-height': `${placement.maxHeight}px`,
           })) panel.style.setProperty(`--detail-${property}`, value);
           placedPanel.current = { panel, size, zoom: view.zoom, side: placement.side,
@@ -145,7 +152,7 @@ export function useMapViewport(
       // Expanding a node never reframes overview. Only a viewport resize adapts
       // the original overview bounds to the new available space.
       if (locked && (locked.size.width !== size.width || locked.size.height !== size.height)) {
-        locked.viewport = overviewViewport(locked.bounds, size);
+        locked.viewport = overviewViewport(resizeToolbarBounds(locked.bounds, locked.toolbar, toolbar), size);
         locked.size = size;
       }
       const bounded = constrain(camera.current.reading);
@@ -186,7 +193,7 @@ export function useMapViewport(
     } else {
       const { bounds, size } = geometryRef.current;
       state.reading = clampReadingViewport(instance.getViewport(), bounds, size);
-      state.overview = { bounds, size, viewport: overviewViewport(bounds, size) };
+      state.overview = { bounds, size, toolbar: nodeToolbarSpace(size), viewport: overviewViewport(bounds, size) };
       apply(state.overview.viewport);
       setOverview(true);
     }

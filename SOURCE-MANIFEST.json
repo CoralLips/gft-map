@@ -2,9 +2,9 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "50f07461dd511dfaeb7a3790f81479e9091e5599",
+  "sourceRevision": "9964722166d7dbdc0354d49bb6cf39a93d6c0525",
   "sourceDirty": false,
-  "version": "0.3.7",
+  "version": "0.3.8",
   "files": [
     {
       "path": ".gitattributes",
@@ -34,7 +34,7 @@
     {
       "path": "apps/gft-local/account.mjs",
       "source": "apps/gft-local/account.mjs",
-      "sha256": "44f6ba630a53aa9e9bcbfe49500cc6336fdaf0f5f8e8e22cbcc9254d17ec4333"
+      "sha256": "34bf9e42ea62bb11119b4fc2b68be4bc465a97d19e9e4cd1feccf4cc65d12770"
     },
     {
       "path": "apps/gft-local/acpRunner.mjs",
@@ -114,12 +114,12 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "a77733369ecb27935ee2cad9750b002336cfc59bd014c49829bc280f6e0a3be2"
+      "sha256": "ae5570db827a25b6c2b3a7e51311e2702d18730ac37e05def702d03e6f18d3cc"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "0c04f9e39ec34cd0ae87dadb518e7c2652eda236210d65c0523ed71be8e98513"
+      "sha256": "448dc8410a62e8e52f74f340ec902b24b148b30447bcdb01f3dfc1a86f03b2ed"
     },
     {
       "path": "apps/gft-local/README_ZH.md",
@@ -354,7 +354,7 @@
     {
       "path": "apps/gft-local/tests/account.test.mjs",
       "source": "apps/gft-local/tests/account.test.mjs",
-      "sha256": "ebebe9d1fcf0f5fd013a44b68e1428dc99a82ce184756651b244257eb4f75fc9"
+      "sha256": "d985e908a5a69b3696ecc9513e769b45d542f139bcef0774c61e132e449c6228"
     },
     {
       "path": "apps/gft-local/tests/acp-cli.test.mjs",
@@ -394,7 +394,7 @@
     {
       "path": "apps/gft-local/tests/detail-placement.test.mjs",
       "source": "apps/gft-local/tests/detail-placement.test.mjs",
-      "sha256": "761306c875f71975a9095e83a295e9e209b54c9d0b8c3bc9709cee58a529c7ff"
+      "sha256": "c7e26890fa65d2fe901847ddb62d76ea5d6f59136b926cb5aecf8637e6ccf652"
     },
     {
       "path": "apps/gft-local/tests/executor-recovery.test.mjs",
@@ -444,7 +444,7 @@
     {
       "path": "apps/gft-local/tests/map-viewport.test.mjs",
       "source": "apps/gft-local/tests/map-viewport.test.mjs",
-      "sha256": "5daa8f5d3dba9f3eb8dc432cf4a4c6d68fc66bced8effd85aad9e5aa550dde14"
+      "sha256": "6e9fc246f87d0888d4c647a12709e5aec09f8854ee155964153fc5edbe2b7b5f"
     },
     {
       "path": "apps/gft-local/tests/materials-http.test.mjs",
@@ -609,7 +609,7 @@
     {
       "path": "apps/gft-local/web/styles.css",
       "source": "apps/gft-local/web/styles.css",
-      "sha256": "7436da935257e89671d372aa92e50f9f49bf208f8d9503c4b97f30a4d52ccc20"
+      "sha256": "42d4556668329f9489b14ca2632ebe6cd150798445a9ffff0e71dd5976b68182"
     },
     {
       "path": "LICENSE",
@@ -619,12 +619,12 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "ef7ae9fa6394ba61b2e0b7a14456f907bce53a263f6cf56c32a9ce0ec29bf47c"
+      "sha256": "b882643cb9d5c6c7648d117b3b3030abad422ab5c13bb233adcc74ef7f8a07d2"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "ec5420a6af640a911de1cda72519751f0febd672f391f65d3bbc2b0199709cc2"
+      "sha256": "950e523349275983e39ab6e202c78b88baf5ef2cbad4681a3bb3ff1e359c84ba"
     },
     {
       "path": "README_ZH.md",
@@ -664,7 +664,7 @@
     {
       "path": "skills/gft-map/scripts/account.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "44f6ba630a53aa9e9bcbfe49500cc6336fdaf0f5f8e8e22cbcc9254d17ec4333"
+      "sha256": "34bf9e42ea62bb11119b4fc2b68be4bc465a97d19e9e4cd1feccf4cc65d12770"
     },
     {
       "path": "skills/gft-map/scripts/change-hook.mjs",
@@ -704,17 +704,17 @@
     {
       "path": "skills/gft-map/scripts/dist/version.json",
       "source": "generated:apps/gft-local",
-      "sha256": "d3b8d62b3af92ca53899298d4e207ac84111bf574cdc4987320325432a90ac6f"
+      "sha256": "4f4306621f1eb3bedc869a5a2709789cf902511d4a2cc6a320c47c81c7ad1ede"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.css",
       "source": "generated:apps/gft-local",
-      "sha256": "544e98f247b60dea31d5538d8dfc82f444891fe0577bdb7575e54a95b0551325"
+      "sha256": "8c3c1cdb18da50e5b5f22938570827a768710f3a28ef6d7453fdb866ccead996"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "88d93baad6e44f2a46c00632499ac7393e6fb2873d3eaf8795177d3a8d31cbf0"
+      "sha256": "163693a49f72bdb6efbf67df5c657696930889866a0e65b3fbe58aa47b04e82d"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -1109,12 +1109,12 @@
     {
       "path": "src/component/focus/ExploreTreeNode/ExploreTreeNode.module.css",
       "source": "src/component/focus/ExploreTreeNode/ExploreTreeNode.module.css",
-      "sha256": "2185655356ea21fee2ef83a2f7a4ee2a3c3caa8af36b20b43873b297252caa38"
+      "sha256": "1803792ebb7a729e743ed57095c0df0a7c0d9e4bf4b4ee251ca1163e9dc56285"
     },
     {
       "path": "src/component/focus/ExploreTreeNode/index.tsx",
       "source": "src/component/focus/ExploreTreeNode/index.tsx",
-      "sha256": "221c3406bf85ad13386a96121dde1a45eb9a444f743086247a557e8353a9df37"
+      "sha256": "712787a0dc772dc45b8de1ace45e919197853815fa75111f84658232001e43d8"
     },
     {
       "path": "src/component/focus/LedgerSourcePanel/index.tsx",
@@ -1159,7 +1159,7 @@
     {
       "path": "src/component/focus/MapDocActions/MapDocActions.module.css",
       "source": "src/component/focus/MapDocActions/MapDocActions.module.css",
-      "sha256": "046d2b35c79f49c56516867ee83c8198d6a0c5404076701b44876fc90e9f1260"
+      "sha256": "a5f29a99ad0b2fc6a7c6acead4fc497178b5e1bf4b26a37f70d8fa89fd56065e"
     },
     {
       "path": "src/component/focus/SourceLogEditor.css",
@@ -1189,12 +1189,12 @@
     {
       "path": "src/component/focus/ThinkingMapView/detailPlacement.ts",
       "source": "src/component/focus/ThinkingMapView/detailPlacement.ts",
-      "sha256": "9b2aae34a1bb5ef4b923fb2f1769824b13d1123b283335bc429fead36fcb7095"
+      "sha256": "4214a677408c0f4c4e6286dd30e016a5783a90a01c42dd54cc760359deeddd91"
     },
     {
       "path": "src/component/focus/ThinkingMapView/index.tsx",
       "source": "src/component/focus/ThinkingMapView/index.tsx",
-      "sha256": "36ff931877cb89285f64a32e1fb1708592fcfe0501742e4ef4febd2df61bf070"
+      "sha256": "ae6f2b038d672d66699eb1982d7c3af64c061e5eca69f041b250d9f2ebfe3490"
     },
     {
       "path": "src/component/focus/ThinkingMapView/layout.ts",
@@ -1209,12 +1209,12 @@
     {
       "path": "src/component/focus/ThinkingMapView/useMapViewport.ts",
       "source": "src/component/focus/ThinkingMapView/useMapViewport.ts",
-      "sha256": "da4e097a72c598db158c9faf679bcd6bbeb58646ef3fa4a710e297e7cb7bb49b"
+      "sha256": "5eb820a7b701ac6c9ceaa871653d6ef6f7c7eb489c756d5e2cce578f9c5647c6"
     },
     {
       "path": "src/component/focus/ThinkingMapView/viewport.ts",
       "source": "src/component/focus/ThinkingMapView/viewport.ts",
-      "sha256": "2bf520f3b3b308e24c92b7d8ceb6e54d403d90a710cf3f1fbd0d9bd4fb2ec4c9"
+      "sha256": "209196d9098ca9899675c1b88c4e0c14804deb6fbf2260f271b9321de0082663"
     },
     {
       "path": "src/component/focus/ThinkingMapWorkspace.tsx",
@@ -1244,7 +1244,7 @@
     {
       "path": "src/page/FocusLab.module.css",
       "source": "src/page/FocusLab.module.css",
-      "sha256": "3e8ab05a4813454d8d5e2c409760967afd4bfff7ff6c9e678e87647cefb857b3"
+      "sha256": "109334bab341976571e3abb6bea1c85e280808999beedd2876e22b9d5004b3c0"
     },
     {
       "path": "src/page/FocusLab/ProjectDropdown.tsx",

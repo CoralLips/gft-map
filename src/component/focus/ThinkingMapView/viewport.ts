@@ -8,6 +8,27 @@ export const VIEWPORT_PADDING = 24;
 // Reserve their footprint before hover so revealing them never moves the map.
 export const NODE_TOOLBAR_SPACE = { width: 320, height: 36, gap: 8 } as const;
 
+export function nodeToolbarSpace(size?: ViewportSize) {
+  const width = size && Number.isFinite(size.width) && size.width > 0
+    ? Math.min(NODE_TOOLBAR_SPACE.width, Math.max(0, size.width - VIEWPORT_PADDING * 2))
+    : NODE_TOOLBAR_SPACE.width;
+  return { ...NODE_TOOLBAR_SPACE, width,
+    height: width < NODE_TOOLBAR_SPACE.width ? NODE_TOOLBAR_SPACE.height * 2 : NODE_TOOLBAR_SPACE.height };
+}
+
+export function detailPanelBelowGap(size?: ViewportSize): number {
+  const toolbar = nodeToolbarSpace(size);
+  return toolbar.gap * 2 + toolbar.height;
+}
+
+/** Resize frozen overview geometry without observing later node/body changes. */
+export function resizeToolbarBounds(bounds: ContentBounds,
+  previous: ReturnType<typeof nodeToolbarSpace>, next: ReturnType<typeof nodeToolbarSpace>): ContentBounds {
+  const extraWidth = Math.max(0, next.width - previous.width);
+  return { ...bounds, x: bounds.x - extraWidth / 2, width: bounds.width + extraWidth,
+    height: bounds.height + Math.max(0, next.height - previous.height) };
+}
+
 const finite = (value: number, fallback = 0): number => Number.isFinite(value) ? value : fallback;
 const dimension = (value: number): number => Math.max(0, finite(value));
 
@@ -15,14 +36,15 @@ function normalizeBounds(bounds: ContentBounds): ContentBounds {
   return { x: finite(bounds.x), y: finite(bounds.y), width: dimension(bounds.width), height: dimension(bounds.height) };
 }
 
-export function nodeReadingBounds(bounds: ContentBounds): ContentBounds {
+export function nodeReadingBounds(bounds: ContentBounds, size?: ViewportSize): ContentBounds {
   const box = normalizeBounds(bounds);
-  const width = Math.max(box.width, NODE_TOOLBAR_SPACE.width);
+  const toolbar = nodeToolbarSpace(size);
+  const width = Math.max(box.width, toolbar.width);
   return {
     x: box.x - (width - box.width) / 2,
     y: box.y,
     width,
-    height: box.height + NODE_TOOLBAR_SPACE.gap + NODE_TOOLBAR_SPACE.height,
+    height: box.height + toolbar.gap + toolbar.height,
   };
 }
 

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import fsPromises, { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createAccount } from '../account.mjs';
-import {writeFile} from 'node:fs/promises';
 
 async function fixture(run, options = {}) {
   const home = await mkdtemp(path.join(tmpdir(), 'gft-account-'));
@@ -109,3 +109,49 @@ test('旧本地凭证首次同步会补齐 access token，网页登录声明自�
   assert.match(calls.at(-1).url,/grant_type=refresh_token/);
   assert.doesNotMatch(JSON.stringify(await account.status()),/private-access|private-refresh/);
 }));
+
+
+test('迟到的旧账号读取复用已经保存的刷新结果，status 与 session 共享刷新', async t => {
+  for (const [first, second] of [['session', 'session'], ['status', 'session'], ['session', 'status'], ['status', 'status']]) {
+    await t.test(first + ' / ' + second, async () => {
+      let refreshes = 0;
+      await fixture(async ({ home, account }) => {
+        const file = path.join(home, 'account.json');
+        await writeFile(file, JSON.stringify({ webUrl: 'https://gitforthought.com', config: { url: 'https://test.supabase.co', anonKey: 'public' }, accessToken: 'expired-access', refreshToken: 'expired-refresh', account: { id: 'a', email: 'a@test.test' }, expiresAt: 0 }));
+        const originalReadFile = fsPromises.readFile;
+        let reads = 0, entered, release, a, b;
+        const delayedRead = new Promise(resolve => { entered = resolve; });
+        const wait = new Promise(resolve => { release = resolve; });
+        fsPromises.readFile = async (...args) => {
+          const delayed = args[0] === file && ++reads === 2;
+          const value = await originalReadFile(...args);
+          if (delayed) { entered(); await wait; }
+          return value;
+        };
+        syncBuiltinESMExports();
+        try {
+          a = account[first]();
+          b = account[second]();
+          await delayedRead;
+          const before = await a;
+          assert.equal(refreshes, 1);
+          release();
+          const after = await b;
+          assert.equal(refreshes, 1);
+          assert.equal(before.id ?? before.account.id, 'a');
+          assert.equal(after.id ?? after.account.id, 'a');
+          if (first === 'session' && second === 'session') assert.equal(before.key, after.key);
+        } finally {
+          release();
+          fsPromises.readFile = originalReadFile;
+          syncBuiltinESMExports();
+          await Promise.allSettled([a, b]);
+        }
+      }, { fetchImpl: async url => {
+        assert.match(url, /grant_type=refresh_token/);
+        refreshes++;
+        return Response.json({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600, user: { id: 'a', email: 'a@test.test' } });
+      } });
+    });
+  }
+});
