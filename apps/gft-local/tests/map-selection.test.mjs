@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-const b=await build({entryPoints:[new URL('../../../src/service/mapSelection.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+import {fileURLToPath} from 'node:url';
+const b=await build({entryPoints:[fileURLToPath(new URL('../../../src/service/mapSelection.ts',import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const {changedSelection:next}=await import('data:text/javascript;base64,'+Buffer.from(b.outputFiles[0].text).toString('base64'));
 test('multiple selected edges coexist without replacing the first selection',()=>{
   assert.deepEqual(next(new Set(['a-b']),[{type:'select',id:'c-d',selected:true}]),['a-b','c-d']);

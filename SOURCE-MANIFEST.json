@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "120c2a387d3f3ddfaf4ad3c8ef10b64183771714",
+  "sourceRevision": "1c482a0a8748b3dee18af9cd38f266d664431569",
   "sourceDirty": false,
   "version": "0.3.10",
   "files": [
@@ -459,7 +459,7 @@
     {
       "path": "apps/gft-local/tests/map-selection.test.mjs",
       "source": "apps/gft-local/tests/map-selection.test.mjs",
-      "sha256": "461d0fe8ce7988153549bcabbeb0058d4c9f593ec4175bbfaf7319a13a6152b5"
+      "sha256": "ea0fdc1a82ad1531ead28a6c60f71f73842f6f7fca1cbda644921d35be702b81"
     },
     {
       "path": "apps/gft-local/tests/map-viewport.test.mjs",
