@@ -729,7 +729,7 @@
     {
       "path": "skills/gft-map/scripts/dist/acp.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "1b9a0077cd9571424a8cd250bee6ce6e01fe7d52addb168ef5512aae15ed5647"
+      "sha256": "4b1f766b5dcaf37f8b242eb5dcff52ecbbb3fa64db1ea6acf74202ac319daa69"
     },
     {
       "path": "skills/gft-map/scripts/dist/core.mjs",
@@ -739,12 +739,12 @@
     {
       "path": "skills/gft-map/scripts/dist/mcp.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "6915315314de09775b0173598f8e680ac5145a26f1fea23ea05af02c489c2568"
+      "sha256": "cc3a098fae8e227ef6af38db19587aa23eaa4b1ade70817fb76712776f53012f"
     },
     {
       "path": "skills/gft-map/scripts/dist/sources.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "78893e38cb3f77cf4140af1617267eccdaa359bcb1047789b2fda8bf5f1d4d05"
+      "sha256": "a23bf23200f38ee7ae3d59f5028a67fc2ff8bd8e6b6122de22be8e869e6a51b5"
     },
     {
       "path": "skills/gft-map/scripts/dist/version.json",
