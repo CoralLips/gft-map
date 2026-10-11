@@ -11,13 +11,13 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 const baseLedger = '[场次 2026-09-17T10:00:00Z · 合成回放]\n走向 p3 [主题]\n只处理合成材料。\n◆ j1 [验证] 原判断\n保留原文。';
 const source = (id, provider = 'codex') => ({ provider, id, title: `合成会话 ${id}`, cwd: 'synthetic', updatedAt: '2026-09-17T10:00:00Z' });
 const connection = (id, topicId = 'a', loadedRevision = null) => ({ id, topicId, source: source(id), history: 'now', loadedRevision });
-let directory, createLocalRuntime, connectionLoadLabel;
+let directory, createLocalRuntime, connectionLoadLabel, receiptDisplayText;
 before(async () => {
   await mkdir(cacheRoot, { recursive: true });
   directory = await mkdtemp(path.join(cacheRoot, 'gft-connections-ui-'));
   const outfile = path.join(directory, 'runtime.mjs');
-  await build({ stdin: { contents: 'export { createLocalRuntime } from "./localRuntime"; export { connectionLoadLabel } from "./ConnectionManager";', resolveDir: web, loader: 'ts' }, outfile, bundle: true, platform: 'node', format: 'esm', nodePaths: [path.resolve(web, '../node_modules')], logLevel: 'silent' });
-  ({ createLocalRuntime, connectionLoadLabel } = await import(pathToFileURL(outfile).href));
+  await build({ stdin: { contents: 'export { createLocalRuntime } from "./localRuntime"; export { connectionLoadLabel, receiptDisplayText } from "./ConnectionManager";', resolveDir: web, loader: 'ts' }, outfile, bundle: true, platform: 'node', format: 'esm', nodePaths: [path.resolve(web, '../node_modules')], logLevel: 'silent' });
+  ({ createLocalRuntime, connectionLoadLabel, receiptDisplayText } = await import(pathToFileURL(outfile).href));
 });
 after(async () => {
   const relative = path.relative(cacheRoot, path.resolve(directory));
@@ -44,6 +44,7 @@ async function fixture(options, run) {
       state.connections.push(...created); return json(created);
     }
     if (address.pathname === '/api/connections/disconnect') { state.connections = state.connections.filter(item => item.id !== body.connectionId); return json({ disconnected: [body.connectionId] }); }
+    if (address.pathname.endsWith('/update-receipt')) return json({topicId:address.pathname.split('/')[3],currentRevision:state.topics.get(address.pathname.split('/')[3])?.revision,receipt:null});
     const topicMatch = address.pathname.match(/^\/api\/topics\/([^/]+)\/(snapshot|state|sources|update-from-chat)$/);
     if (topicMatch) {
       const topic = state.topics.get(topicMatch[1]);
@@ -236,4 +237,106 @@ test('一次确认可连接多个主题；单条与当前主题全部断开不�
     await local.connections.disconnectAll('a');
     assert.deepEqual(state.connections.map(item => item.id), ['shared-b']);
   });
+});
+
+const savedReceipt = (id='saved-update') => ({
+  id, action:'update', baseRevision:0, resultRevision:1, createdAt:'2026-10-10T08:00:00Z', source:{provider:'codex',sessionTitle:'企业的性质',messageCount:2},
+  changes:{nodes:[{id:'j1',kind:'modified',before:{id:'j1',title:'旧判断',content:'旧说明',mark:'◆',domain:'验证',superseded:false},after:{id:'j1',title:'a 原判断',content:'保留原文。',mark:'◆',domain:'验证',superseded:false}}],edges:{added:[],removed:[]},chapters:[],doc:null},
+  canRollback:true,rollbackBlockedReason:null,
+});
+
+test('保存的最近改动在重新打开页面后仍可读取，不依赖本场完成提示', async () => {
+  await fixture({route:(call,state,json)=>call.pathname.endsWith('/update-receipt') ? json({topicId:call.pathname.split('/')[3],currentRevision:1,receipt:savedReceipt()}) : undefined}, async ({local}) => {
+    assert.equal(local.connections.getSnapshot().operation,null);
+    assert.equal(local.receipts.getSnapshot().receipt.id,'saved-update');
+    const second=createLocalRuntime({onRequestUpdate:async()=>null,onError:()=>{}});
+    try { await second.start(); assert.equal(second.receipts.getSnapshot().receipt.id,'saved-update'); assert.equal(second.connections.getSnapshot().operation,null); }
+    finally { second.dispose(); }
+  });
+});
+
+test('未保存的 Doc 编辑会阻止整次退回，不会自动提交或吞掉草稿', async () => {
+  await fixture({route:(call,state,json)=>call.pathname.endsWith('/update-receipt') ? json({topicId:'a',currentRevision:1,receipt:savedReceipt()}) : undefined}, async ({local,state}) => {
+    local.store.getState().setDocDraft('仍在编辑的理解');
+    await local.receipts.rollback();
+    assert.equal(local.store.getState().docDraft,'仍在编辑的理解');
+    assert.match(local.receipts.getSnapshot().error,/先完成或取消当前编辑/);
+    assert.equal(state.calls.filter(call=>call.method==='POST').length,0);
+  });
+});
+
+test('版本冲突时保留当前图文并显示服务端原因，不会刷新覆盖草稿', async () => {
+  await fixture({route:(call,state,json)=>{
+    if(call.pathname.endsWith('/update-receipt'))return json({topicId:'a',currentRevision:1,receipt:savedReceipt()});
+    if(call.pathname.endsWith('/rollback-update'))return json({error:'这次更新之后已有其他修改，不能整次退回。'},409);
+  }},async({local,state})=>{
+    const doc=local.store.getState().doc;
+    await local.receipts.rollback();
+    assert.equal(local.store.getState().doc,doc);
+    assert.match(local.receipts.getSnapshot().error,/已有其他修改/);
+    const request=state.calls.find(call=>call.pathname.endsWith('/rollback-update'));
+    assert.equal(request.body.baseRevision,1);assert.equal(request.body.receiptId,'saved-update');
+    assert.equal(local.receipts.getSnapshot().rollingBack,false);
+  });
+});
+
+test('退回请求等待期间开始的本地编辑仍然保留', async () => {
+  const gate=deferred();let posted=false,rolledBack=false;
+  await fixture({route:async(call,state,json)=>{
+    if(call.pathname.endsWith('/update-receipt'))return json({topicId:'a',currentRevision:rolledBack?2:1,receipt:{...savedReceipt(),canRollback:!rolledBack,...(rolledBack?{rolledBackAt:'2026-10-10T08:02:00Z'}:{})}});
+    if(call.pathname.endsWith('/rollback-update')){
+      posted=true;await gate.promise;rolledBack=true;
+      const topic=state.topics.get('a');topic.ledger=topic.ledger.replace('a 原判断','恢复的旧判断');topic.revision=2;return json({id:'a',revision:2});
+    }
+  }},async({local})=>{
+    const pending=local.receipts.rollback();await waitFor(()=>posted);
+    local.store.getState().setDocDraft('退回期间仍在编写的内容');
+    gate.resolve();await pending;
+    assert.equal(local.store.getState().docDraft,'退回期间仍在编写的内容');
+    assert.equal(local.receipts.getSnapshot().receipt.rolledBackAt,'2026-10-10T08:02:00Z');
+    assert.equal(local.receipts.getSnapshot().rollingBack,false);
+  });
+});
+
+test('读取改动失败不把已完成更新报告成失败', async () => {
+  await fixture({connections:[connection('one')],route:(call,state,json)=>{
+    if(call.pathname.endsWith('/update-receipt'))return json({error:'改动暂时无法读取'},503);
+  }},async({local})=>{
+    await local.host.requestUpdate();
+    assert.equal(local.connections.getSnapshot().operation.phase,'completed');
+    assert.match(local.receipts.getSnapshot().error,/改动暂时无法读取/);
+  });
+});
+
+test('换主题后迟到的改动记录不能串进新的脉络',async()=>{
+  const gate=deferred();let held=false,block=false;
+  await fixture({route:async(call,state,json)=>{
+    if(call.pathname.endsWith('/update-receipt')){
+      const id=call.pathname.split('/')[3];if(block&&id==='a'){held=true;await gate.promise;}
+      return json({topicId:id,currentRevision:1,receipt:savedReceipt(`update-${id}`)});
+    }
+  }},async({local})=>{
+    block=true;const pending=local.receipts.refresh();await waitFor(()=>held);
+    await local.host.switchProject('b');gate.resolve();await pending;
+    assert.equal(local.receipts.getSnapshot().topicId,'b');assert.equal(local.receipts.getSnapshot().receipt.id,'update-b');
+  });
+});
+
+
+test('节点短说明编辑期间不能整次退回或被同步覆盖', async () => {
+  await fixture({route:(call,state,json)=>call.pathname.endsWith('/update-receipt') ? json({topicId:'a',currentRevision:1,receipt:savedReceipt()}) : undefined}, async ({local,state}) => {
+    local.store.getState().setEditingNodeBody('j1');
+    await local.receipts.rollback();
+    assert.equal(local.store.getState().editingNodeBodyId,'j1');
+    assert.match(local.receipts.getSnapshot().error,/先完成或取消当前编辑/);
+    assert.equal(state.calls.filter(call=>call.method==='POST').length,0);
+    local.store.getState().setEditingNodeBody(null);
+  });
+});
+
+
+test('回执隐藏段末节点锚，不改变正文中的普通文字和源字符串', () => {
+  const source='> ◆ 使用市场也要付成本 ^j15\n\n正文说明，^j15 在句中是原材料的一部分。\n> ◇ 新的条件 ^j23  \r\n';
+  assert.equal(receiptDisplayText(source),'> ◆ 使用市场也要付成本\n\n正文说明，^j15 在句中是原材料的一部分。\n> ◇ 新的条件\r\n');
+  assert.ok(source.includes('成本 ^j15'));
 });

@@ -12,6 +12,7 @@ import { appendSourceLog, editSourceLog, renderSourceLog } from '../dist/core.mj
 const entry = fileURLToPath(new URL('../web/localRuntime.ts',import.meta.url));
 const nodePath = fileURLToPath(new URL('../node_modules',import.meta.url));
 const cacheRoot = path.join(nodePath,'.cache');
+const coaseCase=JSON.parse(await readFile(new URL('./fixtures/coase-expression-case.json',import.meta.url),'utf8'));
 const baseLedger = '[场次 2026-09-06T10:00:00Z · 合成回放]\n走向 p3 [主题]\n只处理合成验证材料。\n◆ j1 [验证] 原判断\n先保留原文。\n⏸ j2 [验证] 暂缓扩展\n最小闭环验证后再决定。\n← j2 j1';
 const output = '<revise id="n1" title="整理后的合成判断"/>\n<prose domain="验证" refs="n1,n2">先保留原文，完成最小闭环验证后再决定是否扩展。</prose>';
 const deferred = () => {let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
@@ -37,7 +38,7 @@ async function fixture(execute,run,options = {}) {
     const browserCache=new Map();
     globalThis.localStorage={getItem:key=>browserCache.get(key)??null,setItem:(key,value)=>browserCache.set(key,value),removeItem:key=>browserCache.delete(key)};
     globalThis.fetch=(url,options)=>previousFetch(new URL(String(url),origin),options);
-    const a=await backend.createTopic('面板回放A','只处理合成验证材料。',{ledger:baseLedger,raw:baseLedger});
+    const a=await backend.createTopic(options.coase?coaseCase.name:'面板回放A',options.coase?coaseCase.scope:'只处理合成验证材料。',options.coase?coaseCase:{ledger:baseLedger,raw:baseLedger});
     const b=await backend.createTopic('面板回放B','只处理合成验证材料。',{ledger:baseLedger.replace('原判断','另一主题判断'),raw:baseLedger});
     browserCache.set('gft-local:selected',a.id);
     const errors=[];
@@ -489,7 +490,7 @@ test('状态轮询断开后仍取消后台计算，失败退出不遗留占队�
   });
 });
 
-test('关闭面板使已完成但响应在途的refine失效，不产生迟到保存',async()=>{
+test('关闭面板使已完成但响应在途的局部整理失效，不产生迟到保存',async()=>{
   const held=deferred(),release=deferred();
   await fixture(async()=>'<node title="关闭后的迟到润色"/>',async({local,a,origin,fetch})=>{
     const before=await backend.getTopic(a.id);
@@ -575,4 +576,181 @@ test('页面退出只保活小型取消请求，连续dispose两次仅取消一�
       assert.deepEqual(await backend.getTopic(a.id),before);
     } finally {release.resolve();await running;}
   });
+});
+
+
+test('原案例未直连两点可以连线，自动说明只处理该线；圈圈状态不把整个图设为生成中',async()=>{
+  const entered=deferred(),release=deferred();let calls=0;
+  await fixture(async request=>{
+    calls++;assert.equal(request.action,'relation');
+    const input=JSON.parse(request.user);
+    assert.deepEqual(Object.keys(input),['from','to','reason']);
+    assert.equal(input.from.id,'j15');assert.equal(input.to.id,'j17');
+    entered.resolve();await release.promise;
+    return '<edge from="j15" to="j17" reason="市场能协调，使用它仍要付寻找和订约的成本。"/>';
+  },async({local,a,errors})=>{
+    const initial=local.store.getState(),originalDoc=initial.doc;
+    assert.equal(initial.edges.some(e=>e.from==='j15'&&e.to==='j17'),false);
+    assert.equal(initial.addEdgeManual('j17','j15'),true); // 反向发起仍沿既有思考顺序。
+    await entered.promise;
+    const pending=local.store.getState(),edge=pending.edges.find(e=>e.from==='j15'&&e.to==='j17');
+    assert.deepEqual([...pending.explainingEdgeIds],[edge.id]);
+    assert.equal(pending.isGenerating,false);assert.equal(pending.isTidying,false);assert.equal(pending.isRefining,false);
+    assert.equal(pending.doc,originalDoc);release.resolve();
+    await waitFor(()=>local.store.getState(),s=>s.explainingEdgeIds.size===0&&s.edges.find(e=>e.id===edge.id)?.reason);
+    await waitFor(()=>backend.getView(a.id),view=>view.graph.edges.find(e=>e.from==='j15'&&e.to==='j17')?.reason);
+    assert.equal(calls,1);assert.deepEqual(errors,[]);
+    assert.equal(local.store.getState().doc,originalDoc);
+    assert.equal(local.store.getState().nodes.length,initial.nodes.length);
+  },{coase:true});
+});
+
+test('承接分析可以取消或被手工编辑取代，迟到的AI不覆盖人工说明',async()=>{
+  const entered=deferred(),release=deferred();
+  await fixture(async request=>{entered.resolve();await release.promise;const input=JSON.parse(request.user);return `<edge from="${input.from.id}" to="${input.to.id}" reason="迟到的模型说明。"/>`;},async({local})=>{
+    assert.equal(local.store.getState().addEdgeManual('j15','j17'),true);
+    await entered.promise;
+    const edge=local.store.getState().edges.find(e=>e.from==='j15'&&e.to==='j17');
+    local.store.getState().editEdgeReason(edge.id,'我希望比较市场协调与使用市场的代价。');
+    assert.equal(local.store.getState().explainingEdgeIds.size,0);
+    release.resolve();
+    await new Promise(resolve=>setTimeout(resolve,100));
+    assert.equal(local.store.getState().edges.find(e=>e.id===edge.id).reason,'我希望比较市场协调与使用市场的代价。');
+  },{coase:true});
+});
+
+test('快速连两条线逐条分析，结果不互踩且只保存对应说明',async()=>{
+  let calls=0;
+  await fixture(async request=>{calls++;const input=JSON.parse(request.user);return `<edge from="${input.from.id}" to="${input.to.id}" reason="比较这两点各自承担的协作成本与安排方式。"/>`;},async({local,a,errors})=>{
+    const st=local.store.getState();st.addEdgeManual('j15','j17');st.addEdgeManual('j16','j19');
+    assert.equal(local.store.getState().explainingEdgeIds.size,2);
+    await waitFor(()=>local.store.getState(),s=>s.explainingEdgeIds.size===0&&s.edges.filter(e=>(e.from==='j15'&&e.to==='j17')||(e.from==='j16'&&e.to==='j19')).every(e=>e.reason));
+    await waitFor(()=>backend.getView(a.id),view=>view.graph.edges.filter(e=>(e.from==='j15'&&e.to==='j17')||(e.from==='j16'&&e.to==='j19')).every(e=>e.reason));
+    assert.equal(calls,2);assert.deepEqual(errors,[]);
+  },{coase:true});
+});
+
+test('long standalone caption gets one focused retry and never saves a cut sentence',async()=>{
+  let calls=0;
+  await fixture(async request=>{
+    calls++;const input=JSON.parse(request.user);
+    const reason=calls===1?'x'.repeat(33):'Compare internal vs market cost.';
+    return '<edge from="'+input.from.id+'" to="'+input.to.id+'" reason="'+reason+'"/>';
+  },async({local,a,errors})=>{
+    local.store.getState().addEdgeManual('j15','j17');
+    await waitFor(()=>local.store.getState(),s=>s.explainingEdgeIds.size===0&&s.edges.find(e=>e.from==='j15'&&e.to==='j17')?.reason);
+    const expected='Compare internal vs market cost.';
+    assert.equal(local.store.getState().edges.find(e=>e.from==='j15'&&e.to==='j17').reason,expected);
+    assert.equal(calls,2);assert.deepEqual(errors,[]);
+    await waitFor(()=>backend.getView(a.id),v=>v.graph.edges.find(e=>e.from==='j15'&&e.to==='j17')?.reason===expected);
+  },{coase:true});
+});
+
+test('selected-object deletion persists a real disconnection, keeps endpoints and can restore explanation',async()=>{
+  await fixture(async()=>{throw new Error('No model call is expected for deletion.');},async({local,a})=>{
+    const initial=local.store.getState();
+    const edge=initial.edges.find(e=>e.from==='j15'&&e.to==='j16');
+    const nodeIds=initial.nodes.map(n=>n.id),raw=initial.raw;
+    initial.setSelectedEdges([edge.id]);
+    initial.deleteElements([], [edge.id]);
+    assert.equal(local.store.getState().selectedEdgeIds.size,0);
+    assert.deepEqual(local.store.getState().nodes.map(n=>n.id),nodeIds);
+    assert.equal(local.store.getState().raw,raw);
+    await waitFor(()=>backend.getView(a.id),v=>!v.graph.edges.some(e=>e.from===edge.from&&e.to===edge.to));
+    local.store.getState().undo();
+    await waitFor(()=>backend.getView(a.id),v=>v.graph.edges.some(e=>e.from===edge.from&&e.to===edge.to&&e.reason===edge.reason));
+    const restored=local.store.getState().edges.find(e=>e.id===edge.id);
+    assert.equal(restored.reason,edge.reason);
+  },{coase:true});
+});
+
+
+test('mixed node and line deletion persists together and one undo restores both',async()=>{
+  await fixture(async()=>{throw new Error('Deletion needs no model.');},async({local,a})=>{
+    const initial=local.store.getState();
+    const edge=initial.edges.find(e=>e.from==='j15'&&e.to==='j16');
+    const node=initial.nodes.find(n=>n.id==='j23');
+    const ledger=initial.ledger,raw=initial.raw;
+    initial.setSelectedNodes([node.id]);initial.setSelectedEdges([edge.id]);
+    initial.deleteElements([node.id],[edge.id]);
+    assert.equal(local.store.getState().selectedNodeIds.size,0);
+    assert.equal(local.store.getState().selectedEdgeIds.size,0);
+    await waitFor(()=>backend.getView(a.id),v=>!v.graph.nodes.some(n=>n.id===node.id)&&!v.graph.edges.some(e=>e.from===edge.from&&e.to===edge.to));
+    assert.equal(local.store.getState().raw,raw);
+    local.store.getState().undo();
+    assert.equal(local.store.getState().ledger,ledger);
+    await waitFor(()=>backend.getView(a.id),v=>v.graph.nodes.some(n=>n.id===node.id)&&v.graph.edges.some(e=>e.from===edge.from&&e.to===edge.to&&e.reason===edge.reason));
+  },{coase:true});
+});
+test('selection deletion preserves an active text draft',async()=>{
+  await fixture(async()=>{throw new Error('Deletion needs no model.');},async({local})=>{
+    const initial=local.store.getState(),edge=initial.edges[0],ledger=initial.ledger;
+    initial.setEditingEdge(edge.id);
+    initial.deleteElements([], [edge.id]);
+    assert.equal(local.store.getState().ledger,ledger);
+    initial.setEditingEdge(null);
+  },{coase:true});
+});
+
+
+test('local node refinement edits its body and chapter through the same scoped contract',async()=>{
+  const entered=deferred(),release=deferred();let calls=0;
+  const note='Avoiding renegotiation still requires coordination.';
+  await fixture(async request=>{
+    calls++;assert.match(request.system,/2026-10-11.5/);
+    entered.resolve();await release.promise;
+    return '<revise id="n2" body="'+note+'"/>\\n<prose domain="① 市场能协作，为何还要企业" refs="n1,n2">Market coordination and internal arrangements differ in their agreed authority. '+note+'</prose>';
+  },async({local,a,errors})=>{
+    const before=local.store.getState(),ledger=before.ledger;
+    const run=before.refineNode('j16');await entered.promise;
+    assert.equal(local.store.getState().isTidying,true);
+    assert.deepEqual([...local.store.getState().tidyScopeIds],['j16']);
+    local.store.getState().setSelectedNodes(['j20']);
+    assert.deepEqual([...local.store.getState().tidyScopeIds],['j16']);
+    release.resolve();await run;
+    assert.equal(local.store.getState().ledgerState.judgments.get('j16').content,note);
+    for(const node of before.nodes.filter(n=>n.id!=='j16')) {
+      assert.equal(local.store.getState().ledgerState.judgments.get(node.id).content,before.ledgerState.judgments.get(node.id).content);
+    }
+    assert.match(local.store.getState().doc,/Avoiding renegotiation still requires coordination/);
+    assert.equal(local.store.getState().tidyScopeIds,null);assert.equal(calls,1);assert.deepEqual(errors,[]);
+    await waitFor(()=>backend.getView(a.id),v=>v.graph.nodes.find(n=>n.id==='j16').content===note);
+    local.store.getState().undo();assert.equal(local.store.getState().ledger,ledger);
+  },{coase:true});
+});
+
+test('node refinement rejects edits outside its submitted scope',async()=>{
+  await fixture(async()=>'<revise id="n5" title="Outside requested node"/>',async({local})=>{
+    const before=local.store.getState().ledger;
+    await local.store.getState().refineNode('j16');
+    assert.equal(local.store.getState().ledger,before);
+    assert.match(local.store.getState().error,/选区外/);
+    assert.equal(local.store.getState().tidyScopeIds,null);
+  },{coase:true});
+});
+
+test('removed relations cannot remain as invisible selected delete targets',async()=>{
+  await fixture(async()=>{throw Error('No model call.');},async({local})=>{
+    const initial=local.store.getState(),edge=initial.edges[0];
+    initial.setSelectedNodes(['j15']);initial.setSelectedEdges([edge.id]);
+    initial.deleteEdge(edge.id);
+    assert.equal(local.store.getState().selectedEdgeIds.size,0);
+    assert.deepEqual([...local.store.getState().selectedNodeIds],['j15']);
+  },{coase:true});
+});
+
+test('unified node deletion retains undo metadata and cancels affected relation computation',async()=>{
+  const entered=deferred(),release=deferred();
+  await fixture(async request=>{
+    entered.resolve();await release.promise;const input=JSON.parse(request.user);
+    return '<edge from="'+input.from.id+'" to="'+input.to.id+'" reason="Compare the two arrangements."/>';
+  },async({local,a})=>{
+    local.store.getState().addEdgeManual('j15','j17');await entered.promise;
+    local.store.getState().deleteElements(['j17'],[]);
+    assert.equal(local.store.getState().lastDeleted.node.id,'j17');
+    assert.equal(local.store.getState().explainingEdgeIds.size,0);
+    release.resolve();
+    await waitFor(()=>backend.getView(a.id),v=>!v.graph.nodes.some(n=>n.id==='j17'));
+    assert.equal(local.store.getState().nodes.some(n=>n.id==='j17'),false);
+  },{coase:true});
 });

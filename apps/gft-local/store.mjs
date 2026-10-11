@@ -58,6 +58,118 @@ export async function getSnapshot(id) {
   const { id: topicId, name, scope, revision, ledger, raw, panel, materialRevision } = await getTopic(id);
   return { topic: { id: topicId, name, scope, revision, ledger, raw, panel, materialRevision } };
 }
+// One persistent receipt describes actual published content, never a model's
+// explanation of its own work. Private snapshots support returning this update.
+const receiptNode = node => node ? Object.fromEntries(['id','title','content','mark','domain','superseded'].map(key => [key,node[key]])) : null;
+const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+function chapterText(doc) {
+  const chapters = new Map();
+  let domain = '', lines = [], fence = null;
+  const flush = () => { if (lines.length || domain) chapters.set(domain,[chapters.get(domain),lines.join('\n').trim()].filter(Boolean).join('\n\n')); lines=[]; };
+  for (const line of doc.split('\n')) {
+    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker) {
+      if (!fence) fence=marker;
+      else if (marker[0]===fence[0] && marker.length>=fence.length) fence=null;
+      lines.push(line);continue;
+    }
+    const heading = !fence && /^##\s+(.+?)\s*$/.exec(line);
+    if (heading) { flush();domain=heading[1]; } else lines.push(line);
+  }
+  flush();return chapters;
+}
+function receiptChanges(before, after) {
+  const oldNodes = new Map(before.graph.nodes.map(node => [node.id,receiptNode(node)]));
+  const newNodes = new Map(after.graph.nodes.map(node => [node.id,receiptNode(node)]));
+  const nodes = [...new Set([...oldNodes.keys(),...newNodes.keys()])].flatMap(id => {
+    const a=oldNodes.get(id) || null,b=newNodes.get(id) || null;
+    return same(a,b) ? [] : [{id,kind:!a?'added':!b?'removed':'modified',before:a,after:b}];
+  });
+  const edgeMap = view => new Map(view.graph.edges.map(({from,to,reason}) => [`${from}:${to}`,{from,to,...(reason?{reason}:{})}]));
+  const oldEdges=edgeMap(before),newEdges=edgeMap(after);
+  const a=chapterText(before.doc),b=chapterText(after.doc);
+  return {nodes,edges:{modified:[...newEdges].flatMap(([key,edge])=>oldEdges.has(key)&&(oldEdges.get(key).reason||'')!==(edge.reason||'')?[{from:edge.from,to:edge.to,before:oldEdges.get(key).reason||'',after:edge.reason||''}]:[]),added:[...newEdges].filter(([key])=>!oldEdges.has(key)).map(([,edge])=>edge),removed:[...oldEdges].filter(([key])=>!newEdges.has(key)).map(([,edge])=>edge)},
+    chapters:[...new Set([...a.keys(),...b.keys()])].flatMap(domain => a.get(domain)===b.get(domain)?[]:[{domain,before:a.get(domain)??null,after:b.get(domain)??null}]),
+    doc:before.doc===after.doc?null:{before:before.doc,after:after.doc},
+    name:before.name===after.name?null:{before:before.name,after:after.name}};
+}
+const changedReceipt = receipt => !!(receipt.changes.nodes.length || receipt.changes.edges.added.length || receipt.changes.edges.removed.length || receipt.changes.edges.modified?.length || receipt.changes.doc || receipt.changes.name);
+function updateReceipt(topic, delta, task) {
+  const after={...topic,...delta};
+  return {id:task.id,action:task.action,baseRevision:topic.revision,resultRevision:topic.revision+1,createdAt:new Date().toISOString(),
+    source:task.source?{provider:task.source.provider,sessionTitle:task.source.title || '',messageCount:task.source.messages?.length || 0}:null,
+    changes:receiptChanges(viewTopic(topic),viewTopic(after)),
+    before:{ledger:topic.ledger,name:topic.name,panel:topic.panel || null},after:{ledger:after.ledger,name:after.name}};
+}
+const operationRecords = topic => topic.operationHistory || (topic.latestUpdateReceipt ? [topic.latestUpdateReceipt] : []);
+const contentIdentity = topic => {
+  const view=viewTopic(topic);
+  return {name:view.name,doc:view.doc,nodes:view.graph.nodes.map(receiptNode),edges:view.graph.edges.map(({from,to,reason})=>({from,to,...(reason?{reason}:{})}))};
+};
+function publicReceipt(topic, saved) {
+  const {before,after,...receipt}=saved;
+  const active=operationRecords(topic).filter(item=>!item.rolledBackAt && changedReceipt(item));
+  const rollbackBlockedReason=active.at(-1)?.id!==saved.id && changedReceipt(saved) && !saved.rolledBackAt
+    ? '更新之后已有其他修改，请先撤回后面的操作。' : receiptBlock(topic,saved);
+  return {...receipt,canRollback:!rollbackBlockedReason,rollbackBlockedReason};
+}
+export async function getOperations(id) {
+  const topic=await getTopic(id);
+  return {topicId:id,currentRevision:topic.revision,operations:operationRecords(topic).slice().reverse().map(item=>publicReceipt(topic,item))};
+}
+export async function localFileLocation(id) {
+  const topic=await getTopic(id);
+  return {topicId:id,name:topic.name,path:file('topics',id),directory:path.dirname(file('topics',id)),dataDirectory:homeDir()};
+}
+function receiptBlock(topic, receipt) {
+  if (receipt.rolledBackAt) return '这次更新已退回。';
+  if (!changedReceipt(receipt)) return '这次更新没有改变图文内容。';
+  // Reading a node may save its unread flag. Such metadata saves do not prevent
+  // rollback; any content edit, rename, or relation change does.
+  if (!same(contentIdentity(topic),contentIdentity({...topic,...receipt.after}))) return '更新之后已有其他修改，不能整次退回，以免覆盖后续工作。';
+  return null;
+}
+export async function getUpdateReceipt(id) {
+  const topic=await getTopic(id),saved=topic.latestUpdateReceipt;
+  if (!saved) return {topicId:id,currentRevision:topic.revision,receipt:null};
+  return {topicId:id,currentRevision:topic.revision,receipt:publicReceipt(topic,saved)};
+}
+function restoredLedger(receipt, at, currentLedger=receipt.after.ledger) {
+  const maximum = ledger => [...ledger.matchAll(/^(?:走向\s+p|[◆◇？?✗⏸]\s+j)(\d+)\b/gm)].reduce((high,match)=>Math.max(high,Number(match[1])),0);
+  const high=Math.max(maximum(receipt.after.ledger),maximum(currentLedger)),prior=maximum(receipt.before.ledger);
+  const lines=[receipt.before.ledger.replace(/\n+$/,''),`[场次 ${at} · local-agent · 退回更新 ${receipt.id}]`];
+  // Source receipts keep referring to discarded node IDs. Reserve the consumed
+  // shared j/p counter with a deleted record so later work cannot recycle them.
+  if (high>prior) lines.push(`走向 p${high} [主题]`,`本人 删 p${high}`);
+  return lines.filter(Boolean).join('\n');
+}
+export async function rollbackOperation(id, baseRevision, receiptId) {
+  return mutateTopic(id,baseRevision,topic=>{
+    const records=operationRecords(topic),receipt=records.find(item=>item.id===receiptId);
+    if (!receipt) throw fail('所选操作不存在，请刷新后查看。',409);
+    const blocked=publicReceipt(topic,receipt).rollbackBlockedReason;
+    if (blocked) throw fail(blocked,409);
+    const at=new Date().toISOString();
+    const updated={...receipt,rolledBackAt:at,rollbackRevision:topic.revision+1};
+    const delta={ledger:restoredLedger(receipt,at,topic.ledger),name:receipt.before.name,
+      operationHistory:records.map(item=>item.id===receiptId?updated:item),_skipOperation:true,
+      ...(topic.latestUpdateReceipt?.id===receiptId?{latestUpdateReceipt:updated}:{})};
+    if (topic.panel || receipt.before.panel) {
+      const previous=receipt.before.panel || {},current=topic.panel || {};
+      const unread=new Map((current.nodes || []).map(node=>[node.id,node.unread]));
+      delta.panel={...previous,watermarks:current.watermarks || previous.watermarks || {},
+        nodes:(previous.nodes || []).map(node=>({...node,...(unread.has(node.id)?{unread:unread.get(node.id)}:{})})),
+        doc:viewTopic({...topic,...delta}).doc};
+    }
+    return delta;
+  });
+}
+export async function rollbackUpdate(id, baseRevision, receiptId) {
+  const topic=await getTopic(id);
+  if (topic.latestUpdateReceipt?.id!==receiptId) throw fail('所选更新已变化，请刷新后查看最新变化。',409);
+  return rollbackOperation(id,baseRevision,receiptId);
+}
+
 export {atomic as writeJsonAtomic, locked as withRecordLock};
 export async function getTopicIndex(id) {
   const topic = await jsonRead(file('topics', id));
@@ -92,6 +204,14 @@ async function mutateTopic(id, baseRevision, change, taskId, advanceRevision = t
     if (current.revision !== baseRevision) throw fail('主题已被另一处修改。请重新读取后再保存，当前内容未被覆盖。', 409);
     const delta = await change(current);
     const next = { ...current, ...delta, revision: current.revision + (advanceRevision ? 1 : 0), updatedAt: advanceRevision ? new Date().toISOString() : current.updatedAt };
+    if (advanceRevision && !delta._skipOperation && !next.archived) {
+      const appended=typeof delta.ledger==='string'&&delta.ledger.startsWith(current.ledger)?delta.ledger.slice(current.ledger.length):'';
+      const note=[...appended.matchAll(/^\[场次 .* · .* · (更新|整理|重画)[^\]]*\]$/gm)].at(-1)?.[1];
+      const action=delta._operationAction || ({更新:'update',整理:'tidy',重画:'redraw'}[note] ?? 'edit');
+      const record=delta.latestUpdateReceipt || updateReceipt(current,delta,{id:taskId || randomUUID(),action});
+      if (changedReceipt(record)) next.operationHistory=[...operationRecords(current),record].slice(-30);
+    }
+    delete next._skipOperation;delete next._operationAction;
     if (taskId) next.appliedTasks = { ...current.appliedTasks, [taskId]: next.revision };
     const view = viewTopic(next);
     // Theme is derived from the same current record; manual Doc changes must affect future extraction.
@@ -105,9 +225,9 @@ async function mutateTopic(id, baseRevision, change, taskId, advanceRevision = t
 }
 export const saveDoc = (id, revision, doc) => {
   if (typeof doc !== 'string') throw fail('文档必须是文本');
-  return mutateTopic(id, revision, topic => editDocument(topic, doc));
+  return mutateTopic(id, revision, topic => ({...editDocument(topic, doc),_operationAction:'doc'}));
 };
-export const saveGraph = (id, revision, op) => mutateTopic(id, revision, topic => editGraph(topic, op));
+export const saveGraph = (id, revision, op) => mutateTopic(id, revision, topic => ({...editGraph(topic, op),_operationAction:'graph'}));
 // The shared panel owns all graph/Doc actions. Persist its resulting ledger once,
 // rather than applying the model response a second time on the server.
 export const saveState = async (id, revision, map) => {
@@ -134,7 +254,7 @@ export const saveState = async (id, revision, map) => {
 };
 export const renameTopic = (id, revision, name) => {
   if (typeof name !== 'string' || !name.trim()) throw fail('名称不能为空');
-  return mutateTopic(id, revision, () => ({ name: name.trim() }));
+  return mutateTopic(id, revision, () => ({ name: name.trim(),_operationAction:'rename' }));
 };
 export const archiveTopic = (id, revision) => mutateTopic(id, revision, async () => ({ archived: true, deletionAccount: (await localAccountIdentity(homeDir()))?.key ?? null }));
 
@@ -334,7 +454,7 @@ export const getTask = id => jsonRead(file('tasks', id));
 const taskStatus = ({ input, output, request, source, ...task }) => ({ ...task, ...(source ? {source: { provider: source.provider, id: source.id, connectionId: source.connectionId, generation: source.generation, title: source.title, hasMore: source.hasMore, stage: source.stage }} : {}) });
 export const getTaskStatus = async id => taskStatus(await getTask(id));
 export async function createComputation(topicId, revision, request) {
-  if (!request || !['update','redraw','tidy','refine','theme'].includes(request.action)
+  if (!request || !['update','redraw','tidy','refine','theme','relation'].includes(request.action)
     || typeof request.system !== 'string' || typeof request.user !== 'string'
     || request.system.length + request.user.length > 500000) throw fail('模型请求无效');
   const topic = await getTopic(topicId);
@@ -402,8 +522,8 @@ export async function completeTask(id, output) {
           taskIds: [...(checkpoint?.taskIds || []), id], hasMore: task.source.hasMore,
         }}};
       }
-      const delta = applyTask(topic, task.action, output);
-      if (!task.source) return task.action === 'update' ? {...delta, raw: appendSourceLog(topic.raw, [{
+      const delta = {...applyTask(topic, task.action, output),_operationAction:task.action};
+      if (!task.source) return task.action === 'update' ? {...delta, latestUpdateReceipt:updateReceipt(topic,delta,task), raw: appendSourceLog(topic.raw, [{
         v:1,provider:'local-agent',sessionId:'submitted',id:task.id,role:'user',content:task.input,title:'Agent 提交的材料',ts:Date.parse(task.createdAt),
       }])} : delta;
       const key = `${task.source.connectionId}:${task.source.generation}`;
@@ -419,7 +539,7 @@ export async function completeTask(id, output) {
       };
       const sourceImports = {...topic.sourceImports};
       if (task.source.stage === 'publish') delete sourceImports[key];
-      return {...delta,raw:appendSourceLog(topic.raw,sourceRecordsFromEvents([event])),sourceImports,sourceCursors:{...topic.sourceCursors,[key]:{cursor:task.source.toCursor,taskId:id,updatedAt:new Date().toISOString()}},sourceUpdates:{...topic.sourceUpdates,[id]:event}};
+      return {...delta,...(task.action==='update'?{latestUpdateReceipt:updateReceipt(topic,delta,task)}:{}),raw:appendSourceLog(topic.raw,sourceRecordsFromEvents([event])),sourceImports,sourceCursors:{...topic.sourceCursors,[key]:{cursor:task.source.toCursor,taskId:id,updatedAt:new Date().toISOString()}},sourceUpdates:{...topic.sourceUpdates,[id]:event}};
     }, id, task.action !== 'compact');
     // If topic save succeeded before task status was persisted, replay only the
     // receipt, even when the source was disconnected or the user edited later.

@@ -42,6 +42,7 @@ test('共享核心的完整 TypeScript 依赖闭包可独立检查，不经过�
     'src/service/sourceLog.ts',
     'src/service/sourceCompaction.ts',
     'src/service/mapDocContract.ts',
+    'src/service/relationReason.ts',
   ]);
   const sources = program.getSourceFiles().filter(file => !file.isDeclarationFile).map(file => path.relative(root, file.fileName).replaceAll('\\', '/'));
   for (const file of sources) {
@@ -71,5 +72,5 @@ test('宿主共用生成请求与最终解析，重画和增量使用同一套�
   assert.equal(result.edges.length, 1);
   assert.equal(result.docMarks.length, 1);
   assert.equal(result.digest, '样本数尚未决定。');
-  assert.equal(core.buildGenerateRequest('原始记录', { ...options, rewrite: true }).system, core.buildRewritePrompt(options.theme));
+  assert.equal(core.buildGenerateRequest('原始记录', { ...options, rewrite: true }).system, core.buildRewritePrompt(options.theme,core.serializePreviousMap(first).text));
 });

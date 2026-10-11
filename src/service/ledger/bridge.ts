@@ -4,6 +4,7 @@
  * 账是唯一正本；nodes / edges / doc / groupMap 全是从账折算出来的缓存，形状保持 FocusCard/ThinkingEdge，
  * 现有画布、文档面板、注入、导出一个字不改照样工作。所有写入＝先造账行，再折算。
  */
+import {checkedRelationReason} from '../relationReason';
 import type { FocusCard } from '../../type/focusCard';
 import type { ThinkingEdge } from '../../type/thinkingMap';
 import type { DocSegment, WhiteboxMark } from '../whiteboxDoc';
@@ -48,7 +49,7 @@ export function deriveCaches(st: LedgerState, projectId: string, unreadIds: Set<
     ...(n.superseded ? { superseded: true } : {}),
     ...(unreadIds.has(n.id) ? { unread: true } : {}),
   }));
-  const edges: ThinkingEdge[] = g.edges.map(e => ({ id: e.id, from: e.from, to: e.to, type: 'relates' as const }));
+  const edges: ThinkingEdge[] = g.edges.map(e => ({ id: e.id, from: e.from, to: e.to, type: 'relates' as const, ...(e.reason ? {reason:e.reason} : {}) }));
   const groupMap = new Map(nodes.flatMap(n => (n.group ? [[n.id, n.group] as const] : [])));
   return { nodes, edges, doc: renderDoc(st), groupMap };
 }
@@ -129,6 +130,7 @@ export interface GenerateLike {
   docSegments?: DocSegment[];
   docEntryNodeIds?: string[];
   docMarks?: Array<{ anchor: string; to: WhiteboxMark; reason: string }>;
+  docRevisions?: Array<{ anchor: string; title?: string; body: string }>;
 }
 
 /** 只用于新 AI 产出；历史账和人工编辑不受生成格式约束。 */
@@ -211,21 +213,57 @@ export function linesFromGenerate(
     // 只继承端点能唯一对应的原始连接；其余连接采用本次重画明确给出的关系。
     for (const e of renderGraph(source).edges) {
       const from = bySource.get(e.from), to = bySource.get(e.to);
-      if (from && to && from !== to) lines.push(relationLine(to, from));
+      if (from && to && from !== to) {
+        lines.push(relationLine(to, from));
+        if (e.reason !== undefined) lines.push(aiDecision.edgeNote(to,from,e.reason));
+      }
     }
   }
   // 边：新节点走 idMap；旧节点 id 已经是账 id；重画时所有节点都是新的
   const known = new Set<string>([...liveJudgments(st).map(j => j.id), ...allEntryIds]);
   const existing = new Set((opts.isUpdate ? st.relations : parseLedger(lines.join('\n')).relations).map(r => `${r.from}→${r.to}`));
+  const currentReasons = new Map(renderGraph(opts.isUpdate ? st : parseLedger(lines.join('\n'))).edges.map(e => [`${e.from}→${e.to}`,e.reason ?? '']));
+  const relationChanged = new Set<string>();
   for (const e of result.edges) {
     const from = idMap.get(e.from) ?? e.from;
     const to = idMap.get(e.to) ?? e.to;
     if (from === to || !known.has(from) || !known.has(to)) continue;
     if (!opts.isUpdate && !(allEntryIds.includes(from) && allEntryIds.includes(to))) continue; // 重画只连新代
     const key = `${from}→${to}`;
-    if (existing.has(key)) continue;
-    existing.add(key);
-    lines.push(relationLine(to, from));
+    if (!existing.has(key)) {
+      existing.add(key);
+      lines.push(relationLine(to, from));
+    }
+    const currentReason = currentReasons.get(key);
+    if (e.reason !== undefined && e.reason.trim() !== (currentReason ?? '')) {
+      lines.push(aiDecision.edgeNote(to,from,checkedRelationReason(e.reason)));
+      currentReasons.set(key,e.reason.trim());
+      if (opts.isUpdate && st.judgments.has(from) && st.judgments.has(to)) {
+        relationChanged.add(st.judgments.get(from)!.domain);
+        relationChanged.add(st.judgments.get(to)!.domain);
+      }
+    }
+  }
+  // 原位补充同一判断，不分配新编号、不改关系；与受影响章节一起校验后原子保存。
+  const revised = new Set<string>();
+  for (const revision of result.docRevisions ?? []) {
+    const j = st.judgments.get(revision.anchor);
+    if (!opts.isUpdate || !j || j.deleted || revised.has(revision.anchor) || !revision.body.trim()) {
+      throw new Error('节点修订引用不存在、重复或不适用，已保留原图文。');
+    }
+    if (revision.title !== undefined) {
+      const title = revision.title.trim();
+      const probe = parseLedger(judgmentLines('j0', '◇', '正文', title).join('\n'));
+      const check = probe.judgments.get('j0');
+      if (!title || probe.judgments.size !== 1 || !check || check.title !== title || check.deleted
+        || check.content || check.mergedFrom.length || check.rawFrom?.length || probe.prose.length
+        || probe.relations.length || probe.cuts.size || probe.sessions.length || probe.warnings.length) {
+        throw new Error('节点修订标题包含无效指令，已保留原图文。');
+      }
+      if (title !== j.title) lines.push(aiDecision.retitle(j.id, title));
+    }
+    if (revision.body.trim() !== j.content.trim()) lines.push(...aiDecision.rewrite(j.id, revision.body));
+    revised.add(j.id);
   }
   // AI 改档（轻量整理：改档+留痕）
   for (const m of result.docMarks ?? []) {
@@ -238,10 +276,11 @@ export function linesFromGenerate(
   const chapterEntries = [...(opts.isUpdate ? liveJudgments(st) : []), ...liveJudgments(generated)];
   const chapterProse = [...(opts.isUpdate ? liveProse(st) : []), ...liveProse(generated)];
   if (opts.requireChapterDoc) {
-    const changed = new Set(liveJudgments(generated).map(j => j.domain));
+    const changed = new Set([...liveJudgments(generated).map(j => j.domain), ...relationChanged]);
     for (const segment of result.docSegments ?? []) {
       if (segment.domain !== '主题' && segment.domain !== '主线') changed.add(segment.domain);
     }
+    for (const revision of result.docRevisions ?? []) changed.add(st.judgments.get(revision.anchor)!.domain);
     for (const mark of result.docMarks ?? []) {
       const entry = chapterEntries.find(j => j.id === mark.anchor);
       if (entry) changed.add(entry.domain);
@@ -287,7 +326,7 @@ export function tidyInput(st: LedgerState, unreadIds: Set<string>, raw?: LedgerS
     question: j.mark === '？' || j.mark === '⏸', unread: unreadIds.has(j.id),
     sourceIds: sourcesOf(j.id),
   }));
-  const edges = renderGraph(st).edges.map(e => [e.from, e.to] as [string, string]);
+  const edges = renderGraph(st).edges.map(e => [e.from, e.to, e.reason] as [string, string, string?]);
   const byDomain = new Map<string, string[]>();
   for (const p of liveProse(st)) {
     const text = p.lines.join('\n').trim();
@@ -303,6 +342,7 @@ export function tidyInput(st: LedgerState, unreadIds: Set<string>, raw?: LedgerS
 export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerState, scopeIds?: ReadonlySet<string>, options?: { requireChapterDoc?: boolean }): { lines: string[]; newIds: string[]; merged: number; dropped: number; linked: number; unlinked: number } {
   if (scopeIds?.size === 0) return { lines: [], newIds: [], merged: 0, dropped: 0, linked: 0, unlinked: 0 };
   for (const op of ops) {
+    if(op.kind==='link')checkedRelationReason(op.reason);
     assertTidyScopeIds(op.kind === 'merge' ? op.memberIds : op.kind === 'revise' || op.kind === 'drop' ? [op.id] : op.kind === 'prose' || op.kind === 'add' ? [] : [op.from, op.to], scopeIds);
     if (scopeIds && op.kind === 'add') throw new Error('局部整理不新增判断。');
     {
@@ -343,12 +383,20 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerSta
     if (handledPairs.has(key) || invalid(!validTidyRelation(op, input.judgments, evidenceContext))) continue;
     handledPairs.add(key);
     const exists = renderGraph(st).edges.some(e => e.from === op.from && e.to === op.to);
-    if ((op.kind === 'link') === exists) continue;
+    if (op.kind === 'link' && exists) {
+      if ((renderGraph(st).edges.find(e => e.from === op.from && e.to === op.to)?.reason ?? '') === op.reason.trim()) continue;
+      lines.push(aiDecision.edgeNote(op.to,op.from,op.reason.trim()));
+      changedChapters.add(st.judgments.get(op.from)!.domain);
+      changedChapters.add(st.judgments.get(op.to)!.domain);
+      continue;
+    }
+    if (op.kind === 'unlink' && !exists) continue;
     changedChapters.add(st.judgments.get(op.from)!.domain);
     changedChapters.add(st.judgments.get(op.to)!.domain);
     // 原句保存在动作行中，重放/同步时可审计；不能改写成新的用户判断。
     lines.push(`${op.kind === 'link' ? aiDecision.link(op.to, op.from) : aiDecision.unlink(op.to, op.from)} # ${JSON.stringify({ reason: op.reason, evidence: op.evidence })}`);
     if (op.kind === 'link') {
+      lines.push(aiDecision.edgeNote(op.to,op.from,op.reason.trim()));
       st.cuts.delete(key);
       st.relations.push({ from: op.from, to: op.to, seq: st.lineCount + lines.length });
       linked++;

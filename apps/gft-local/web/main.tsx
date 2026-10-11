@@ -14,6 +14,8 @@ import { ConnectionActions, ConnectionManager, LocalDialog as Modal } from './Co
 import { ExportMenu } from '../../../src/component/focus/MapDocActions';
 import '../../../src/style/index.css';
 import './styles.css';
+import {LocalFilesDialog} from './LocalFilesDialog';
+import {OperationHistoryDialog} from './OperationHistoryDialog';
 
 type LocalRuntime = ReturnType<typeof createLocalRuntime>;
 type Task = { id: string; topicId: string; action: string; status: string; mode?: string; error?: string; createdAt?: string };
@@ -44,7 +46,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const projects = useThinkingMapHost(snapshot => snapshot.projects);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
-  const [dialog, setDialog] = useState<'tasks' | 'history' | 'import' | 'account' | null>(null);
+  const [dialog, setDialog] = useState<'tasks' | 'history' | 'import' | 'account' | 'files' | 'operations' | null>(null);
   const [error, setError] = useState('');
   const service = useSyncExternalStore(runtime.service.subscribe, runtime.service.getSnapshot);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
@@ -121,6 +123,8 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
         <div className="gft-local-appearance"><span>{tr('语言')}</span><div role="group" aria-label={tr('语言')}>{([['zh','中文'],['en','EN']] as const).map(([value,label])=><button key={value} aria-pressed={lang===value} onClick={()=>setLang(value)}>{label}</button>)}</div></div>
         <div className="gft-local-appearance"><span>{tr('外观')}</span><div role="group" aria-label={tr('外观')}>{([['light','浅色'],['dark','深色'],['system','跟随系统']] as const).map(([value,label])=><button key={value} aria-pressed={theme===value} onClick={()=>{setTheme(value);setThemePref(value);}}>{tr(label)}</button>)}</div></div>
         <button onClick={() => open('tasks')}>{tr('任务')}{active > 0 ? ` · ${active} ${tr('处理中')}` : ''}</button>
+        <button disabled={!projectId} onClick={() => open('files')}>{tr('本地文件')}</button>
+        <button disabled={!projectId} onClick={() => open('operations')}>{tr('操作历史')}</button>
         <button disabled={!projectId} onClick={() => open('history')}>Log</button>
         <button onClick={() => open('account')}>{tr('GFT 账号')}</button>
       </div>
@@ -131,6 +135,8 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
       const result=await addMaterial(file,target||'');
       await runtime.refreshProjects();await runtime.host.switchProject(result.topicId);
     }} onClose={()=>setDialog(null)} />}
+    {dialog === 'files' && projectId && <LocalFilesDialog key={projectId} runtime={runtime} topicId={projectId} onClose={()=>setDialog(null)}/>}
+    {dialog === 'operations' && projectId && <OperationHistoryDialog key={projectId} runtime={runtime} topicId={projectId} onClose={()=>setDialog(null)}/>}
     {dialog === 'account' && <AccountDialog onClose={() => setDialog(null)} />}
     {error && !dialog && <div className="gft-local-banner" role="alert">{tr(error)}<button aria-label={tr('关闭提示')} onClick={() => setError('')}>×</button></div>}
     {dialog === 'history' && projectId && <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />}

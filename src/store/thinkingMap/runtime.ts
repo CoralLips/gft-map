@@ -48,6 +48,8 @@ export interface MapComputeContext {
   signal: AbortSignal;
 }
 export interface ThinkingMapRuntime {
+  /** Local node editing uses the graph/document contract; older platform refinement remains compatible. */
+  nodeRefinement?: 'title' | 'document';
   host: ThinkingMapHost;
   persistence: {
     migrateLegacySources?: boolean;
@@ -63,6 +65,7 @@ export interface ThinkingMapRuntime {
     fetchSourceSnapshots(projectId: string, nodeIds: string[]): Promise<string>;
   };
   ai: {
+    explainRelation?(from: FocusCard, to: FocusCard, reason: string, context: MapComputeContext): Promise<string>;
     generate(input: string, options: GenerateOptions | undefined, onPreview: (preview: { nodes: FocusCard[]; edges: ThinkingEdge[] }) => void, context: MapComputeContext): Promise<ThinkingMapResult>;
     tidy(input: TidyInput, options: { modelId?: string } | undefined, context: MapComputeContext): Promise<TidyAiOp[]>;
     refine(target: FocusCard, neighbors: { up: FocusCard[]; down: FocusCard[] }, birth: string, chat: string, options: { modelId?: string } | undefined, context: MapComputeContext): Promise<RefineResult>;

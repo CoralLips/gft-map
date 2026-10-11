@@ -76,6 +76,29 @@ function terminalTurn(turn) {
   if (turn.status === 'inProgress') return false;
   fail('SOURCE_CAPABILITY_MISSING', 'Codex 返回了尚未支持的轮次状态，请升级会话读取组件。');
 }
+function readableTurn(turn, hasLaterTurn = false) {
+  if (!terminalTurn(turn)) return false;
+  // A short-lived app-server can report the desktop's still-running turn as
+  // interrupted. Only its final answer or a later turn establishes that stop.
+  return turn.status === 'completed' || hasLaterTurn || turn.items?.some(item =>
+    item.type === 'agentMessage' && ['final', 'final_answer'].includes(item.phase) && item.text?.trim());
+}
+function codexContentDigest(value) {
+  const content = ({ turnStatus, ...message }) => message;
+  return hash(Array.isArray(value) ? value.map(content) : content(value));
+}
+function matchesCodexDigest(value, digest, version) {
+  if (version === 2) return codexContentDigest(value) === digest;
+  if (version !== undefined) fail('SOURCE_CURSOR_INVALID', 'Codex 来源游标摘要版本无效。');
+  // v1/v2 cursors written before content digests included the mutable status.
+  // Reconstruct only that field; changed IDs, text, roles or metadata still fail.
+  return [...TERMINAL_TURNS].some(turnStatus => hash(Array.isArray(value)
+    ? value.map(message => ({ ...message, turnStatus })) : { ...value, turnStatus }) === digest);
+}
+function codexPosition(before, turnId, entries, consumed, offset) {
+  return { before, turnId, consumed, digest: codexContentDigest(entries.slice(0, consumed)), digestVersion: 2,
+    ...(offset === undefined ? {} : { offset, messageDigest: codexContentDigest(entries[consumed]) }) };
+}
 
 /** A short-lived, read-only app-server connection. No thread/start or turn/start exists here. */
 export async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || 'codex', timeoutMs = 20000, spawnImpl = spawn } = {}) {
@@ -248,6 +271,7 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
     return withCodex(async request => {
       await codexSession(request, source);
       let native = null;
+      let hasLaterTurn = false;
       const visited = new Set();
       for (;;) {
         if (visited.has(native)) fail('SOURCE_CURSOR_STALE','来源分页未推进，请更新 Codex 后重试。');
@@ -255,16 +279,17 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         const page = await turns(request, source, native, 'desc');
         const turn = page.data[0];
         if (!turn) return cursor;
-        if (terminalTurn(turn)) {
+        if (readableTurn(turn, hasLaterTurn)) {
           // Native backwardsCursor replays this page's first turn inclusively.
           // It is not the exclusive nextCursor of the preceding turn.
           const before = page.backwardsCursor;
           if (!before) fail('SOURCE_CAPABILITY_MISSING', 'Codex 缺少双向会话游标，请升级 Codex。');
           const messages = codexMessages(turn);
-          cursor.position = { before, turnId: turn.id, consumed: messages.length, digest: hash(messages) };
+          cursor.position = codexPosition(before, turn.id, messages, messages.length);
           return cursor;
         }
         if (!page.nextCursor) return cursor;
+        hasLaterTurn = true;
         native = page.nextCursor;
       }
     });
@@ -276,13 +301,14 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
     if (source.provider === 'claude') selected = (await claudeComplete(await sdk(), source)).slice(-12);
     else selected = await withCodex(async request => {
       await codexSession(request, source);
-      let native = null; const entries = [];
+      let native = null; const entries = []; let hasLaterTurn = false;
       for (let i = 0; i < 12; i++) {
         const page = await turns(request, source, native, 'desc');
         const turn = page.data[0];
         if (!turn) break;
-        if (terminalTurn(turn)) entries.unshift(...codexMessages(turn));
+        if (readableTurn(turn, hasLaterTurn)) entries.unshift(...codexMessages(turn));
         if (entries.length >= 12 || !page.nextCursor) break;
+        hasLaterTurn = true;
         native = page.nextCursor;
       }
       return entries.slice(-12);
@@ -344,6 +370,10 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
       let native = start.position?.before ?? null;
       let cursor = start;
       let anchor = start.position;
+      const waitForBoundary = () => {
+        if (end?.position) fail('SOURCE_NOT_READY', '所选读取范围内还有未结束的轮次，请等本轮结束后重试；读取位置未改变。');
+        return { messages, cursor, hasMore: false };
+      };
       if (anchor && (typeof anchor.turnId !== 'string' || !Number.isSafeInteger(anchor.consumed) || anchor.consumed < 0 || typeof anchor.digest !== 'string'
           || (anchor.before !== null && typeof anchor.before !== 'string'))) fail('SOURCE_CURSOR_INVALID', 'Codex 来源游标格式无效。');
       const visited = new Set();
@@ -352,29 +382,37 @@ export function createSourceReaders({ codexConnect = connectCodexReadOnly, claud
         visited.add(native);
         const page = await turns(request, source, native);
         const turn = page.data[0];
-        if (anchor && (!turn || turn.id !== anchor.turnId || !terminalTurn(turn))) changed();
-        if (!turn || !terminalTurn(turn)) {
+        if (anchor && (!turn || turn.id !== anchor.turnId)) changed();
+        if (!turn) {
           if (end?.position) changed();
           return { messages, cursor, hasMore: false };
         }
+        const terminal = terminalTurn(turn);
+        if (!terminal && !anchor && end?.position?.turnId !== turn.id) return waitForBoundary();
         const entries = codexMessages(turn);
+        // Do not move past an uncertain tail. A real stopped turn is retained
+        // and becomes readable once a subsequent turn is present.
+        let readable = readableTurn(turn);
+        if (!readable && terminal && page.nextCursor) readable = !!(await turns(request, source, page.nextCursor)).data[0];
         const lastTurn = end?.position?.turnId === turn.id;
         const endConsumed = lastTurn ? end.position.consumed : entries.length;
-        if (lastTurn && (!Number.isSafeInteger(endConsumed) || endConsumed < 0 || endConsumed > entries.length || hash(entries.slice(0, endConsumed)) !== end.position.digest)) changed();
+        if (lastTurn && (!Number.isSafeInteger(endConsumed) || endConsumed < 0 || endConsumed > entries.length
+            || !matchesCodexDigest(entries.slice(0, endConsumed), end.position.digest, end.position.digestVersion))) changed();
         let consumed = anchor?.consumed ?? 0;
-        if (anchor && (consumed > entries.length || hash(entries.slice(0, consumed)) !== anchor.digest)) changed();
+        if (anchor && (consumed > entries.length || !matchesCodexDigest(entries.slice(0, consumed), anchor.digest, anchor.digestVersion))) changed();
         let offset = anchor?.offset ?? 0;
-        if (anchor?.offset !== undefined && (!entries[consumed] || hash(entries[consumed]) !== anchor.messageDigest)) changed();
+        if (anchor?.offset !== undefined && (!entries[consumed] || !matchesCodexDigest(entries[consumed], anchor.messageDigest, anchor.digestVersion))) changed();
+        if (!readable) return waitForBoundary();
         anchor = null;
         for (; consumed < endConsumed; consumed++) {
           const next = append(entries[consumed],offset);
           if (next === null) return { messages, cursor, hasMore: true };
-          if (next < entries[consumed].content.length) return {messages,hasMore:true,cursor:{...start,v:2,position:{before:native,turnId:turn.id,consumed,digest:hash(entries.slice(0,consumed)),offset:next,messageDigest:hash(entries[consumed])}}};
+          if (next < entries[consumed].content.length) return {messages,hasMore:true,cursor:{...start,v:2,position:codexPosition(native,turn.id,entries,consumed,next)}};
           offset = 0;
-          cursor = { ...start, v:1, position: { before: native, turnId: turn.id, consumed: consumed + 1, digest: hash(entries.slice(0, consumed + 1)) } };
+          cursor = { ...start, v:1, position: codexPosition(native,turn.id,entries,consumed + 1) };
         }
         // Keep an anchor even for a completed turn without user-visible text.
-        cursor = { ...start, v:1, position: { before: native, turnId: turn.id, consumed: endConsumed, digest: hash(entries.slice(0, endConsumed)) } };
+        cursor = { ...start, v:1, position: codexPosition(native,turn.id,entries,endConsumed) };
         if (lastTurn) return { messages, cursor, hasMore: false };
         if (!page.nextCursor) {
           if (end?.position) changed();

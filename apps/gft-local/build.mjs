@@ -47,6 +47,9 @@ await copyFile(path.join(root, 'web/index.html'), path.join(root, 'dist/web/inde
 if (process.argv.includes('--skill')) {
   const target = path.join(root, 'release/gft-map');
   await cp(path.join(root, 'skill'), target, { recursive: true });
+  const { MAP_EXPRESSION_CONTRACT } = await import(new URL('./dist/core.mjs', import.meta.url));
+  await mkdir(path.join(target, 'references'), { recursive: true });
+  await writeFile(path.join(target, 'references/map-expression-contract.md'), MAP_EXPRESSION_CONTRACT);
   await mkdir(path.join(target, 'scripts/dist'), { recursive: true });
   for (const f of ['cli.mjs', 'store.mjs', 'server.mjs', 'serviceLifecycle.mjs', 'executor-config.mjs', 'materials.mjs', 'materialArchive.mjs', 'account.mjs', 'sync.mjs', 'runner.mjs', 'connections.mjs', 'memory.mjs', 'notifications.mjs', 'change-hook.mjs', 'install-hooks.mjs', 'version.mjs', 'upgrade.mjs']) await copyFile(path.join(root, f), path.join(target, 'scripts', f));
   await cp(path.join(root, 'dist'), path.join(target, 'scripts/dist'), { recursive: true });

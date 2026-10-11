@@ -124,7 +124,7 @@ export function UpdateMapButton(): JSX.Element {
           ? tr('左边还没有对话内容')
           : noFresh
             ? tr('没有新对话——聊几句再来更新')
-            : (hasMap ? tr('把左边新聊的内容记进 Log，Map 和 Doc 跟着更新（已有部分一字不动）') : tr('把左边对话里的想法记进 Log，长成 Map 和 Doc'))}
+            : (hasMap ? tr('把新讨论记进 Log，按主题更新节点和正文') : tr('把左边对话里的想法记进 Log，长成 Map 和 Doc'))}
     >
       {running
         ? <>
@@ -138,6 +138,22 @@ export function UpdateMapButton(): JSX.Element {
           : `🧭 ${tr('从当前对话生成')}`}
     </button>
   );
+}
+
+/** Delete the canvas selection using the same ledger transaction and undo as direct edits. */
+export function DeleteSelectionButton(): JSX.Element | null {
+  const {store}=useThinkingMapRuntime();
+  const tr=useT();
+  const nodes=store(s=>s.selectedNodeIds);
+  const edges=store(s=>s.selectedEdgeIds);
+  const editing=store(s=>s.editingNodeId!==null||s.editingNodeBodyId!==null||s.editingEdgeId!==null);
+  const remove=store(s=>s.deleteElements);
+  const count=nodes.size+edges.size;
+  if(!count)return null;
+  return <button className={styles.freshBtn} data-gft-delete-selection
+    disabled={editing}
+    title={tr('删除选中的 {count} 个元素；可在操作历史中撤回',{count})}
+    onClick={()=>remove([...nodes],[...edges])}>{tr('删除')}</button>;
 }
 
 /**

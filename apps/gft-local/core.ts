@@ -1,5 +1,7 @@
+import {checkedRelationReason} from '../../src/service/relationReason';
 import { IMPORT_COMPACT_THRESHOLD, sourceChunks, prepareSourceSummary } from '../../src/service/sourceCompaction';
 import { validateMapDocOutput } from '../../src/service/mapDocContract';
+export { MAP_EXPRESSION_CONTRACT, MAP_EXPRESSION_CONTRACT_VERSION } from '../../src/service/mapDocContract';
 export { createTopicBundle, parseTopicBundle, bundleToMap, mapToBundle, topicSummary } from '../../src/service/topicBundle';
 import { recordDocumentInput } from '../../src/service/ledger/docEdit';
 import { appendSourceLog, renderSourceLog, hasSourceLog, isEditedSourceLog, sourceRecordsFromEvents, type SourceEvent } from '../../src/service/sourceLog';
@@ -48,10 +50,11 @@ export function prepareSourceRedraw(topic: Topic, events: SourceEvent[] = []) {
 }
 
 export interface GraphOperation {
-  kind: 'add' | 'edit' | 'delete' | 'connect' | 'disconnect';
+  kind: 'add' | 'edit' | 'delete' | 'connect' | 'disconnect' | 'explain';
   id?: string;
   title?: string;
   content?: string;
+  reason?: string;
   mark?: LedgerMark;
   domain?: string;
   from?: string;
@@ -150,7 +153,11 @@ export function editGraph(topic: Topic, op: GraphOperation) {
   if (!op || typeof op !== 'object') throw new Error('图操作无效。');
   const state = stateOf(topic);
   const lines: string[] = [];
-  if (op.kind === 'add') {
+  if (op.kind === 'explain') {
+    const from=activeId(state,op.from),to=activeId(state,op.to);
+    if(!renderGraph(state).edges.some(edge=>edge.from===from&&edge.to===to) || typeof op.reason!=='string')throw new Error('承接关系不存在或说明无效。');
+    lines.push(decision.edgeNote(to,from,checkedRelationReason(op.reason)));
+  } else if (op.kind === 'add') {
     if (op.id !== undefined) throw new Error('新判断编号由系统分配。');
     const id = `j${state.nextNum}`;
     const content = op.content ?? '';
@@ -194,7 +201,7 @@ export function prepareTask(topic: Topic, action: TaskAction, input = '', overvi
   }
   if (action === 'redraw') {
     if (!hasSourceLog(topic.raw)) throw new Error('还没有可供重画的来源材料，请先更新或在文稿中添加内容。');
-    return { system: buildRewritePrompt(scope) + THEME_RULE + naming, user: renderSourceLog(topic.raw) };
+    return { system: buildRewritePrompt(scope, serializePreviousMap(previous(state, topic)).text) + THEME_RULE + naming, user: renderSourceLog(topic.raw) };
   }
   if (action !== 'update') throw new Error('不支持的任务。');
   if (typeof input !== 'string' || !input.trim()) throw new Error('请先输入需要提取的对话或笔记。');
@@ -235,7 +242,7 @@ export function applyTask(topic: Topic, action: TaskAction, output: string) {
   for (const node of parsed.nodes) safeTitle(node.title);
   for (const seg of parsed.docSegments) if (/\[|\]|\r|\n/.test(seg.domain)) throw new Error('模型返回无效章节，已保留原图文。');
   const usableMarks = parsed.docMarks.filter(mark => state.judgments.has(mark.anchor) && !state.judgments.get(mark.anchor)!.deleted);
-  if (!parsed.nodes.length && !parsed.docSegments.length && !usableMarks.length) {
+  if (!parsed.nodes.length && !parsed.docSegments.length && !usableMarks.length && !parsed.docRevisions.length) {
     if (action === 'update' && /^\s*<noop\s*\/>\s*$/.test(output)) return finish(topic, []);
     throw new Error('模型没有返回可用图文，已保留原图文。');
   }
@@ -243,7 +250,7 @@ export function applyTask(topic: Topic, action: TaskAction, output: string) {
     ? mergeIncremental(prev, serialized, parsed)
     : parsed.nodes.length ? buildFreshMap(parsed, undefined, { rewrite: action === 'redraw' })
       : { nodes: [], edges: [], newIds: [], docEntryNodeIds: [] };
-  const generated = linesFromGenerate(state, { ...result, docSegments: parsed.docSegments, docMarks: usableMarks }, {
+  const generated = linesFromGenerate(state, { ...result, docSegments: parsed.docSegments, docMarks: usableMarks, docRevisions: parsed.docRevisions }, {
     isUpdate: action === 'update', source: SOURCE, note: action === 'redraw' ? '重画（按 Log 重写）' : '更新', at: Date.now(), requireChapterDoc: true,
     ...(action === 'redraw' ? { provenanceSource: parseLedger(topic.raw) } : {}),
   });

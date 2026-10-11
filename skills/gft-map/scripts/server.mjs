@@ -1,4 +1,6 @@
 import http from 'node:http';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -18,6 +20,14 @@ import { loadExecutorConfig, saveExecutorConfig, agents as executorAgents } from
 import { acquireServiceLease, checkRecordedService, recordServiceStart, serviceEvent } from './serviceLifecycle.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const agents = [...executorAgents];
+export function revealCommand(filename, platform=process.platform) {
+  return platform==='darwin'?['open',['-R',filename]]:platform==='win32'?['explorer.exe',[`/select,${filename}`]]:['xdg-open',[path.dirname(filename)]];
+}
+async function revealSavedFile(filename) {
+  const [binary,args]=revealCommand(filename);
+  try { await promisify(execFile)(binary,args,{timeout:10000,windowsHide:true}); }
+  catch { throw store.fail('无法打开文件夹，请复制路径在文件管理器中打开。',503); }
+}
 
 export async function createRunner(agent = 'codex', options) {
   if (agent === 'codex') return createCodexRunner(options);
@@ -32,7 +42,7 @@ async function body(req) {
   for await (const chunk of req) { length += chunk.length; if(length > 4 * 1024 * 1024) throw store.fail('内容过大',413); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw store.fail('JSON 无法解析'); }
 }
-export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs, managed = false } = {}) {
+export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs, managed = false, revealFile = revealSavedFile } = {}) {
   if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
   const releaseLease = managed ? await acquireServiceLease() : null;
   try {
@@ -134,7 +144,7 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else if(group === 'chat-session') value = await readers.getChatSession({provider:url.searchParams.get('provider'),id:url.searchParams.get('id'),cwd:url.searchParams.get('cwd') || undefined});
         else if(group === 'connections') value = await connections.listConnections(Object.fromEntries(['topicId','provider','sessionId'].flatMap(key=>url.searchParams.has(key)?[[key,url.searchParams.get(key)]]:[])));
         else if(group === 'sessions') value = await store.listSessions();
-        else if(group === 'topics') value = !id ? await store.listTopics() : action === 'history' ? await store.history(id) : action === 'export' ? await store.exportTopic(id) : action === 'snapshot' ? await store.getSnapshot(id) : action === 'sources' ? await store.sourceEvents(id) : await store.getView(id);
+        else if(group === 'topics') value = !id ? await store.listTopics() : action === 'local-file' ? await store.localFileLocation(id) : action === 'operations' ? await store.getOperations(id) : action === 'update-receipt' ? await store.getUpdateReceipt(id) : action === 'history' ? await store.history(id) : action === 'export' ? await store.exportTopic(id) : action === 'snapshot' ? await store.getSnapshot(id) : action === 'sources' ? await store.sourceEvents(id) : await store.getView(id);
         else if(group === 'tasks') value = id ? action === 'status' ? await store.getTaskStatus(id) : action === 'result' ? await store.computationResult(id) : await store.taskPrompt(id) : await store.listTasks();
         else throw store.fail('接口不存在',404);
       } else if(req.method === 'POST') {
@@ -211,6 +221,9 @@ export async function startServer({ port = 4317, agent = null, execute, runnerOp
         else if(group === 'connections' && id === 'sources') value = await connections.readConnectedSources(data);
         else if(group === 'chat-preview') value = await readers.getChatPreview(data.source);
         else if(group === 'topics' && !id) value = await store.createTopic(data.name,data.scope,undefined,data.id);
+        else if(group === 'topics' && action === 'reveal-file') { const location=await store.localFileLocation(id);await revealFile(location.path);value={opened:true}; }
+        else if(group === 'topics' && action === 'rollback-operation') value = await store.rollbackOperation(id,data.baseRevision,data.receiptId);
+        else if(group === 'topics' && action === 'rollback-update') value = await store.rollbackUpdate(id,data.baseRevision,data.receiptId);
         else if(group === 'topics' && action === 'doc') value = await store.saveDoc(id,data.baseRevision,data.doc);
         else if(group === 'topics' && action === 'graph') value = await store.saveGraph(id,data.baseRevision,data.op);
         else if(group === 'topics' && action === 'state') value = await store.saveState(id,data.baseRevision,data.map);

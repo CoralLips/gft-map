@@ -48,6 +48,7 @@ export function actions(actor: '本人' | 'AI') {
     redomain: (id: string, domain: string) => `${actor} 改 ${id} 域：${domain.trim()}`,
     remove: (id: string) => `${actor} 删 ${id}`,
     link: (to: string, from: string) => `${actor} 接 ${to} ${from}`,
+    edgeNote: (to: string, from: string, reason: string) => `${actor} 改 ${to} 承接 ${from}：${JSON.stringify(reason)}`,
     unlink: (to: string, from: string) => `${actor} 断 ${to} ${from}`,
     reorder: (id: string, before: string | '末') => `${actor} 序 ${id} ${before}`,
   };

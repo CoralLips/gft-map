@@ -36,8 +36,8 @@ export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, sec
         />
         <span className={styles.nodeCount}>{tr('{count} 条', {count: projects.filter(p => p.status === 'active').length})}</span>
         <div className={styles.mapDocTabs}>
-          <button className={`${styles.mapDocTab} ${rightView === 'map' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('map')} title={tr('思维脉络：判断的导航图')}>Map</button>
-          <button className={`${styles.mapDocTab} ${rightView === 'doc' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('doc')} title={tr('白盒文档：每条判断的完整表述（可编辑、可带走）；图是它的目录')}>Doc</button>
+          <button className={`${styles.mapDocTab} ${rightView === 'map' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('map')} title={tr('Map：关键判断与问题的导航图')}>Map</button>
+          <button className={`${styles.mapDocTab} ${rightView === 'doc' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('doc')} title={tr('Doc：连贯的章节正文，可直接编辑；Map 帮助定位要点')}>Doc</button>
           {showLogTab && <button className={`${styles.mapDocTab} ${rightView === 'source' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('source')} title={tr('Log：已接收的来源材料')}>Log</button>}
         </div>
       </div>

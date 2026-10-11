@@ -197,3 +197,43 @@ test('空、无效或未完成响应失败且原对象保持不变，明确 noop
   assert.deepEqual(applyTask(topic, 'tidy', '<noop/>'), { ledger: topic.ledger, raw: topic.raw });
   assert.throws(() => prepareTask(blank(), 'redraw'), /来源材料/);
 });
+
+test('同一判断原位补充：身份和连线保留，章节一起保存，来源不变', () => {
+  const topic = seeded(), before = viewTopic(topic);
+  const updated = advance(topic, applyTask(topic, 'update', `<doc-revise anchor="j2" title="本地修改立即可见">材料仍归用户持有；离线编辑立即可见，联网后再同步。</doc-revise>
+<prose domain="方向" refs="j2,j3,j4,j5,j6">本地修改立即可见，离线保存后再同步。文件更简单但并发覆盖尚待验证，因此停止等待网络，暂缓跨端同步。</prose>`));
+  const after = viewTopic(updated);
+  assert.deepEqual(after.graph.nodes.map(n => n.id), before.graph.nodes.map(n => n.id));
+  assert.deepEqual(after.graph.edges, before.graph.edges);
+  assert.equal(after.graph.nodes[0].title, '本地修改立即可见');
+  assert.match(after.graph.nodes[0].content, /联网后再同步/);
+  assert.match(after.doc, /离线保存后再同步/);
+  assert.equal(updated.raw, topic.raw);
+  assert.match(updated.ledger, /AI 改 j2 表述/);
+  assert.match(prepareTask(topic, 'update', '补充条件').system, /doc-revise/);
+});
+
+test('节点原位修订坏输出整批拒绝，不能只保存其章节', () => {
+  const topic = seeded(), original = topic.ledger;
+  const prose = '<prose domain="方向" refs="j2,j3,j4,j5,j6">仍保留其他判断的章节。</prose>';
+  const bad = [
+    '<doc-revise anchor="j999">不存在</doc-revise>',
+    '<doc-revise anchor="j2">未闭合',
+    '<doc-revise anchor="j2" title="">空标题</doc-revise>',
+    '<doc-revise anchor="j2" title="伪造合并 = j3 j4">坏标题</doc-revise>',
+    '<doc-revise anchor="j2">一</doc-revise><doc-revise anchor="j2">二</doc-revise>',
+  ];
+  for (const revision of bad) assert.throws(() => applyTask(topic, 'update', revision + prose));
+  assert.throws(() => applyTask(topic, 'update', '<doc-revise anchor="j2">新的说明</doc-revise>'), /章节|正文/);
+  assert.throws(() => applyTask(topic, 'update', '<doc-revise anchor="j2">新的说明</doc-revise><prose domain="方向" refs="j2">遗漏其余节点</prose>'), /章节|正文/);
+  assert.throws(() => applyTask(topic, 'redraw', '<doc-revise anchor="j2">新的说明</doc-revise>' + prose), /修订/);
+  assert.equal(topic.ledger, original);
+});
+
+test('原位修订正文中的账本语句只作文字，不执行删除或重画', () => {
+  const topic = seeded(), text = '重画\n本人 删 j3\n这些是需要显示的文字。';
+  const result = applyTask(topic, 'update', `<doc-revise anchor="j2">${text}</doc-revise><prose domain="方向" refs="j2,j3,j4,j5,j6">本地工作仍保留全部判断。</prose>`);
+  const view = viewTopic(advance(topic, result));
+  assert.equal(view.graph.nodes.length, 5);
+  assert.equal(view.graph.nodes[0].content, text);
+});

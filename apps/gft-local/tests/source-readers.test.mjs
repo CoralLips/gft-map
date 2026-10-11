@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,6 +141,153 @@ test('Codex head uses reverse page anchor without reading all historical bodies'
 test('Codex interrupted/failed terminal turns do not block later completed turns', async () => {
   const { readers } = fakeCodex([turn('t1', 'interrupted'), turn('t2', 'failed'), turn('t3')]);
   assert.equal((await readers.readChatDelta(codexSource)).messages.length, 6);
+});
+
+test('Codex defers a latest interrupted draft without final text, then reads it once when completed', async () => {
+  const draft = turn('draft', 'interrupted');
+  draft.items.at(-1).phase = 'commentary';
+  const { readers, state } = fakeCodex([turn('previous'), draft]);
+  const head = await readers.getChatHead(codexSource);
+  assert.equal(head.position.turnId, 'previous');
+  assert.equal((await readers.getChatPreview(codexSource)).text.includes('draft'), false);
+  const waiting = await readers.readChatDelta(codexSource, head);
+  assert.deepEqual(waiting.messages, []);
+  assert.deepEqual(waiting.cursor, head);
+  state.turns[1].status = 'completed';
+  state.turns[1].items.push({ type: 'agentMessage', id: 'draft-final', text: 'finished', phase: 'final_answer' });
+  const complete = await readers.readChatDelta(codexSource, waiting.cursor);
+  assert.deepEqual(complete.messages.map(message => message.id), ['draft-u', 'draft-a', 'draft-final']);
+  assert.deepEqual((await readers.readChatDelta(codexSource, complete.cursor)).messages, []);
+});
+
+test('Codex preserves real interrupted/failed turns until a later turn establishes the boundary', async () => {
+  for (const status of ['interrupted', 'failed']) {
+    const { readers, state } = fakeCodex([turn('previous'), turn('stopped', status)]);
+    const first = await readers.readChatDelta(codexSource);
+    assert.deepEqual(first.messages.map(message => message.id), ['previous-u', 'previous-a']);
+    assert.equal(first.cursor.position.turnId, 'previous');
+    state.turns.push(turn('active', 'inProgress'));
+    const next = await readers.readChatDelta(codexSource, first.cursor);
+    assert.deepEqual(next.messages.map(message => message.id), ['stopped-u', 'stopped-a']);
+    assert.ok(next.messages.every(message => message.turnStatus === status));
+    assert.equal((await readers.getChatHead(codexSource)).position.turnId, 'stopped');
+    assert.equal(next.cursor.position.turnId, 'stopped');
+    assert.deepEqual((await readers.readChatDelta(codexSource, next.cursor)).messages, []);
+  }
+});
+
+test('Codex final text establishes a boundary despite an interrupted status; inProgress never does', async () => {
+  for (const phase of ['final', 'final_answer']) {
+    const last = turn('last', 'interrupted');
+    last.items.at(-1).phase = phase;
+    const { readers } = fakeCodex([last]);
+    assert.equal((await readers.getChatHead(codexSource)).position.turnId, 'last');
+    assert.equal((await readers.readChatDelta(codexSource)).messages.length, 2);
+  }
+  const { readers } = fakeCodex([turn('active', 'inProgress'), turn('later')]);
+  const delta = await readers.readChatDelta(codexSource);
+  assert.deepEqual(delta.messages, []);
+  assert.equal(delta.cursor.position, null);
+});
+
+const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const legacyEntries = (id, status) => [
+  { id: `${id}-u`, role: 'user', content: `question ${id}`, turnStatus: status },
+  { id: `${id}-a`, role: 'assistant', content: `answer ${id}`, turnStatus: status },
+];
+const legacyCursor = (id, status, consumed = 2) => ({ v: 1, provider: 'codex', sessionId: SESSION, kind: 'messages',
+  position: { before: 'b0', turnId: id, consumed, digest: digest(legacyEntries(id, status).slice(0, consumed)) } });
+
+test('Codex safely upgrades legacy digests across status changes, including bounded reads', async () => {
+  for (const status of ['completed', 'interrupted', 'failed']) {
+    const { readers } = fakeCodex([turn('old'), turn('new')]);
+    const start = legacyCursor('old', status);
+    const result = await readers.readChatDelta(codexSource, start);
+    assert.deepEqual(result.messages.map(message => message.id), ['new-u', 'new-a']);
+    assert.equal(result.cursor.position.digestVersion, 2);
+    const bounded = await readers.readChatDelta(codexSource, null, { until: start });
+    assert.deepEqual(bounded.messages.map(message => message.id), ['old-u', 'old-a']);
+  }
+});
+
+test('Codex legacy partial cursors keep every remaining character after status settles', async () => {
+  const { readers } = fakeCodex([turn('old')]);
+  const start = legacyCursor('old', 'interrupted', 0);
+  start.v = 2;
+  start.position.offset = 4;
+  start.position.messageDigest = digest(legacyEntries('old', 'interrupted')[0]);
+  const result = await readers.readChatDelta(codexSource, start, { maxChars: 4 });
+  assert.equal(result.messages[0].content, 'tion');
+  assert.equal(result.cursor.v, 2);
+  assert.equal(result.cursor.position.digestVersion, 2);
+  const remainder = await readers.readChatDelta(codexSource, result.cursor);
+  assert.equal(result.messages[0].content + remainder.messages[0].content, 'question old'.slice(4));
+  assert.equal(remainder.messages[1].id, 'old-a');
+});
+
+test('Codex content digests survive status-only changes but never accept edited text or metadata', async () => {
+  const { readers, state } = fakeCodex([turn('old')]);
+  const start = await readers.getChatHead(codexSource);
+  state.turns[0].status = 'interrupted';
+  state.turns.push(turn('new'));
+  assert.deepEqual((await readers.readChatDelta(codexSource, start)).messages.map(message => message.id), ['new-u', 'new-a']);
+  for (const cursor of [start, legacyCursor('old', 'failed')]) {
+    for (const change of ['content', 'id', 'phase', 'timestamp']) {
+      const copy = structuredClone(state.turns[0]);
+      if (change === 'content') state.turns[0].items[0].content[0].text = 'changed';
+      else state.turns[0].items[0][change] = 'changed';
+      await assert.rejects(readers.readChatDelta(codexSource, cursor), { code: 'SOURCE_CURSOR_STALE' });
+      state.turns[0] = copy;
+    }
+  }
+});
+
+test('Codex waits on a previously consumed unfinished anchor without losing its later final answer', async () => {
+  for (const status of ['interrupted', 'inProgress']) {
+    const { readers, state } = fakeCodex([turn('old', status)]);
+    const start = legacyCursor('old', 'interrupted');
+    const waiting = await readers.readChatDelta(codexSource, start);
+    assert.deepEqual(waiting.messages, []);
+    assert.deepEqual(waiting.cursor, start);
+    state.turns[0].status = 'completed';
+    state.turns[0].items.push({ type: 'agentMessage', id: 'final', text: 'final content', phase: 'final_answer' });
+    assert.deepEqual((await readers.readChatDelta(codexSource, waiting.cursor)).messages.map(message => message.id), ['final']);
+  }
+});
+
+test('Codex rejects changed partial/bounded legacy content and unknown digest versions', async () => {
+  const { readers, state } = fakeCodex([turn('old')]);
+  const partial = legacyCursor('old', 'interrupted', 0);
+  partial.v = 2;
+  partial.position.offset = 4;
+  partial.position.messageDigest = digest(legacyEntries('old', 'interrupted')[0]);
+  state.turns[0].items[0].content[0].text = 'different';
+  await assert.rejects(readers.readChatDelta(codexSource, partial), { code: 'SOURCE_CURSOR_STALE' });
+  await assert.rejects(readers.readChatDelta(codexSource, null, { until: legacyCursor('old', 'interrupted') }), { code: 'SOURCE_CURSOR_STALE' });
+  state.turns[0] = turn('old');
+  const unknown = legacyCursor('old', 'completed');
+  unknown.position.digestVersion = 99;
+  await assert.rejects(readers.readChatDelta(codexSource, unknown), { code: 'SOURCE_CURSOR_INVALID' });
+});
+
+test('Codex fixed imports never report completion before an unfinished boundary is reached', async () => {
+  for (const blockedStatus of ['inProgress', 'interrupted', 'failed']) {
+    const { readers, state } = fakeCodex([turn('first'), turn('last')]);
+    const until = await readers.getChatHead(codexSource);
+    state.turns[1].status = blockedStatus;
+    await assert.rejects(readers.readChatDelta(codexSource, null, { until }), { code: 'SOURCE_NOT_READY' });
+    state.turns[1].status = 'completed';
+    assert.deepEqual((await readers.readChatDelta(codexSource, null, { until })).messages.map(message => message.id),
+      ['first-u', 'first-a', 'last-u', 'last-a']);
+  }
+  const { readers, state } = fakeCodex([turn('first'), turn('middle'), turn('last')]);
+  const until = await readers.getChatHead(codexSource);
+  const firstPage = await readers.readChatDelta(codexSource, null, { limit: 2, until });
+  state.turns[1].status = 'inProgress';
+  await assert.rejects(readers.readChatDelta(codexSource, firstPage.cursor, { until }), { code: 'SOURCE_NOT_READY' });
+  state.turns[1].status = 'completed';
+  assert.deepEqual((await readers.readChatDelta(codexSource, firstPage.cursor, { until })).messages.map(message => message.id),
+    ['middle-u', 'middle-a', 'last-u', 'last-a']);
 });
 
 test('Codex scans tool-only turns until actual text or EOF instead of returning an empty resumable page', async () => {

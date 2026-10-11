@@ -11,6 +11,7 @@ import type { FocusCard } from './focusCard';
 export type ThinkingEdgeType = 'relates';
 
 export interface ThinkingEdge {
+  reason?: string;
   id: string;
   from: string;
   to: string;

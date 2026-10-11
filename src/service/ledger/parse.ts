@@ -31,7 +31,7 @@ const parseTime = (s: string | undefined, fallback: number): number => {
 const normMark = (m: string): LedgerMark => (m === '?' ? '？' : (m as LedgerMark));
 
 export function emptyLedgerState(): LedgerState {
-  return { judgments: new Map(), relations: [], cuts: new Set(), prose: [], sessions: [], domains: [], order: [], nextNum: 1, warnings: [], lineCount: 0 };
+  return { judgments: new Map(), relations: [], cuts: new Set(), relationNotes: new Map(), prose: [], sessions: [], domains: [], order: [], nextNum: 1, warnings: [], lineCount: 0 };
 }
 
 /** 一遍折算 */
@@ -86,6 +86,13 @@ export function parseLedger(text: string): LedgerState {
     if (literal !== undefined) { appendBody(literal, i); continue; }
     if (isSourceLogControlLine(line)) { flushRewrite(); sink = null; continue; }
 
+    const note=/^(?:本人|AI) 改 ([jc]\d+) 承接 ([jc]\d+)：(.+)$/.exec(line);
+    if (note) {
+      flushRewrite();sink=null;
+      try { const value=JSON.parse(note[3]);if(typeof value!=='string')throw new Error();st.relationNotes!.set(`${note[2]}→${note[1]}`,value); }
+      catch { st.warnings.push(`无效承接说明：${line}`); }
+      continue;
+    }
     const sm = SESSION_RE.exec(line);
     if (sm) {
       flushRewrite();

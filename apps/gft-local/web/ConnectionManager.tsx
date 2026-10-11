@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useThinkingMapHost } from '../../../src/component/focus/ThinkingMapRuntime';
-import { localRequest, type ChatConnection, type ChatProvider, type ChatSession, type UpdateSource, type createLocalRuntime } from './localRuntime';
+import { localRequest, type ChatConnection, type ChatProvider, type ChatSession, type UpdateSource, type UpdateReceipt, type ReceiptNode, type createLocalRuntime } from './localRuntime';
 import { t, useT } from '../../../src/i18n';
 
 type LocalRuntime = ReturnType<typeof createLocalRuntime>;
@@ -135,6 +135,39 @@ export function ConnectionManager({ runtime, topicId, projects, purpose = 'manag
   </LocalDialog>;
 }
 
+// Document anchors belong to the stored mapping, not the reader-facing change text.
+export const receiptDisplayText = (text: string) => text.replace(/[ \t]+\^j\d+[ \t]*(?=\r?$)/gm, '');
+
+function ReceiptNodeText({ node }: { node: ReceiptNode }) {
+  const tr = useT();
+  return <><strong>{node.title}</strong><small>{node.mark} · {node.domain}{node.superseded ? ` · ${tr('历史判断')}` : ''}</small><p>{node.content}</p></>;
+}
+
+export function ReceiptDetails({ receipt, runtime, onNavigate }: { receipt: UpdateReceipt; runtime: LocalRuntime; onNavigate(): void }) {
+  const tr = useT();
+  const state = runtime.store.getState();
+  const titleOf = (id: string) => state.nodes.find(node => node.id === id)?.title || receipt.changes.nodes.find(node => node.id === id)?.after?.title || receipt.changes.nodes.find(node => node.id === id)?.before?.title || id;
+  const canNavigate = runtime.receipts.rollbackBlocked() === null;
+  return <div className="gft-local-receipt-details">
+    {receipt.source && <p className="gft-local-receipt-source">{tr('取材于：')}{receipt.source.sessionTitle} · {tr('{count} 条消息', {count:receipt.source.messageCount})}</p>}
+    {receipt.changes.name && <p className="gft-local-receipt-source">{tr('名称')}：{receipt.changes.name.before} → {receipt.changes.name.after}</p>}
+    {receipt.changes.nodes.map(change => <section key={change.id} className="gft-local-receipt-change">
+      <div className="gft-local-receipt-heading"><strong>{tr(change.kind === 'added' ? '新增节点' : change.kind === 'removed' ? '移除节点' : '修改节点')}</strong>{state.nodes.some(node => node.id === change.id) && <button disabled={!canNavigate} onClick={() => { runtime.store.getState().focusOnMap(change.id); onNavigate(); }}>{tr('在 Map 查看')}</button>}</div>
+      {change.before && <div className="gft-local-receipt-before"><span>{tr('修改前')}</span><ReceiptNodeText node={change.before}/></div>}
+      {change.after && <div className="gft-local-receipt-after"><span>{tr('修改后')}</span><ReceiptNodeText node={change.after}/></div>}
+    </section>)}
+    {receipt.changes.chapters.map(change => <section key={change.domain} className="gft-local-receipt-change">
+      <div className="gft-local-receipt-heading"><strong>{tr('正文')} · {change.domain}</strong><button disabled={!canNavigate} onClick={() => { runtime.store.getState().jumpToDoc(change.domain); onNavigate(); }}>{tr('在 Doc 查看')}</button></div>
+      {change.before !== null && <div className="gft-local-receipt-before"><span>{tr('修改前')}</span><p>{receiptDisplayText(change.before) || tr('空')}</p></div>}
+      {change.after !== null && <div className="gft-local-receipt-after"><span>{tr('修改后')}</span><p>{receiptDisplayText(change.after) || tr('空')}</p></div>}
+    </section>)}
+    {(['added','removed'] as const).flatMap(kind => receipt.changes.edges[kind].map((edge,index) => <p className="gft-local-receipt-edge" key={`${kind}-${index}`}>{tr(kind === 'added' ? '新增承接' : '移除承接')}：{titleOf(edge.from)} → {titleOf(edge.to)}</p>))}
+    {receipt.changes.edges.modified?.map(edge=><section className="gft-local-receipt-change" key={`${edge.from}:${edge.to}`}><strong>{tr('修改承接说明')}：{titleOf(edge.from)} → {titleOf(edge.to)}</strong><p>{tr('修改前')}：{edge.before || tr('空')}</p><p>{tr('修改后')}：{edge.after || tr('空')}</p></section>)}
+    {!receipt.changes.chapters.length && receipt.changes.doc && <section className="gft-local-receipt-change"><strong>{tr('文档变化')}</strong><div className="gft-local-receipt-before"><span>{tr('修改前')}</span><p>{receiptDisplayText(receipt.changes.doc.before)}</p></div><div className="gft-local-receipt-after"><span>{tr('修改后')}</span><p>{receiptDisplayText(receipt.changes.doc.after)}</p></div></section>}
+    <p className="gft-local-receipt-source">{tr('撤回只恢复本次操作前的图文；已接收的材料和读取进度保留。')}</p>
+  </div>;
+}
+
 export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
   const tr = useT();
   const topicId = useThinkingMapHost(snapshot => snapshot.currentProjectId);
@@ -142,11 +175,28 @@ export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
   const snapshot = useSyncExternalStore(runtime.connections.subscribe, runtime.connections.getSnapshot);
   const [dialogTopic, setDialogTopic] = useState<string | null>(null);
   const [disconnectError, setDisconnectError] = useState('');
-  useEffect(() => { setDialogTopic(null); }, [topicId]);
+  const receipts = useSyncExternalStore(runtime.receipts.subscribe, runtime.receipts.getSnapshot);
+  useSyncExternalStore(runtime.store.subscribe, runtime.store.getState);
+  const service = useSyncExternalStore(runtime.service.subscribe, runtime.service.getSnapshot);
+  const [expanded, setExpanded] = useState(false);
+  const [hiddenReceipt, setHiddenReceipt] = useState<string | null>(null);
+  useEffect(() => { setDialogTopic(null); setExpanded(false); setHiddenReceipt(null); }, [topicId]);
+  useEffect(() => { setExpanded(false); }, [receipts.receipt?.id]);
   const current = snapshot.topicId === topicId ? snapshot : null;
   const connections = current?.connections ?? [];
   const operation = current?.operation;
   const busy = operation && ['reading', 'running', 'cancelling'].includes(operation.phase);
+  const receipt = receipts.topicId === topicId ? receipts.receipt : null;
+  const showReceipt = !!receipt && hiddenReceipt !== receipt.id && !busy;
+  const blocked = service.phase !== 'connected' ? tr('请等本地服务恢复连接。') : runtime.receipts.rollbackBlocked() || receipt?.rollbackBlockedReason;
+  const changes = receipt?.changes;
+  const changedNodes = changes?.nodes || [];
+  const hasChanges = !!changes && (!!changedNodes.length || !!changes.chapters.length || !!changes.edges.added.length || !!changes.edges.removed.length || !!changes.edges.modified?.length || !!changes.doc || !!changes.name);
+  const summary = changes ? [
+    changedNodes.length ? tr('节点：新增 {added} · 修改 {modified} · 移除 {removed}', {added:changedNodes.filter(node=>node.kind==='added').length,modified:changedNodes.filter(node=>node.kind==='modified').length,removed:changedNodes.filter(node=>node.kind==='removed').length}) : '',
+    changes.chapters.length ? tr('正文 {count} 处', {count:changes.chapters.length}) : '',
+    changes.edges.added.length + changes.edges.removed.length ? tr('承接 {count} 处', {count:changes.edges.added.length + changes.edges.removed.length}) : '',
+  ].filter(Boolean).join(' · ') || tr(hasChanges ? '图文已修改' : '本次图文没有变化') : '';
   return <>
     <span className="gft-local-connection-chips" role="group" aria-label={tr('已连接的会话，可横向滚动')} tabIndex={0}>
       {connections.map(connection => <span className="gft-local-connection-chip" key={connection.id}>
@@ -155,10 +205,19 @@ export function ConnectionActions({ runtime }: { runtime: LocalRuntime }) {
         </button>
         <button aria-label={`${tr('断开')} ${connection.source.title}`} onClick={() => { setDisconnectError(''); void runtime.connections.disconnect(connection.id).catch(error => setDisconnectError(messageOf(error))); }}>×</button>
       </span>)}
+      {receipt && hiddenReceipt === receipt.id && <button className="gft-local-connection-trigger" onClick={() => { setHiddenReceipt(null); setExpanded(true); }}>{tr('上次改动')}</button>}
       {!current?.connections.length && <button className="gft-local-connection-trigger" aria-haspopup="dialog" disabled={!topicId} onClick={() => { if (topicId) { setDialogTopic(topicId); void runtime.connections.refresh(topicId).catch(() => {}); } }}>{tr(current?.status === 'loading' ? '读取连接…' : '＋连接')}</button>}
     </span>
     {disconnectError && <div className="gft-local-banner" role="alert">{tr(disconnectError)}<button aria-label={tr('关闭提示')} onClick={() => setDisconnectError('')}>×</button></div>}
-    {operation && <div className={`gft-local-update-status${operation.phase === 'failed' ? ' gft-local-error' : ''}`} role={operation.phase === 'failed' ? 'alert' : 'status'}><span>{tr(operation.message)}</span>{busy ? <button disabled={operation.phase === 'cancelling'} onClick={runtime.connections.cancel}>{tr('取消')}</button> : operation.phase !== 'choosing' && <button aria-label={tr('关闭更新提示')} onClick={runtime.connections.dismiss}>×</button>}</div>}
+    {(operation || showReceipt || receipts.topicId === topicId && receipts.error) && <div className={`gft-local-update-status gft-local-receipt${expanded && showReceipt ? ' gft-local-receipt-expanded' : ''}`}>
+      {operation && <div className={`gft-local-receipt-bar${operation.phase === 'failed' ? ' gft-local-error' : ''}`} role={operation.phase === 'failed' ? 'alert' : 'status'}><span>{tr(operation.message)}</span>{busy ? <button disabled={operation.phase === 'cancelling'} onClick={runtime.connections.cancel}>{tr('取消')}</button> : !showReceipt && operation.phase !== 'choosing' && <button aria-label={tr('关闭更新提示')} onClick={runtime.connections.dismiss}>×</button>}</div>}
+      {showReceipt && receipt && <>
+        <div className="gft-local-receipt-bar"><span>{tr(receipt.rolledBackAt ? '上次更新已退回' : '上次完成的更新')} · {new Date(receipt.createdAt).toLocaleString()}</span><button disabled={receipts.rollingBack} aria-label={tr('关闭更新提示')} onClick={() => { setHiddenReceipt(receipt.id); setExpanded(false); runtime.connections.dismiss(); }}>×</button></div>
+        <div className="gft-local-receipt-bar"><span>{summary}</span><div className="gft-local-receipt-actions">{hasChanges && <button aria-expanded={expanded} onClick={() => setExpanded(value=>!value)}>{tr(expanded ? '收起改动' : '查看改动')}</button>}{!receipt.rolledBackAt && hasChanges && <button disabled={!!blocked || !receipt.canRollback || receipts.rollingBack} title={blocked || tr('恢复本次更新前的图文，保留已接收的材料。')} onClick={() => { void runtime.receipts.rollback(); }}>{tr(receipts.rollingBack ? '正在退回…' : '退回本次更新')}</button>}</div></div>
+        {expanded && <><ReceiptDetails receipt={receipt} runtime={runtime} onNavigate={() => setExpanded(false)}/>{blocked && !receipt.rolledBackAt && <p className="gft-local-receipt-source">{tr(blocked)}</p>}</>}
+      </>}
+      {receipts.topicId === topicId && receipts.error && <p className="gft-local-error" role="alert">{tr(receipts.error)} <button onClick={() => { void runtime.receipts.refresh(); }}>{tr('重新读取改动')}</button></p>}
+    </div>}
     {dialogTopic && dialogTopic === topicId && <ConnectionManager key={dialogTopic} runtime={runtime} topicId={dialogTopic} projects={projects} onClose={() => setDialogTopic(null)} />}
   </>;
 }

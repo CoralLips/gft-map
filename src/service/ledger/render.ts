@@ -83,6 +83,14 @@ export function renderGraph(st: LedgerState): { nodes: LedgerNode[]; edges: Ledg
     edges = edges.filter(e => e[0] !== d && e[1] !== d);
     for (const p of preds) for (const s of succs) edges.push([p, s]);
   }
+  const inheritedNotes = new Map<string, Set<string>>();
+  for (const relation of st.relations) {
+    const note = st.relationNotes?.get(`${relation.from}→${relation.to}`);
+    if (!note) continue;
+    const key = `${resolve(relation.from)}→${resolve(relation.to)}`;
+    if (!inheritedNotes.has(key)) inheritedNotes.set(key,new Set());
+    inheritedNotes.get(key)!.add(note);
+  }
   const seen = new Set<string>();
   const out: LedgerEdge[] = [];
   for (const [from, to] of edges) {
@@ -90,7 +98,9 @@ export function renderGraph(st: LedgerState): { nodes: LedgerNode[]; edges: Ledg
     const key = `${from}→${to}`;
     if (seen.has(key) || st.cuts.has(key)) continue;
     seen.add(key);
-    out.push({ id: `le_${key}`, from, to });
+    const notes = inheritedNotes.get(key);
+    const reason = st.relationNotes?.has(key) ? st.relationNotes.get(key) : notes?.size === 1 ? [...notes][0] : undefined;
+    out.push({ id: `le_${key}`, from, to, ...(reason ? {reason} : {}) });
   }
   return { nodes, edges: out };
 }
@@ -156,19 +166,11 @@ export function docChars(st: LedgerState): number {
   return renderDoc(st).replace(/\s+/g, '').length;
 }
 
-/**
- * D53 时间主干：每条判断只画最近的一条正向来路；完整关系留在账和缓存中。
- * 这里仅投影已有承接，不能根据时间相邻生成关系。
- */
+/** 画出有效端点之间的全部正向承接，不因另一条较近来路而隐藏人画的线。 */
 export function timelineEdges<E extends { from: string; to: string }>(nodes: Array<{ id: string; order: number }>, edges: E[]): E[] {
-  const orderOf = new Map(nodes.map(n => [n.id, n.order]));
-  const best = new Map<string, E>();
-  for (const e of edges) {
-    const fo = orderOf.get(e.from);
-    const to = orderOf.get(e.to);
-    if (fo === undefined || to === undefined || fo >= to) continue;
-    const cur = best.get(e.to);
-    if (!cur || orderOf.get(cur.from)! < fo) best.set(e.to, e);
-  }
-  return edges.filter(e => best.get(e.to) === e);
+  const orderOf=new Map(nodes.map(n=>[n.id,n.order]));
+  return edges.filter(e=>{
+    const from=orderOf.get(e.from),to=orderOf.get(e.to);
+    return from!==undefined && to!==undefined && from<to;
+  });
 }

@@ -1,3 +1,4 @@
+import {checkedRelationReason} from '../../service/relationReason';
 import { recordDocumentInput } from '../../service/ledger/docEdit';
 import { appendSourceLog, renderSourceLog, hasSourceLog, sourceRecordsFromEvents } from '../../service/sourceLog';
 /**
@@ -11,7 +12,7 @@ import type { ThinkingMapRuntime, ThinkingMapStore } from './runtime';
 import type { FocusCard } from '../../type/focusCard';
 import { THINKING_MAP_PROJECT_ID, DEFAULT_PROJECT_NAME } from '../../service/thinkingMapCore';
 import { tidyTarget, TIDY_MAX_ROUNDS } from '../../service/tidyCore';
-import { parseLedger, emptyLedgerState, appendLines, judgmentLines, relationLine, sessionLine, decision, liveJudgments, docChars, themeOf, stripToRaw, renderSourceDoc, type LedgerState } from '../../service/ledger';
+import { parseLedger, emptyLedgerState, appendLines, judgmentLines, relationLine, sessionLine, decision, aiDecision, liveJudgments, docChars, themeOf, stripToRaw, renderSourceDoc, type LedgerState } from '../../service/ledger';
 import { foldLedger, linesFromGenerate, absorbLegacyRow, tidyInput, tidyOpsToLines } from '../../service/ledger/bridge';
 import { docEditLines } from '../../service/ledger/docEdit';
 import { buildChatText } from '../../util/chatHistory';
@@ -39,8 +40,13 @@ export interface ThinkingMapState {
   sourceWatermarks: Map<string, string>;
   /** 正在图上就地编辑 title 的节点（手动加节点流程用） */
   editingNodeId: string | null;
+  /** 节点说明正在输入：远端刷新和整次回退等待保存或取消，不能吞掉草稿。 */
+  editingNodeBodyId: string | null;
+  editingEdgeId: string | null;
+  explainingEdgeIds: Set<string>;
   /** 框选/加选的节点集（Shift 拖框选、Ctrl 点加选；跨组件共享：View 写、Panel 读） */
   selectedNodeIds: Set<string>;
+  selectedEdgeIds: Set<string>;
   /** 最近一次删除的信息（toast 文案用；撤销走统一栈 undo()） */
   lastDeleted: { node: FocusCard; edges: ThinkingEdge[]; bridges?: ThinkingEdge[] } | null;
   /** 当前图归属的 project（hydrate 设置；防抖落库用它做键） */
@@ -51,6 +57,8 @@ export interface ThinkingMapState {
   isCondensing: boolean;
   /** 图文整理进行中；全部结果一次提交 */
   isTidying: boolean;
+  /** Immutable input selection for progress indicators; null means a whole-topic operation. */
+  tidyScopeIds: Set<string> | null;
   /** 单节点整理（✨）进行中；refiningNodeId=正在整理哪个节点（节点本体显示加载态——反馈不挂 hover 浮层） */
   isRefining: boolean;
   refiningNodeId: string | null;
@@ -148,6 +156,7 @@ export interface ThinkingMapActions {
   /** 手动种一个判断；afterId 传入时新节点承接它（「↳ 接一条」）；返回新节点 id */
   addNode: (opts?: { title?: string; afterId?: string }) => string;
   setEditingNode: (id: string | null) => void;
+  setEditingNodeBody: (id: string | null) => void;
   /** 手动牵一条承接线（🔗 连线）：方向=用户操作顺序；拒绝自环/重复/成环 */
   addEdgeManual: (from: string, to: string) => boolean;
   /** 三区拖放 · 中间：node 改为承接 target（替换全部入边；出边一根不动） */
@@ -167,11 +176,17 @@ export interface ThinkingMapActions {
   redo: () => void;
   /** 同步框选/加选状态（View 的 selection changes 写入；Panel 的「整理」按它分流） */
   setSelectedNodes: (ids: string[]) => void;
+  setSelectedEdges: (ids: string[]) => void;
+  deleteElements: (nodeIds: string[], edgeIds: string[]) => void;
   /** 批量删除（多选工具条）：一次入栈=一次 Ctrl+Z 全回；逐个桥接续链；L2=拆开 */
   deleteNodes: (ids: string[]) => void;
   /** 删节点同时删掉所有触及它的边（快照存入 lastDeleted 供撤销） */
   deleteNode: (id: string) => void;
   deleteEdge: (edgeId: string) => void;
+  editEdgeReason: (edgeId: string, reason: string) => void;
+  explainEdge: (edgeId: string) => Promise<void>;
+  cancelEdgeExplanation: (edgeId: string) => void;
+  setEditingEdge: (edgeId: string | null) => void;
   /** 标记节点已存入项目（P0③ 沉淀探针） */
   markSaved: (id: string) => void;
   /** 清除节点的未读红点（单击展开时调；已读的从视觉消失，跟 nodes 落库） */
@@ -238,6 +253,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
   let generationAbort: AbortController | null = null;
   let tidyAbort: AbortController | null = null;
   let refineAbort: AbortController | null = null;
+  const relationAborts=new Map<string,AbortController>();
+  let relationQueue:Promise<void>=Promise.resolve();
   async function applySuggestedName(projectId: string | null, name?: string): Promise<void> {
     if (!projectId || !name) return;
     const project = runtime.host.getSnapshot().projects.find(p => p.id === projectId);
@@ -372,6 +389,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       edges: caches.edges,
       doc: caches.doc,
       groupMap: caches.groupMap,
+      selectedNodeIds: new Set([...s.selectedNodeIds].filter(id=>caches.nodes.some(n=>n.id===id&&!n.condensedInto))),
+      selectedEdgeIds: new Set([...s.selectedEdgeIds].filter(id=>caches.edges.some(e=>e.id===id&&!e.hiddenBy))),
       ...extra,
     });
   }
@@ -402,7 +421,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     const s = store.getState();
     // Remote refresh/save echoes must never submit or normalize an active draft.
     // The next refresh merges it after an explicit editing boundary.
-    if (s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null) return null;
+    if (s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null) return null;
     let absorbed: ReturnType<typeof absorbLegacyRow>;
     let raw: string;
     try {
@@ -439,13 +458,16 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     groupMap: new Map<string, string>(),
     sourceWatermarks: new Map<string, string>(),
     editingNodeId: null,
-    selectedNodeIds: new Set<string>(),
+    editingNodeBodyId: null,
+      editingEdgeId: null,
+    selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>(),
     lastDeleted: null,
     boundProjectId: null,
     isHydrating: false,
     isGenerating: false,
     isCondensing: false,
-    isTidying: false,
+    isTidying: false, tidyScopeIds: null,
+    explainingEdgeIds:new Set<string>(),
     isRefining: false,
     refiningNodeId: null,
     streamingCount: null,
@@ -476,7 +498,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const epoch = projectEpoch;
       if (!pid) return false;
       // 在途保存和待上传修改均算脏；保存时会检查远端版本并合入这次通知。
-      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.isRefining || s.isGenerating || s.isTidying || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
+      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null || s.explainingEdgeIds.size>0 || s.isRefining || s.isGenerating || s.isTidying || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
       if (busy(get())) return false;
       const remote = await loadThinkingMap(pid); // 读取不确认版本，实际接受之后才记。
       if (!remote) return false;
@@ -487,7 +509,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const changed = ingestRemoteMap(remote, true);
       if (!changed) return false;
       clearUndo(); // 跨版本撤销＝灾难（同"切换脉络清栈"定式）
-      set({ newIds: [], editingNodeId: null, selectedNodeIds: new Set<string>(), lastDeleted: null, lastCondensedL2Ids: null });
+      set({ newIds: [], editingNodeId: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>(), lastDeleted: null, lastCondensedL2Ids: null });
       console.debug(`🧭 远端变更已同步：账 ${before.length} → ${get().ledger.length} 字`);
       return true;
     },
@@ -498,6 +520,9 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       get().cancelGeneration();
       refineAbort?.abort();
       refineAbort = null;
+      for(const controller of relationAborts.values())controller.abort();
+      relationAborts.clear();
+      set({explainingEdgeIds:new Set<string>()});
       get().flushDocEdits();
       flushPersist(get()); // 旧图的最后一笔先落盘
       const epoch = ++projectEpoch;
@@ -523,8 +548,10 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           userEditedIds: new Set<string>(),
           savedIds: new Set<string>(),
           sourceText: '',
-          selectedNodeIds: new Set<string>(),
+          selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>(),
           editingNodeId: null,
+          editingNodeBodyId: null,
+      editingEdgeId: null,
           lastDeleted: null,
           lastCondensedL2Ids: null,
           docDraft: null,
@@ -554,7 +581,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       try {
         const loaded = await loadThinkingMap(projectId);
         if (epoch !== projectEpoch) return;
-        const edited = recovering || get().ledger !== initialLedger || get().raw !== initialRaw || get().docDraft !== null;
+        const edited = recovering || get().ledger !== initialLedger || get().raw !== initialRaw || get().docDraft !== null || get().editingNodeBodyId !== null || get().editingEdgeId !== null;
         if (edited) {
           get().flushDocEdits();
           if (loaded) {
@@ -623,7 +650,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const controller = new AbortController();
       tidyAbort = controller;
       const context = { projectId: bound, signal: controller.signal };
-      set({ isTidying: true, tidyRound: 0, error: null });
+      set({ isTidying: true, tidyScopeIds: scope ? new Set(scope) : null, tidyRound: 0, error: null });
       const lines: string[] = [sessionLine(Date.now(), '本地', scope ? '整理选中' : '整理')];
       let text = appendLines(base, lines);
       let cur = parseLedger(text);
@@ -640,7 +667,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           rounds = round;
           const ops = await runtime.ai.tidy({ ...tidyInput(cur, get().unreadIds, source), sourceDoc: renderSourceLog(rawBase), target, consolidationRetry, ...(scope ? { scopeIds: [...scope] } : {}) }, modelId ? { modelId } : undefined, context);
           if (run !== tidyRun) return null; // 取消、切图或重新开始后，旧结果不再有权落账
-          if (get().boundProjectId !== bound) { set({ isTidying: false, tidyRound: null }); return null; } // 期间切图 → 丢弃
+          if (get().boundProjectId !== bound) { set({ isTidying: false, tidyScopeIds: null, tidyRound: null }); return null; } // 期间切图 → 丢弃
           const r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
           // 主题提案被共享写入层忽略后，不重试模型，也不制造空整理场次或撤销记录。
           if (!r.lines.length && themeOf(cur) && ops.length && ops.every(op => op.kind === 'prose' && op.domain === '主题')) break;
@@ -665,12 +692,12 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         }
         get().flushDocEdits(); // 正在输入、尚未失焦的 Doc 草稿也先纳入并发检查
         if (get().ledger !== base || get().raw !== rawBase) {
-          set({ isTidying: false, tidyRound: null, error: '整理期间账被改动，这次作废——再点一次「整理」' });
+          set({ isTidying: false, tidyScopeIds: null, tidyRound: null, error: '整理期间账被改动，这次作废——再点一次「整理」' });
           return null;
         }
         const edgesNow = get().edges.length;
         if (applied === 0) {
-          set({ isTidying: false, tidyRound: null, selectedNodeIds: new Set<string>() });
+          set({ isTidying: false, tidyScopeIds: null, tidyRound: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
           return { changed: false, entries: liveJudgments(s.ledgerState).length, mergedGroups: 0, dropped: 0, added: 0, edges: edgesNow, before, after: before, textBefore, textAfter: textBefore, rounds };
         }
         // 合出来的判断：成员有未读的就带红点；退休的成员不再算未读
@@ -680,7 +707,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           if (j?.mergedFrom.some(m => unreadIds.has(m))) unreadIds.add(id);
           j?.mergedFrom.forEach(m => unreadIds.delete(m));
         }
-        commitLines(lines, { extra: { isTidying: false, tidyRound: null, unreadIds, selectedNodeIds: new Set<string>() } });
+        commitLines(lines, { extra: { isTidying: false, tidyScopeIds: null, tidyRound: null, unreadIds, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
         const after = countInScope(get().ledgerState);
         const textAfter = docChars(get().ledgerState);
         console.debug(`🧹 整理完成: ${before}→${after} 条，${textBefore}→${textAfter} 字，${rounds} 轮`);
@@ -688,7 +715,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       } catch (err) {
         if (run !== tidyRun) return null; // 旧任务的报错也不能清掉新任务的状态
         console.error('❌ 整理失败:', err);
-        set({ isTidying: false, tidyRound: null, error: err instanceof Error ? err.message : '整理失败' });
+        set({ isTidying: false, tidyScopeIds: null, tidyRound: null, error: err instanceof Error ? err.message : '整理失败' });
         return null;
       } finally {
         if (tidyAbort === controller) tidyAbort = null;
@@ -700,6 +727,9 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       get().cancelGeneration();
       refineAbort?.abort();
       refineAbort = null;
+      for(const controller of relationAborts.values())controller.abort();
+      relationAborts.clear();
+      set({explainingEdgeIds:new Set<string>()});
       projectEpoch++;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } // 丢弃挂起的落库（项目已删/已退出）
       set({ docDraft: null, sourceDraftActive: false, raw: '' });
@@ -718,7 +748,9 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         sourceWatermarks: new Map<string, string>(),
         doc: '',
         editingNodeId: null,
-        selectedNodeIds: new Set<string>(),
+        editingNodeBodyId: null,
+      editingEdgeId: null,
+        selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>(),
         lastDeleted: null,
           boundProjectId: null,
           isHydrating: false,
@@ -908,7 +940,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       tidyRun++;
       tidyAbort?.abort();
       tidyAbort = null;
-      set({ isTidying: false, tidyRound: null, selectedNodeIds: new Set<string>() });
+      set({ isTidying: false, tidyScopeIds: null, tidyRound: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
     },
 
     updateNode: (id, updates) => {
@@ -945,6 +977,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     },
 
     setEditingNode: (id) => set({ editingNodeId: id }),
+    setEditingNodeBody: (id) => set({ editingNodeBodyId: id }),
 
     addEdgeManual: (a, b) => {
       const s = get();
@@ -957,6 +990,10 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (s.edges.some(e => e.from === from && e.to === to)) return false; // 重复
       if (wouldCycle(s.edges, from, to)) return false; // 真循环
       commitLines([decision.link(to, from)]);
+      if(runtime.ai.explainRelation) {
+        const edge=get().edges.find(e=>e.from===from&&e.to===to);
+        if(edge)void get().explainEdge(edge.id);
+      }
       return true;
     },
 
@@ -997,7 +1034,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     dissolveGroup: (l2Id) => {
       const j = get().ledgerState.judgments.get(l2Id);
       if (!j || j.deleted) return;
-      commitLines([decision.remove(l2Id)], { extra: { selectedNodeIds: new Set<string>() } });
+      commitLines([decision.remove(l2Id)], { extra: { selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
     },
 
     undo: () => {
@@ -1009,7 +1046,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (redoStack.length > UNDO_DEPTH) redoStack.shift();
       // 不 bump generation：撤回不改变用户当前视野（2026-07-12 用户定则）
       set({ unreadIds: new Set(snap.unreadIds) });
-      applyLedgerText(snap.ledger, { lastDeleted: null, lastCondensedL2Ids: null, editingNodeId: null, selectedNodeIds: new Set<string>() });
+      applyLedgerText(snap.ledger, { lastDeleted: null, lastCondensedL2Ids: null, editingNodeId: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
       schedulePersist(get);
     },
 
@@ -1021,7 +1058,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       undoStack.push({ ledger: cur.ledger, unreadIds: new Set(cur.unreadIds) }); // 当前态回撤销栈（不走 pushUndo：那会清空 redo）
       if (undoStack.length > UNDO_DEPTH) undoStack.shift();
       set({ unreadIds: new Set(snap.unreadIds) });
-      applyLedgerText(snap.ledger, { lastDeleted: null, lastCondensedL2Ids: null, editingNodeId: null, selectedNodeIds: new Set<string>() });
+      applyLedgerText(snap.ledger, { lastDeleted: null, lastCondensedL2Ids: null, editingNodeId: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
       schedulePersist(get);
     },
 
@@ -1033,13 +1070,37 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       });
     },
 
+    setSelectedEdges: (ids) => {
+      set(state => {
+        if (ids.length === state.selectedEdgeIds.size && ids.every(id => state.selectedEdgeIds.has(id))) return state;
+        return { selectedEdgeIds: new Set(ids) };
+      });
+    },
+
+    deleteElements: (nodeIds, edgeIds) => {
+      const current = get();
+      if (current.editingNodeId || current.editingNodeBodyId || current.editingEdgeId) return;
+      const nodes = new Set(nodeIds.filter(id => current.nodes.some(n => n.id === id)));
+      const edges = current.edges.filter(e => edgeIds.includes(e.id));
+      if (!nodes.size && !edges.length) return;
+      for (const edge of current.edges) {
+        if (nodes.has(edge.from) || nodes.has(edge.to) || edgeIds.includes(edge.id)) current.cancelEdgeExplanation(edge.id);
+      }
+      const lines = [
+        ...[...nodes].map(id => decision.remove(id)),
+        ...edges.map(e => decision.unlink(e.to, e.from)),
+      ];
+      const node=nodes.size===1&&edges.length===0?current.nodes.find(n=>nodes.has(n.id)):undefined;
+      commitLines(lines, { extra: { lastDeleted: node ? {node,edges:current.edges.filter(e=>nodes.has(e.from)||nodes.has(e.to))} : null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
+    },
+
     deleteNodes: (ids) => {
       const st = get().ledgerState;
       const valid = ids.filter(id => st.judgments.has(id) && !st.judgments.get(id)!.deleted);
       if (valid.length === 0) return;
       // 删掉的节点由渲染自动短路（上游×下游接上），账里只记删
       const lines = valid.map(id => decision.remove(id));
-      commitLines(lines, { extra: { lastDeleted: null, selectedNodeIds: new Set<string>() } });
+      commitLines(lines, { extra: { lastDeleted: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
     },
 
     deleteNode: (id) => {
@@ -1047,13 +1108,64 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const j = st.judgments.get(id);
       if (!j || j.deleted) return;
       // 选中集合同步清空——被删 id 残留=幽灵（2026-07-11 dogfood 实测抓获）；短路由渲染做
-      commitLines([decision.remove(id)], { extra: { selectedNodeIds: new Set<string>() } });
+      commitLines([decision.remove(id)], { extra: { selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
     },
 
+    setEditingEdge:(editingEdgeId)=>set({editingEdgeId}),
+    editEdgeReason:(edgeId,reason)=>{
+      get().cancelEdgeExplanation(edgeId);
+      const e=get().edges.find(x=>x.id===edgeId);
+      if(!e || (e.reason || '')===reason.trim())return;
+      try {commitLines([decision.edgeNote(e.to,e.from,checkedRelationReason(reason))]);}
+      catch(error){set({error:error instanceof Error?error.message:'Invalid relationship caption.'});}
+    },
     deleteEdge: (edgeId) => {
+      get().cancelEdgeExplanation(edgeId);
       const e = get().edges.find(x => x.id === edgeId);
       if (!e) return;
       commitLines([decision.unlink(e.to, e.from)]);
+    },
+
+    cancelEdgeExplanation:(edgeId)=>{
+      relationAborts.get(edgeId)?.abort();
+      relationAborts.delete(edgeId);
+      set(s=>({explainingEdgeIds:new Set([...s.explainingEdgeIds].filter(id=>id!==edgeId))}));
+    },
+    explainEdge:async(edgeId)=>{
+      if(!runtime.ai.explainRelation || relationAborts.has(edgeId))return;
+      get().flushDocEdits();
+      const state=get(),edge=state.edges.find(e=>e.id===edgeId);
+      if(!edge || state.isGenerating || state.isTidying || state.isRefining)return;
+      const bound=state.boundProjectId,epoch=projectEpoch,controller=new AbortController();
+      relationAborts.set(edgeId,controller);
+      set(s=>({explainingEdgeIds:new Set(s.explainingEdgeIds).add(edgeId),error:null}));
+      const previousJob=relationQueue;
+      let release!:()=>void;
+      relationQueue=new Promise<void>(resolve=>{release=resolve;});
+      const node=(id:string)=>{
+        const s=get(),n=s.nodes.find(n=>n.id===id);
+        return n?{...n,body:s.ledgerState.judgments.get(id)?.content ?? n.body}:null;
+      };
+      try {
+        await previousJob;
+        if(controller.signal.aborted || epoch!==projectEpoch || get().boundProjectId!==bound)return;
+        const current=get().edges.find(e=>e.id===edgeId),from=node(edge.from),to=node(edge.to);
+        if(!current || !from || !to)return;
+        const identity=JSON.stringify([from.title,from.body,to.title,to.body,current.reason || '']);
+        const reason=await runtime.ai.explainRelation(from,to,current.reason || '',{projectId:bound,signal:controller.signal});
+        if(controller.signal.aborted || epoch!==projectEpoch || get().boundProjectId!==bound)return;
+        const latest=get().edges.find(e=>e.id===edgeId),f=node(edge.from),t=node(edge.to);
+        if(!latest || !f || !t || get().editingEdgeId===edgeId || identity!==JSON.stringify([f.title,f.body,t.title,t.body,latest.reason || '']))return;
+        if(reason.trim() && reason.trim()!==(latest.reason || ''))commitLines([aiDecision.edgeNote(edge.to,edge.from,checkedRelationReason(reason))]);
+      } catch(error) {
+        if(!controller.signal.aborted && epoch===projectEpoch)set({error:error instanceof Error?error.message:'关系说明失败，连线已保留。'});
+      } finally {
+        release();
+        if(relationAborts.get(edgeId)===controller){
+          relationAborts.delete(edgeId);
+          set(s=>({explainingEdgeIds:new Set([...s.explainingEdgeIds].filter(id=>id!==edgeId))}));
+        }
+      }
     },
 
     markSaved: (id) => {
@@ -1070,6 +1182,12 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     },
 
     refineNode: async (id) => {
+      if(runtime.nodeRefinement==='document') {
+        const state=get();
+        if(state.editingNodeId||state.editingNodeBodyId||state.editingEdgeId)return;
+        await state.tidyWhitebox([id]);
+        return;
+      }
       get().flushDocEdits();
       const state = get();
       if (state.isRefining || state.isGenerating || state.isTidying) return;
@@ -1223,7 +1341,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         userEditedIds: new Set<string>(),
         savedIds: new Set<string>(),
         sourceWatermarks: new Map<string, string>(),
-        selectedNodeIds: new Set<string>(),
+        selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>(),
         error: null,
       });
       schedulePersist(get);

@@ -1,3 +1,4 @@
+import {RelationReason,type NodeRelation} from './RelationReason';
 /**
  * ExploreTreeNode — 探索模式的 reactflow 节点
  *  - 数据源 FocusCard + CandidateItem（虚框候选：isCandidate=true 时虚线 + ✓✕ 按钮）
@@ -11,6 +12,7 @@ import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 import { diffArrays } from 'diff';
 import { copyToClipboard } from '../../../util/clipboard';
+import { useT } from '../../../i18n';
 import styles from './ExploreTreeNode.module.css';
 
 // 把中文长文本切分成句子数组（按 。！？\n 等分隔）
@@ -64,6 +66,13 @@ export interface ExploreNodeData {
   id: string;
   title: string;
   body: string;
+  incomingRelations?: NodeRelation[];
+  onRelationExplain?: (id:string)=>void;
+  onRelationCancel?: (id:string)=>void;
+  onRelationHover?: (id:string|null)=>void;
+  onRelationSelect?: (id:string)=>void;
+  onRelationChange?: (id:string,text:string)=>void;
+  onRelationEditing?: (id:string|null)=>void;
   notes: { id: string; text: string; createdAt: number }[];
   commits: ExploreCommit[];
   headCommitId: string | null;
@@ -158,6 +167,7 @@ export interface ExploreNodeData {
   /** 是否已存入项目（按钮变 ✓ 防重复） */
   isSaved?: boolean;
   onBodyChange?: (id: string, newBody: string) => void;
+  onBodyEditingChange?: (id: string, editing: boolean) => void;
   onRemoveNote?: (id: string, noteId: string) => void;
   onCommit?: (id: string, message: string) => void;
   onRestoreCommit?: (id: string, commitId: string) => void;
@@ -194,6 +204,8 @@ const arePropsEqual = (prev: NodeProps<ExploreNodeData>, next: NodeProps<Explore
     p.id === n.id &&
     p.title === n.title &&
     p.body === n.body &&
+    p.incomingRelations === n.incomingRelations &&
+    p.onNodeClick === n.onNodeClick && p.onTogglePanel === n.onTogglePanel &&
     p.notes.length === n.notes.length &&
     (p.notes.length === 0 || p.notes[p.notes.length - 1].id === n.notes[n.notes.length - 1].id) &&
     commitsEqual(p.commits, n.commits) &&
@@ -203,7 +215,7 @@ const arePropsEqual = (prev: NodeProps<ExploreNodeData>, next: NodeProps<Explore
     p.suggestion?.isGenerating === n.suggestion?.isGenerating &&
     p.isPanelOpen === n.isPanelOpen &&
     p.isCandidate === n.isCandidate &&
-    p.isHighlighted === n.isHighlighted &&
+    p.isHighlighted === n.isHighlighted && p.refining === n.refining &&
     p.hasChildren === n.hasChildren &&
     p.isExpanded === n.isExpanded &&
     p.isDragging === n.isDragging &&
@@ -226,7 +238,9 @@ const arePropsEqual = (prev: NodeProps<ExploreNodeData>, next: NodeProps<Explore
 };
 
 export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.Element => {
+  const tr = useT();
   const {
+    incomingRelations,onRelationChange,onRelationEditing,onRelationExplain,onRelationCancel,onRelationHover,onRelationSelect,
     id, title, body, notes, commits, headCommitId, isCandidate, isPanelOpen,
     isHighlighted,
     hasChildren, isExpanded,
@@ -235,7 +249,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
     onNodeClick, onToggleExpand, onDelete,
     onTitleChange, onCancelEdit, onConfirm, onReject,
     onAddChildWithType,
-    onTogglePanel, onSaveToProject, isSaved, onBodyChange, onRemoveNote, onCommit, onRestoreCommit,
+    onTogglePanel, onSaveToProject, isSaved, onBodyChange, onBodyEditingChange, onRemoveNote, onCommit, onRestoreCommit,
     onContinueFrom, onStartLinking, onDeleteSelf, onRefine, onViewDoc, refining,
     memberCount, members, onDissolve, isMultiSelected, unread,
     unresolved, // superseded 仍在 props/memo 比较里，图上不再消费（9-5 删灰显）
@@ -341,6 +355,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
   // 关闭面板/退出 viewing 时重置 diff
   useEffect(() => {
     if (!isPanelOpen) {
+      setIsEditingBody(false);
       setViewingCommitId(null);
       setShowDiff(false);
     }
@@ -352,6 +367,12 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
   useEffect(() => {
     if (!isEditingBody) setBodyDraft(body);
   }, [body, isEditingBody]);
+
+  useLayoutEffect(() => {
+    if (!isEditingBody || !isPanelOpen) return;
+    onBodyEditingChange?.(id, true);
+    return () => onBodyEditingChange?.(id, false);
+  }, [id, isEditingBody, isPanelOpen, onBodyEditingChange]);
 
   useEffect(() => {
     if (isEditingBody && bodyTextareaRef.current) {
@@ -464,6 +485,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
           className={nodeClassName}
           onClick={() => { if (!isEditing) onNodeClick(id); }}
         >
+          {inlineBody && refining && <span className={styles.nodeProcessing} role="status" aria-label="正在处理这个节点"><span className={styles.relationSpinner}/></span>}
           {/* 未读红点（增量新增未点开）：右上角外挂小圆点，单击节点即清——微信未读点同款 */}
           {inlineBody && unread && !isEditing && <span className={styles.unreadDot} />}
 
@@ -576,17 +598,17 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                 className={styles.selectedToolbarBtn}
                 onClick={() => onRefine(id)}
                 disabled={refining}
-                title="让 AI 根据上下文完善这个节点：粗记→改锐利补支撑；未解的问题→尝试找答案接上（找到答案问号自动熄灭）"
+                title={tr('根据现有材料整理这个要点的表达；可撤回')}
               >{refining ? '✨ 整理中…' : '✨ 整理'}</button>
             )}
             {onViewDoc && (
-              <button className={styles.selectedToolbarBtn} onClick={() => onViewDoc(id)} title="到白盒文档看这一条的完整表述">📄 Doc</button>
+              <button className={styles.selectedToolbarBtn} onClick={() => onViewDoc(id)} title={tr('查看相关正文')}>📄 Doc</button>
             )}
             {/* L2 判断的"删除"=拆开（成员回图面，数据无损）；普通节点=删除（3 秒撤销） */}
             {memberCount && onDissolve ? (
               <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDissolve(id)} title="拆开这组：上层判断移除，成员节点回到图面">⊗ 拆开</button>
             ) : onDeleteSelf ? (
-              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDeleteSelf(id)} title="删除（3 秒内可撤销）">🗑 删除</button>
+              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDeleteSelf(id)} disabled={isEditingBody} title="删除（3 秒内可撤销）">🗑 删除</button>
             ) : null}
           </div>
         )}
@@ -629,6 +651,8 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
           <div
             className={`${styles.detailPanel} nopan nodrag nowheel`}
             data-gft-detail=""
+            onPointerDown={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
@@ -672,6 +696,14 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                   style={isSaved ? { opacity: 0.55 } : undefined}
                   title={isSaved ? '已存入项目' : '存入项目（成为长期资产）'}
                 >{isSaved ? '✓' : '⤵'}</button>
+              )}
+              {onBodyChange && !isViewingPast && !isReadonly && !isEditingBody && (
+                <button
+                  className={styles.detailCopyBtn}
+                  onClick={(e) => { e.stopPropagation(); setIsEditingBody(true); }}
+                  title={tr('编辑节点说明')}
+                  aria-label={tr('编辑节点说明')}
+                >✎</button>
               )}
               <button
                 className={styles.detailCopyBtn}
@@ -749,14 +781,15 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
 
             {/* body 段：可编辑（仅 HEAD 时） */}
             <div className={styles.detailSection}>
-              {/* 脉络场景（无 onBodyChange 且非历史态）整行标签不渲染——「完整表述」四个字零信息量（2026-9-1 用户拍），正文直接开始 */}
-              {(onBodyChange || isViewingPast || showDiff) && (
+              {/* Map 详情直接呈现说明，不增加 Body 标签。 */}
+              {((onBodyChange && !inlineBody) || isViewingPast || showDiff) && (
                 <div className={styles.detailSectionLabel}>
-                  {onBodyChange ? 'Body' : null}
+                  {onBodyChange && !inlineBody ? 'Body' : null}
                   {isViewingPast && !showDiff && <span className={styles.detailReadOnlyTag}>read-only</span>}
                   {showDiff && <span className={styles.detailDiffTag}>diff</span>}
                 </div>
               )}
+              {incomingRelations && incomingRelations.length>0 && <div className={styles.nodeRelations}>{incomingRelations.map(relation=><RelationReason key={relation.id} relation={relation} onChange={onRelationChange} onEditing={onRelationEditing} onExplain={onRelationExplain} onCancel={onRelationCancel} onHover={onRelationHover} onSelect={onRelationSelect}/>)}</div>}
               {showDiff && diffChunks ? (
                 <div className={`${styles.detailBody} ${styles.detailBodyDiff}`}>
                   {diffChunks.length === 0 ? (
@@ -778,6 +811,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                 <textarea
                   ref={bodyTextareaRef}
                   className={styles.detailBodyEdit}
+                  aria-label={tr('编辑节点说明')}
                   value={bodyDraft}
                   onChange={(e) => {
                     setBodyDraft(e.target.value);
@@ -788,27 +822,28 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                   }}
                   onBlur={commitBody}
                   onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
                     if (e.key === 'Escape') {
                       e.preventDefault();
+                      e.stopPropagation();
                       setBodyDraft(body);
                       setIsEditingBody(false);
-                    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    } else if ((e.key === 'Enter' || e.key.toLowerCase() === 's') && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
+                      e.stopPropagation();
                       commitBody();
                     }
                   }}
-                  placeholder="还没沉淀，focus 之后会自动填入"
+                  placeholder={inlineBody ? tr('解释这个要点的理由、例子和条件') : '还没沉淀，focus 之后会自动填入'}
                 />
               ) : (
                 <div
                   className={`${styles.detailBody} ${!displayBody?.trim() ? styles.detailBodyEmpty : ''} ${(isViewingPast || isReadonly) ? styles.detailBodyReadonly : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    // 无 onBodyChange = 正文只读（与 title 同定式；思维脉络走这条：
-                    // 正文来自白盒文档，改它要去 Doc 页签，图上不开反向通道）
                     if (!isViewingPast && !isReadonly && onBodyChange) setIsEditingBody(true);
                   }}
-                  title={!onBodyChange ? '正文来自白盒文档——改它请到 Doc 页签' : isReadonly ? '只读模式' : isViewingPast ? '历史版本（read-only）' : '点击编辑'}
+                  title={!onBodyChange || isReadonly ? '只读模式' : isViewingPast ? '历史版本（read-only）' : tr('点击编辑节点说明')}
                 >
                   {displayBody?.trim() || (!onBodyChange || isReadonly ? '（空）' : '（空，点击编辑）')}
                 </div>
@@ -1008,6 +1043,12 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
 
             </div>
 
+              {inlineBody && (onViewDoc || isEditingBody) && (
+                <div className={styles.detailReadingActions} data-gft-detail-footer="">
+                  {isEditingBody && <span title={tr('此处编辑节点说明；章节正文可单独编辑。')}>{tr('移开焦点保存，Esc 取消')}</span>}
+                  {onViewDoc && <button title={tr('此处编辑节点说明；章节正文可单独编辑。')} onClick={() => onViewDoc(id)}>{tr('查看相关正文')} ↗</button>}
+                </div>
+              )}
             {/* Commit 弹窗：嵌入在 detailPanel 内部 */}
             {isCommitDialogOpen && (
               <div

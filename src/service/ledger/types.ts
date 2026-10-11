@@ -85,6 +85,7 @@ export interface LedgerState {
   relations: LedgerRelation[];
   /** 被人断掉的自动接续边（`from→to`） */
   cuts: Set<string>;
+  relationNotes?: Map<string,string>;
   prose: LedgerProse[];
   sessions: LedgerSession[];
   /** 域按首次出现序 */
@@ -114,6 +115,7 @@ export interface LedgerNode {
 }
 
 export interface LedgerEdge {
+  reason?: string;
   id: string;
   from: string;
   to: string;

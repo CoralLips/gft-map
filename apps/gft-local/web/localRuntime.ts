@@ -1,3 +1,5 @@
+import {RelationReasonLengthError} from '../../../src/service/relationReason';
+import {buildRelationExplanationRequest,parseRelationExplanation} from '../../../src/service/relationExplanation';
 import { createThinkingMapStore } from '../../../src/store/thinkingMap/createStore';
 import type { MapComputeContext, MapHostSnapshot, ThinkingMapHost, ThinkingMapRuntime } from '../../../src/store/thinkingMap/runtime';
 import type { PersistedThinkingMap } from '../../../src/type/thinkingMap';
@@ -18,6 +20,23 @@ export type ChatProvider = 'codex' | 'claude';
 export interface ChatSession { provider: ChatProvider; id: string; title: string; cwd: string; updatedAt: string }
 export interface ChatConnection { id: string; topicId: string; source: ChatSession; history: 'now' | 'all'; loadedRevision: number | null }
 export type UpdateSource = { connectionId: string } | { manual: true } | null;
+export interface ReceiptNode { id: string; title: string; content: string; mark: string; domain: string; superseded: boolean }
+export interface UpdateReceipt {
+  id: string; action: string; baseRevision: number; resultRevision: number; createdAt: string;
+  source: { provider: string; sessionTitle: string; messageCount: number } | null;
+  changes: {
+    name?: { before: string; after: string } | null;
+    nodes: Array<{ id: string; kind: 'added' | 'modified' | 'removed'; before: ReceiptNode | null; after: ReceiptNode | null }>;
+    edges: { modified?: Array<{from:string;to:string;before:string;after:string}>; added: Array<{ from: string; to: string }>; removed: Array<{ from: string; to: string }> };
+    chapters: Array<{ domain: string; before: string | null; after: string | null }>;
+    doc: { before: string; after: string } | null;
+  };
+  canRollback: boolean; rollbackBlockedReason: string | null; rolledBackAt?: string; rollbackRevision?: number;
+}
+export interface ReceiptSnapshot {
+  topicId: string | null; currentRevision: number | null; receipt: UpdateReceipt | null;
+  loading: boolean; rollingBack: boolean; error: string;
+}
 export interface ConnectionSnapshot {
   topicId: string | null;
   revision: number | null;
@@ -86,6 +105,10 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   const pendingNames = new Map<string, string>();
   const renameQueues = new Map<string, Promise<void>>();
   let creating: Promise<string | null> | undefined;
+  const receiptListeners = new Set<() => void>();
+  let receiptSnapshot: ReceiptSnapshot = { topicId: null, currentRevision: null, receipt: null, loading: false, rollingBack: false, error: '' };
+  let receiptEpoch = 0;
+  const publishReceipt = (change: Partial<ReceiptSnapshot>) => { receiptSnapshot = { ...receiptSnapshot, ...change }; receiptListeners.forEach(listener => listener()); };
   const connectionListeners = new Set<() => void>();
   const disconnecting = new Set<string>();
   let connectionSnapshot: ConnectionSnapshot = { topicId: null, revision: null, connections: [], status: 'ready', error: '', operation: null };
@@ -207,6 +230,64 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       throw error;
     }
   }
+  async function refreshReceipt(id = snapshot.currentProjectId) {
+    if (!id) return null;
+    const epoch = ++receiptEpoch;
+    if (snapshot.currentProjectId === id) publishReceipt({ topicId: id, loading: true, error: '' });
+    try {
+      await pendingCreates.get(id)?.promise;
+      const result = await request<{topicId: string; currentRevision: number; receipt: UpdateReceipt | null}>(`/api/topics/${encodeURIComponent(id)}/update-receipt`);
+      if (!disposed && snapshot.currentProjectId === id && epoch === receiptEpoch) publishReceipt({ ...result, loading: false, error: '' });
+      return result;
+    } catch (error) {
+      if (!disposed && snapshot.currentProjectId === id && epoch === receiptEpoch) publishReceipt({ loading: false, error: messageOf(error) });
+      return null; // Receipt failure must not change a successfully completed update into a failed update.
+    }
+  }
+  function rollbackBlocked() {
+    const id = snapshot.currentProjectId, state = store.getState();
+    if (!id || state.boundProjectId !== id || state.isHydrating) return t('请等当前脉络读取完成。');
+    if (state.docDraft !== null || state.sourceDraftActive || state.editingNodeId !== null || state.editingNodeBodyId !== null || state.editingEdgeId !== null) return t('请先完成或取消当前编辑，再退回更新。');
+    if (readCache(id)?.pending || saveQueues.has(id) || failedSaves.has(id)) return t('请等当前修改保存完成，再退回更新。');
+    if (chatUpdate || activeTasks.size || state.isGenerating || state.isTidying || state.isRefining || state.isCondensing) return t('请等当前操作完成后再退回更新。');
+    return null;
+  }
+  async function rollbackUpdate() {
+    if (receiptSnapshot.rollingBack) return;
+    const id = snapshot.currentProjectId, receipt = receiptSnapshot.topicId === id ? receiptSnapshot.receipt : null;
+    const blocked = rollbackBlocked();
+    if (!id || !receipt) return;
+    if (blocked || !receipt.canRollback) { publishReceipt({ error: blocked || receipt.rollbackBlockedReason || t('当前内容已改变，不能整次退回。') }); return; }
+    publishReceipt({ rollingBack: true, error: '' });
+    try {
+      // Use the displayed version. A stale tab must not silently agree to overwrite a newer revision.
+      const baseRevision = readCache(id)?.revision;
+      if (baseRevision === undefined) throw new Error(t('脉络尚未读取，请重新打开后处理。'));
+      await request(`/api/topics/${encodeURIComponent(id)}/rollback-update`, { baseRevision, receiptId: receipt.id });
+      if (!disposed && snapshot.currentProjectId === id) {
+        // syncFromRemote preserves any draft started while the request was in flight.
+        await store.getState().syncFromRemote();
+        await refreshReceipt(id);
+        publishConnections({ operation: null });
+      }
+    } catch (error) {
+      if (!disposed && snapshot.currentProjectId === id) {
+        await refreshReceipt(id);
+        publishReceipt({ error: messageOf(error) });
+      }
+    } finally { if (!disposed && receiptSnapshot.topicId === id) publishReceipt({ rollingBack: false }); }
+  }
+  async function rollbackOperation(receiptId: string, baseRevision: number) {
+    const blocked=rollbackBlocked(),id=snapshot.currentProjectId;
+    if (blocked || !id || receiptSnapshot.rollingBack) throw new Error(blocked || t('请等当前操作完成后再退回更新。'));
+    publishReceipt({rollingBack:true,error:''});
+    try {
+      await request(`/api/topics/${encodeURIComponent(id)}/rollback-operation`,{baseRevision,receiptId});
+      if (!disposed && snapshot.currentProjectId===id) {
+        await store.getState().syncFromRemote();await refreshReceipt(id);
+      }
+    } finally { if (!disposed && receiptSnapshot.topicId===id) publishReceipt({rollingBack:false}); }
+  }
   function cancelChatUpdate() {
     if (!chatUpdate) return;
     if (connectionSnapshot.topicId === chatUpdate.topicId) publishConnections({ operation: { ...connectionSnapshot.operation, phase: 'cancelling', message: t('正在取消…') } });
@@ -257,6 +338,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
           await store.getState().syncFromRemote();
           if (!current()) throw abortError();
           await refreshConnections(id);
+          await refreshReceipt(id);
           if (response.hasMore && until !== undefined) break;
           if (current()) publishConnections({ operation: { phase: 'completed', message: response.hasMore ? t('本批已更新，还有材料可继续更新。') : t('已完成 {batch} 批更新，已追到本次开始时的会话末尾。', {batch}), taskId, hasMore: response.hasMore } });
           return;
@@ -377,11 +459,14 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       cancelChatUpdate();
       chatUpdate = null;
       connectionEpoch++;
+      receiptEpoch++;
+      publishReceipt({topicId:id,currentRevision:null,receipt:null,loading:true,rollingBack:false,error:''});
       publishConnections({ topicId: id, revision: readCache(id)?.revision ?? null, connections: [], status: options.onRequestSource ? 'loading' : 'ready', error: '', operation: null });
       publish({ currentProjectId: id, projectNameFallback: snapshot.projects.find(project => project.id === id)?.name, hasSourceMaterial: storage.get(`gft-local:has-sources:${id}`) === 'true' });
       storage.set('gft-local:selected', id);
       if (options.onRequestSource) void refreshConnections(id).catch(() => {});
       await store.getState().hydrateForProject(id);
+      await refreshReceipt(id);
     },
     async renameProject(id, name) {
       name = name.trim();
@@ -457,7 +542,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       } finally { if (chatUpdate === operation) chatUpdate = null; }
     },
   };
-  async function compute(action: 'update' | 'redraw' | 'tidy' | 'refine' | 'theme', system: string, user: string, context: MapComputeContext) {
+  async function compute(action: 'update' | 'redraw' | 'tidy' | 'refine' | 'theme' | 'relation', system: string, user: string, context: MapComputeContext) {
     const id = context.projectId;
     if (!id) throw new Error(t('请先选择脉络。'));
     if (context.signal.aborted || disposed) throw abortError();
@@ -488,6 +573,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     finally { context.signal.removeEventListener('abort', cancel); activeTasks.delete(task.id); }
   }
   const runtime: ThinkingMapRuntime = {
+    nodeRefinement:'document',
     host,
     persistence: {
       // Empty raw is valid for file-backed topics. Do not manufacture a Log
@@ -512,6 +598,18 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       },
     },
     ai: {
+      async explainRelation(from,to,reason,context) {
+        const request=buildRelationExplanationRequest(from,to,reason);
+        for(let attempt=0;attempt<2;attempt++) {
+          const raw=await compute('relation',request.system,request.user,context);
+          try {return parseRelationExplanation(raw,from.id,to.id);}
+          catch(error) {
+            if(!(error instanceof RelationReasonLengthError) || attempt===1)throw error;
+            request.system+='\n\nThe previous caption exceeded the 32-character limit. Rewrite the bridge as one short caption (aim for 16-24 characters), preserve necessary conditions, and return only the requested edge.';
+          }
+        }
+        throw new Error('Relationship caption was not produced.');
+      },
       async generate(input,settings,_onPreview,context) {
         const request = buildGenerateRequest(input,settings);
         const raw = await compute(settings?.rewrite ? 'redraw' : 'update',request.system,request.user,context);
@@ -540,6 +638,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       if (first) await host.switchProject(first.id);
     } else await store.getState().syncFromRemote();
     if (!disposed && options.onRequestSource) await refreshConnections();
+    if (!disposed) await refreshReceipt();
   });
   function publishService() {
     const next = { ...monitor.getSnapshot(), pending: !!snapshot.currentProjectId && readCache(snapshot.currentProjectId)?.pending === true, saveFailed: !!snapshot.currentProjectId && failedSaves.has(snapshot.currentProjectId) };
@@ -555,13 +654,14 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   const dispose = () => {
     if (disposed) return;
     disposed = true; monitor.dispose();
-    cancelChatUpdate(); connectionEpoch++;
+    cancelChatUpdate(); connectionEpoch++; receiptEpoch++;
     store.getState().cancelGeneration(); store.getState().cancelTidy();
     for (const cancel of activeTasks.values()) void cancel();
     store.getState().flushDocEdits(); store.getState().flushDoc();
     store.getState().resetLocal(); // Includes an in-flight node refinement and invalidates late responses.
     listeners.clear();
     connectionListeners.clear();
+    receiptListeners.clear();
     serviceListeners.clear();
   };
   return {
@@ -593,6 +693,14 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         await flushPending(id);
         store.setState({ error: null });
       },
+    },
+    receipts: {
+      getSnapshot: () => receiptSnapshot,
+      subscribe(listener: () => void) { receiptListeners.add(listener); return () => { receiptListeners.delete(listener); }; },
+      refresh: refreshReceipt,
+      rollback: rollbackUpdate,
+      rollbackOperation,
+      rollbackBlocked,
     },
     connections: {
       getSnapshot: () => connectionSnapshot,

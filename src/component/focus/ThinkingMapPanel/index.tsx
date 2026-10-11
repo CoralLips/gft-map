@@ -10,7 +10,7 @@ import { ThinkingMapView } from '../ThinkingMapView';
 import styles from './ThinkingMapPanel.module.css';
 // 本体级动作（更新/AI记忆/导出）08-25 抽至共享组件——Map/Doc 两视图同款；
 // 喂图数据流（useMapFeed）一并共享，本组件的「重画」也从它取参
-import { UpdateMapButton, AiMemoryToggle, ExportMenu, RedrawButton, TidyButton, MapStats } from '../MapDocActions';
+import { UpdateMapButton, AiMemoryToggle, ExportMenu, RedrawButton, DeleteSelectionButton, TidyButton, MapStats } from '../MapDocActions';
 import { themeOf } from '../../../service/ledger';
 import { useT } from '../../../i18n';
 
@@ -41,6 +41,7 @@ export function ThinkingMapPanel({ showExport = true }: { showExport?: boolean }
           <UpdateMapButton />
           <TidyButton />
           <RedrawButton />
+          <DeleteSelectionButton />
         </span>
         <MapStats />
         {/* 右区=拿走成品（与左侧"改图"操作拉开——改 vs 拿走两种心态）。共享组件（Doc 视图同款） */}

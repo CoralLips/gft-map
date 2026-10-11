@@ -219,6 +219,10 @@
   top: 10px;
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 112px);
+  box-sizing: border-box;
+  pointer-events: none;
   z-index: 20;
   font-size: 13px;
   color: var(--poe-purple);
@@ -272,24 +276,35 @@
 }
 
 /* ===== 点线浮出的 🗑（点击位置旁，零行程） ===== */
-.edgeDeleteFloat {
+.edgeMenu {
   position: absolute;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
   z-index: 25;
-  height: 30px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 10px;
-  white-space: nowrap;
-  font-size: 13px;
+  gap: 8px;
+  width: max-content;
+  max-width: min(340px, calc(100% - 16px));
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--poe-gray-700);
   background: color-mix(in srgb, var(--poe-surface) 98%, transparent);
   border: 1px solid var(--poe-gray-200);
   border-radius: 8px;
-  cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
-  transition: all 0.12s;
+}
+.edgeMenu > span { min-width: 0; overflow-wrap: anywhere; }
+.edgeDeleteFloat {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
 }
 
 .edgeDeleteFloat:hover {
@@ -314,74 +329,6 @@
   background: color-mix(in srgb, var(--poe-purple) 10%, var(--poe-surface));
 }
 
-/* 多选工具条：框选/加选 ≥2 节点时顶部浮现 */
-.multiSelectBar {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  font-size: 12.5px;
-  color: var(--poe-gray-700);
-  background: var(--poe-surface);
-  border: 1px solid var(--poe-purple-light, var(--tint-purple-border));
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.15);
-}
-
-.multiSelectBtn {
-  font-size: 12.5px;
-  color: var(--poe-red-dark);
-  background: none;
-  border: 1px solid var(--poe-gray-300);
-  border-radius: 6px;
-  padding: 3px 8px;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.multiSelectBtn:hover {
-  border-color: var(--poe-red-dark);
-  background: var(--tint-red-bg);
-}
-
-.multiSelectCancel {
-  font-size: 12px;
-  color: var(--poe-gray-400);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-}
-
-.multiSelectCancel:hover {
-  color: var(--poe-gray-700);
-}
-
-.multiSelectTidyBtn {
-  font-size: 12.5px;
-  color: var(--poe-purple);
-  background: none;
-  border: 1px solid var(--poe-purple-light, var(--tint-purple-border));
-  border-radius: 6px;
-  padding: 3px 8px;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.multiSelectTidyBtn:hover:not(:disabled) {
-  background: var(--poe-purple-100, #ede9fe);
-}
-
-.multiSelectTidyBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* 整理操作流进行中：节点位移平滑过渡（合并/丢弃引发的重排滑动就位而非瞬跳）。
    只在 isTidying 期间挂载——拖动手感与日常布局零影响 */
 .tidyingAnim :global(.react-flow__node) {
@@ -394,3 +341,5 @@
 /* hover 换「■ 中止」但按钮尺寸纹丝不动：进度文案隐形保占位，中止字样绝对定位居中覆盖；颜色继承不另染 */
 .stopOnHover:hover .runLabel { visibility: hidden; }
 .stopOnHover:hover .stopLabel { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; }
+
+.edgeMenu { flex-wrap:wrap; }

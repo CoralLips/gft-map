@@ -91,6 +91,12 @@ Each saved map includes **Doc for writing, Map for relationships, and Log for so
 
 Edit the topic, document, or Log directly. Click outside the editor or press Ctrl+S to save.
 
+In Map, click a node to edit its title and explanation. Click a line to open the receiving node and edit the relation explanation above its body. Node explanations and Doc chapters are saved separately; check both after changing their meaning. Nodes hold individual ideas, and lines explain how one idea leads to another. Clarifications can revise an existing node. The Skill includes the shared [expression guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/skills/gft-map/references/map-expression-contract.md).
+
+Ctrl/Cmd-click to add to a selection, or Shift-drag to select an area. Use **Delete** beside Redraw, or Delete/Backspace, to remove selected objects. Deleting a line keeps its endpoints; clearing its explanation keeps the line. With nodes selected, **Tidy** revises only those ideas and related Doc chapters; without a selection, it organizes the whole map.
+
+In Settings, **Operation history** shows actual changes and keeps the latest 30 content operations available for undo after a refresh, while preserving source material and reading progress. **Local files** shows the current topic's saved path, with actions to copy it or open its folder.
+
 | What you want to do | Action |
 |---|---|
 | Bring in new progress from a conversation | **Update**: receive new messages and update Doc / Map. |

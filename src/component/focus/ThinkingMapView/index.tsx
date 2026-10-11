@@ -1,16 +1,17 @@
+import {changedSelection} from '../../../service/mapSelection';
 /**
- * ThinkingMapView — 思维导航的 reactflow 图视图（阶段1 demo）
+ * ThinkingMapView — 从判断账派生的思维导航图视图
  * 与 ExploreTreeView（单父树）刻意分离：这里是多对多的时序 DAG（边永远从早指向晚）。
  *  - 布局：dagre TB——拓扑=时序承接，往下=更晚；acyclicer=greedy 仅作渲染兜底（数据层已保证无环）
  *  - 节点皮复用 ExploreTreeNode：optional 回调 = 能力裁剪，不传的按钮自动消失
- *  - 边=朴素连线+箭头（不分类型）；点边出工具条（删除）
+ *  - 线表示承接；点线进入接收节点，关系说明在节点内编辑
  *  - 取代/分组只在数据层默默积累（收拢时作为整理建议），图上不渲染——"给不出便宜纠错动作的 AI 提议不展示"
  */
 
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import ReactFlow, { Background, BaseEdge, getSmoothStepPath } from 'reactflow';
-import type { Node, Edge, NodeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
+import type { Node, Edge, NodeChange, EdgeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
 import { layoutGraph, estimateNodeHeight, NODE_WIDTH, type MeasuredSizes } from './layout';
 import { nodeReadingBounds, nodeToolbarSpace, unionBounds, type ViewportSize } from './viewport';
 import { useMapViewport } from './useMapViewport';
@@ -18,6 +19,7 @@ import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import { wouldCycle } from '../../../type/thinkingMap';
 import { ExploreTreeNode, type ExploreNodeData } from '../ExploreTreeNode';
+import {mapHighlights} from '../../../service/mapHighlights';
 import { EDGE_TYPE_META } from '../../../type/thinkingMap';
 import { timelineEdges } from '../../../service/ledger';
 import { isOpen } from '../../../util/mapGroups';
@@ -211,11 +213,10 @@ function ThinkingMapViewImpl(): JSX.Element {
   const allEdges = useThinkingMapStore(s => s.edges);
   const generation = useThinkingMapStore(s => s.generation);
   const editingNodeId = useThinkingMapStore(s => s.editingNodeId);
+  const boundProjectId = useThinkingMapStore(s => s.boundProjectId);
   const lastDeleted = useThinkingMapStore(s => s.lastDeleted);
   const updateNode = useThinkingMapStore(s => s.updateNode);
   const deleteNode = useThinkingMapStore(s => s.deleteNode);
-  const deleteNodes = useThinkingMapStore(s => s.deleteNodes);
-  const deleteEdge = useThinkingMapStore(s => s.deleteEdge);
   const setEditingNode = useThinkingMapStore(s => s.setEditingNode);
   const addNodeAction = useThinkingMapStore(s => s.addNode);
   const addEdgeManual = useThinkingMapStore(s => s.addEdgeManual);
@@ -235,12 +236,8 @@ function ThinkingMapViewImpl(): JSX.Element {
   const dismissProposal = useThinkingMapStore(s => s.dismissProposal);
   const setSelectedNodes = useThinkingMapStore(s => s.setSelectedNodes);
   const selectedNodeIds = useThinkingMapStore(s => s.selectedNodeIds);
-  const tidyWhitebox = useThinkingMapStore(s => s.tidyWhitebox);
   const isTidying = useThinkingMapStore(s => s.isTidying);
-  const isGenerating = useThinkingMapStore(s => s.isGenerating);
-  const isRefining = useThinkingMapStore(s => s.isRefining);
-  const tidyRound = useThinkingMapStore(s => s.tidyRound);
-  const cancelTidy = useThinkingMapStore(s => s.cancelTidy);
+  const tidyScopeIds=useThinkingMapStore(s=>s.tidyScopeIds);
 
   // 压缩塔展示过滤：被收拢的成员与被折叠的边不渲染——数据无损全在 store，拆开即回
   const mapNodes = useMemo(() => allNodes.filter(n => !n.condensedInto), [allNodes]);
@@ -252,18 +249,25 @@ function ThinkingMapViewImpl(): JSX.Element {
     for (const j of ledgerState.judgments.values()) if (!j.deleted && j.content.trim()) m.set(j.id, j.content.trim());
     return m;
   }, [ledgerState]);
-  // 完整承接（缓存里一条不少）→ 画出来的：时间线画法，每条判断只挂最近的一条来路，线只从早指向晚
+  // 全部有效承接都可见、可点、可编辑，不因较近的一条来路而隐藏其他连接。
   const fullEdges = useMemo(() => allEdges.filter(e => !e.hiddenBy), [allEdges]);
   const mapEdges = useMemo(() => timelineEdges(mapNodes, fullEdges), [mapNodes, fullEdges]);
 
   const [openPanelId, setOpenPanelId] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const selectedEdgeIds=useThinkingMapStore(s=>s.selectedEdgeIds);
+  const setSelectedEdges=useThinkingMapStore(s=>s.setSelectedEdges);
+  const setSelectedEdgeId=useCallback((id:string|null)=>setSelectedEdges(id?[id]:[]),[setSelectedEdges]);
+  const deleteElements=useThinkingMapStore(s=>s.deleteElements);
   // hover 线的高亮加粗（纯视觉提示，不带操作）
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
-  // 悬停/点开的节点：它的线高亮，其余压淡——只做视觉，不选中线
+  useEffect(()=>{
+    if(openPanelId&&!mapNodes.some(n=>n.id===openPanelId))setOpenPanelId(null);
+  },[mapNodes,openPanelId]);
+  // Hover highlights only the element under the pointer.
+  const explainingEdgeIds=useThinkingMapStore(s=>s.explainingEdgeIds);
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
   // hover 线浮出的 🗑（就在鼠标进入位置旁——零行程；离开走 250ms 延迟收起）
-  const [edgeMenu, setEdgeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   // 手势定式（07-05 调整）：hover=出操作（节点工具条/线删除钮）；单击=直接展开详情；
   // 「选中」中间态退役——想删一个节点从两步（点选中→点🗑）变一步（hover→点🗑）
@@ -293,6 +297,8 @@ function ThinkingMapViewImpl(): JSX.Element {
   // 零位移时布局位置根本没动过,松手无需 bumpLayout(否则每次点击都全图 dagre 重排,profile 实锤)
   const dragMovedRef = useRef(false);
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const removed=changes.filter(c=>c.type==='remove').map(c=>c.id);
+    if(removed.length){deleteElements(removed,[]);setOpenPanelId(prev=>prev&&removed.includes(prev)?null:prev);}
     // 框选/加选（Shift 拖、Ctrl 点）：ReactFlow 报增量 select changes → 同步进 store（Panel 的「整理」按它分流）
     const selChanges = changes.filter((c): c is Extract<NodeChange, { type: 'select' }> => c.type === 'select');
     if (selChanges.length > 0) {
@@ -320,12 +326,10 @@ function ThinkingMapViewImpl(): JSX.Element {
       }
       return next ?? prev;
     });
-  }, []);
+  }, [deleteElements,setSelectedNodes,useThinkingMapStore]);
 
   // 节点本体点击：直接展开/收起详情（hover 已承担操作入口）；连线态下=选定连线目标
   const handleNodeBodyClick = useCallback((id: string) => {
-    setSelectedEdgeId(null);
-    setEdgeMenu(null);
     const linking = linkingFromId;
     if (linking) {
       if (linking === id) {
@@ -334,12 +338,16 @@ function ThinkingMapViewImpl(): JSX.Element {
       }
       const ok = addEdgeManual(linking, id);
       // 坐实才退出连线态；被拒（重复/成环）保持连线态——提示条已在解释原因，用户可直接换目标
-      if (ok) setLinkingFromId(null);
+      if (ok) {
+        setLinkingFromId(null);
+        const edge=useThinkingMapStore.getState().edges.find(e=>(e.from===linking&&e.to===id)||(e.from===id&&e.to===linking));
+        if(edge){setSelectedNodes([]);setOpenPanelId(edge.to);setSelectedEdgeId(edge.id);}
+      }
       return;
     }
     markNodeRead(id); // 单击=已读，清红点（微信未读点同款）
     setOpenPanelId(prev => (prev === id ? null : id));
-  }, [linkingFromId, addEdgeManual, markNodeRead]);
+  }, [linkingFromId, addEdgeManual, markNodeRead,setSelectedNodes]);
 
   const handleTogglePanel = useCallback((id: string) => {
     setOpenPanelId(prev => (prev === id ? null : id));
@@ -367,7 +375,22 @@ function ThinkingMapViewImpl(): JSX.Element {
   }, [deleteNode, setEditingNode]);
 
 
-  // handleBodyChange 已撤（08-28）：正文改由文档承载，图上只读——改正文去 Doc 页签
+  // 节点短说明写回同一条判断；章节正文仍在 Doc 中编辑，不把两种表述混成一份。
+  const handleBodyChange = useCallback((id: string, body: string) => {
+    if (useThinkingMapStore.getState().boundProjectId !== boundProjectId) return;
+    updateNode(id, { body });
+  }, [updateNode, boundProjectId]);
+
+  const handleBodyEditingChange = useCallback((id: string, editing: boolean) => {
+    const state = useThinkingMapStore.getState();
+    if (state.boundProjectId !== boundProjectId) return;
+    if (editing) {
+      state.setSelectedEdges([]);
+      state.setSelectedNodes([id]);
+      state.setEditingNodeBody(id);
+    }
+    else if (state.editingNodeBodyId === id) state.setEditingNodeBody(null);
+  }, [boundProjectId]);
 
   const handleDelete = useCallback(async ({ id, title }: { id: string; title: string }) => {
     const ok = await confirmDialog({
@@ -376,20 +399,22 @@ function ThinkingMapViewImpl(): JSX.Element {
       danger: true,
     });
     if (ok) {
-      deleteNode(id);
-      setOpenPanelId(prev => (prev === id ? null : prev));
+      deleteElements([id],[]);
+      if(!useThinkingMapStore.getState().nodes.some(n=>n.id===id))setOpenPanelId(prev => (prev === id ? null : prev));
     }
-  }, [deleteNode]);
+  }, [deleteElements,useThinkingMapStore]);
 
   // ===== hover 工具条动作（挂在 hover 节点下方；无弹窗，删除给 3 秒撤销）=====
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleToolbarDelete = useCallback((id: string) => {
-    deleteNode(id);
+    const before=useThinkingMapStore.getState().ledger;
+    deleteElements([id],[]);
+    if(before===useThinkingMapStore.getState().ledger)return;
     setOpenPanelId(prev => (prev === id ? null : prev));
     setUndoVisible(true);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setUndoVisible(false), 3000);
-  }, [deleteNode]);
+  }, [deleteElements,useThinkingMapStore]);
 
   const handleUndoDelete = useCallback(() => {
     undo(); // 统一撤销栈（toast 按钮=Ctrl+Z 的鼠标入口）
@@ -408,6 +433,7 @@ function ThinkingMapViewImpl(): JSX.Element {
   }, [addNodeAction, setEditingNode]);
 
   const handleStartLinking = useCallback((id: string) => {
+    setOpenPanelId(null);
     setLinkingFromId(id);
     setLinkMouse(null); // 清上一轮残留,防预览线闪到旧位置
     setLinkHoverId(null);
@@ -422,9 +448,11 @@ function ThinkingMapViewImpl(): JSX.Element {
       (e.from === linkingFromId && e.to === linkHoverId) ||
       (e.from === linkHoverId && e.to === linkingFromId));
     if (dup) return '这两个节点已有连线(两点之间最多一条)';
-    if (wouldCycle(mapEdges, linkingFromId, linkHoverId)) return '不能这样连:会绕成一个圈';
+    const source=mapNodes.find(n=>n.id===linkingFromId),target=mapNodes.find(n=>n.id===linkHoverId);
+    const [from,to]=(source?.order ?? 0)<=(target?.order ?? 0)?[linkingFromId,linkHoverId]:[linkHoverId,linkingFromId];
+    if (wouldCycle(mapEdges, from, to)) return '不能这样连:会绕成一个圈';
     return null;
-  }, [linkingFromId, linkHoverId, mapEdges]);
+  }, [linkingFromId, linkHoverId, mapEdges, mapNodes]);
 
   const handlePaneMouseMove = useCallback((e: React.MouseEvent) => {
     if (!linkingFromId || !rfInstanceRef.current) return;
@@ -434,6 +462,7 @@ function ThinkingMapViewImpl(): JSX.Element {
   const handleNodeMouseEnter = useCallback((_e: React.MouseEvent, node: Node) => {
     if (node.id === LINK_GHOST_ID) return;
     setHoverNodeId(node.id);
+    setHoveredEdgeId(null);
     if (!linkingFromId) return;
     setLinkHoverId(node.id);
   }, [linkingFromId]);
@@ -629,11 +658,16 @@ function ThinkingMapViewImpl(): JSX.Element {
       const data: ExploreNodeData = {
         id: n.id,
         title: n.title,
-        // 详情正文取自白盒文档（按锚），不再用节点自存的 body——v1.2 起 AI 走 <doc> 块、
-        // 完整表述只写进文档，node.body 一律为空；图是投影，内容回文档取（2026-08-28 修）。
-        // 无锚的老节点退回 body（不主动把老图点成空壳）。
+        // 详情编辑判断正本；Doc 可另有解释多个判断的章节正文。
         body: docContentByAnchor.get(n.anchor ?? '') ?? n.body,
         inlineBody: true,
+        incomingRelations:mapEdges.filter(e=>e.to===n.id).map(e=>({id:e.id,reason:e.reason || '',pending:explainingEdgeIds.has(e.id),selected:selectedEdgeIds.has(e.id)})),
+        onRelationHover:setHoveredEdgeId,
+        onRelationSelect:(id)=>{setSelectedNodes([]);setSelectedEdges([id]);},
+        onRelationExplain:(id)=>void useThinkingMapStore.getState().explainEdge(id),
+        onRelationCancel:useThinkingMapStore.getState().cancelEdgeExplanation,
+        onRelationChange:(id,text)=>useThinkingMapStore.getState().editEdgeReason(id,text),
+        onRelationEditing:useThinkingMapStore.getState().setEditingEdge,
         notes: [],
         commits: [],
         headCommitId: null,
@@ -645,10 +679,11 @@ function ThinkingMapViewImpl(): JSX.Element {
         // 紫框标「正在展开的节点」（选中态退役后唯一常驻高亮：你在看谁）；
         // 工具条改 hover 浮现（节点组件内部按 isHovered && !isDragging 控制）
         isHighlighted: false,
+
         onContinueFrom: handleContinueFrom,
         onStartLinking: handleStartLinking,
         onDeleteSelf: handleToolbarDelete,
-        onRefine: (nid: string) => void refineNodeAction(nid),
+        onRefine: refineNodeAction,
         onViewDoc: jumpToDoc,
         refining: false, // 节点级：只有整理中的那个节点显示加载态（覆盖层 patch）
         isDragging: false,
@@ -661,8 +696,8 @@ function ThinkingMapViewImpl(): JSX.Element {
         onTogglePanel: handleTogglePanel,
         onTitleChange: handleTitleChange,
         onCancelEdit: handleCancelEdit,
-        // 正文只读（08-28）：它显示的是文档里的完整表述，在图上改它＝开了"图→文档"反向通道
-        // （用户已否：图文各改各的，到更新/整理才汇合）。要改正文去 Doc 页签。
+        onBodyChange: handleBodyChange,
+        onBodyEditingChange: handleBodyEditingChange,
         onDelete: handleDelete,
         // 单选视觉隐形（size≥2 才亮虚线框）：单击=纯展开语义，RF 内部排他选中照常运转，
         // 但不给「已选 1」任何视觉/工具条存在感——紫虚线框=批量操作候选专属（一色一义）
@@ -709,11 +744,13 @@ function ThinkingMapViewImpl(): JSX.Element {
         style: {},
       };
     });
-  }, [mapNodes, allNodes, layoutPositions, docContentByAnchor, acceptProposal, dismissProposal, handleNodeBodyClick, handleTogglePanel, handleTitleChange, handleCancelEdit, handleDelete, handleContinueFrom, handleStartLinking, handleToolbarDelete, dissolveGroup, refineNodeAction, jumpToDoc, hasOutEdge]);
+  }, [mapNodes, mapEdges, explainingEdgeIds,selectedEdgeIds, allNodes, layoutPositions, docContentByAnchor, acceptProposal, dismissProposal, handleNodeBodyClick, handleTogglePanel, handleTitleChange, handleBodyChange, handleBodyEditingChange, handleCancelEdit, handleDelete, handleContinueFrom, handleStartLinking, handleToolbarDelete, dissolveGroup, refineNodeAction, jumpToDoc, hasOutEdge]);
+
+  const readingHighlights=useMemo(()=>mapHighlights({edges:mapEdges,hoverNodeId,hoveredEdgeId,selectedEdgeIds:[...selectedEdgeIds]}),[mapEdges,hoverNodeId,hoveredEdgeId,selectedEdgeIds]);
 
   // 瞬态覆盖:只 clone 被触及的节点,其余引用原样(无任何瞬态时直接返回底座数组本身)
   const flowNodes = useMemo<Node[]>(() => {
-    const hasTransient = openPanelId !== null || dragPos !== null || draggingNodeId !== null
+    const hasTransient = readingHighlights.hasFocus || openPanelId !== null || dragPos !== null || draggingNodeId !== null
       || dropTargetId !== null || selectedNodeIds.size > 0 || refiningNodeId !== null
       || editingNodeId !== null || isTidying;
     if (!hasTransient) return flowNodesBase;
@@ -722,11 +759,11 @@ function ThinkingMapViewImpl(): JSX.Element {
       const isOpen = openPanelId === id;
       const isSel = selectedNodeIds.has(id);
       const isDropT = dropTargetId === id;
-      const isRefining = refiningNodeId === id;
-      const touched = isOpen || isSel || isDropT || isRefining
+      const isRefining = refiningNodeId === id || (isTidying && (tidyScopeIds===null || tidyScopeIds.has(id)));
+      const isReadingFocus=readingHighlights.nodeId===id;
+      const touched = isReadingFocus || isOpen || isSel || isDropT || isRefining
         || draggingNodeId === id || editingNodeId === id || (dragPos !== null && dragPos.id === id);
       if (!touched) return n;
-      const dimmed = isRefining || (isTidying && isSel);
       return {
         ...n,
         // 位置：布局位为基底；拖动中的节点用 ReactFlow 回报的实时位置（跟手）
@@ -735,13 +772,12 @@ function ThinkingMapViewImpl(): JSX.Element {
         zIndex: isOpen ? 9999 : 1,
         style: {
           ...(isOpen ? { zIndex: 9999 } : {}),
-          // 整理中：目标节点半透明呼吸感（点击即时反馈——不依赖会消失的 hover 工具条）
-          ...(dimmed ? { opacity: 0.45, transition: 'opacity 0.25s ease' } : {}),
+          // 处理中的反馈位于对应节点或关系，不降低正文可读性。
         },
         data: {
           ...n.data,
           isPanelOpen: isOpen,
-          isHighlighted: isOpen,
+          isHighlighted: isReadingFocus || isSel,
           refining: isRefining,
           isDragging: draggingNodeId === id,
           isDropTarget: isDropT,
@@ -749,11 +785,11 @@ function ThinkingMapViewImpl(): JSX.Element {
           isValidDropTarget: isDropT && isValidDrop,
           isInvalidDropTarget: isDropT && !isValidDrop,
           isEditing: editingNodeId === id,
-          isMultiSelected: selectedNodeIds.size >= 2 && isSel,
+          isMultiSelected: false,
         },
       };
     });
-  }, [flowNodesBase, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeId, editingNodeId, isTidying]);
+  }, [flowNodesBase, readingHighlights, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeId, editingNodeId, isTidying,tidyScopeIds]);
 
   // ===== 边几何共享值:节点盒一份共算(见 EdgeGeomContext 注释)=====
   // 幽灵节点(连线预览)不进盒:原实现就把它排除在障碍集外;预览边端点走 props 直传不受影响
@@ -773,41 +809,37 @@ function ThinkingMapViewImpl(): JSX.Element {
 
   // ===== reactflow 边（朴素连线 + 箭头，单一中性色，无标签）=====
   const flowEdges = useMemo<Edge[]>(() => {
-    // 聚焦节点（悬停优先，其次点开面板的）：它的线高亮（全实线），其余压淡——线多重合时一眼看清连到哪
-    const focusId = hoverNodeId ?? openPanelId;
     const built = mapEdges.map(e => {
       const meta = EDGE_TYPE_META[e.type];
-      // 加粗两来源：hover（纯视觉提示）或 点击选中（删除钮开着）
-      const isSelected = e.id === selectedEdgeId || e.id === hoveredEdgeId;
-      const incoming = focusId !== null && e.to === focusId;
-      const outgoing = focusId !== null && e.from === focusId;
-      const dim = focusId !== null && !incoming && !outgoing;
+      const lit=readingHighlights.edgeIds.has(e.id);
       return {
         id: e.id,
         source: e.from,
         target: e.to,
         type: 'outlined',
+        selected:selectedEdgeIds.has(e.id),
         // 视觉 2px 不变，隐形点击热区 24px——看着细、点着粗
         interactionWidth: 24,
         // 素线无箭头（旧树同款）：时序图方向永远向下，箭头是冗余的视觉重量
         // 转折边机制 09-01 退役：turn 字段一律忽略，所有边同一画法
         // 不抬 zIndex：抬了线会画到节点和工具条上面（9-6 实测）；高亮靠颜色和粗细就够
         style: {
-          stroke: incoming || outgoing ? 'var(--poe-purple)' : meta.color,
-          strokeWidth: isSelected || incoming || outgoing ? 3.5 : 2,
-          opacity: dim ? 0.2 : 1,
+          stroke: lit ? 'var(--poe-purple)' : meta.color,
+          strokeWidth: lit ? 3.5 : 2,
+          opacity: 1,
           transition: 'opacity 0.15s, stroke 0.15s',
         },
-        data: { lit: incoming || outgoing },
+        data: { lit },
       };
     });
     // 高亮的线排到最后：SVG 后画的在上面，共用同一段轨道时不被压淡的线盖住（9-6 实测：只剩节点间独占段是紫的）
-    return focusId === null ? built : [...built.filter(e => !e.data?.lit), ...built.filter(e => e.data?.lit)];
-  }, [mapEdges, selectedEdgeId, hoveredEdgeId, hoverNodeId, openPanelId]);
+    return !readingHighlights.hasFocus ? built : [...built.filter(e => !e.data?.lit), ...built.filter(e => e.data?.lit)];
+  }, [mapEdges, readingHighlights,selectedEdgeIds]);
 
   // 线的手势（07-05 二次调）：hover=只做高亮加粗的视觉提示；🗑 删除走点击（删除是重操作，
   // hover 直出误触代价高——与节点工具条的轻操作区别对待）
   const onEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setHoverNodeId(null);
     setHoveredEdgeId(edge.id);
   }, []);
   const onEdgeMouseLeave = useCallback(() => {
@@ -816,17 +848,28 @@ function ThinkingMapViewImpl(): JSX.Element {
   // 点线：🗑 浮在点击位置旁（零行程）
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setEdgeMenu({ id: edge.id, x: event.clientX - rect.left, y: event.clientY - rect.top });
+    if(!event.ctrlKey&&!event.metaKey) {
+      setSelectedEdgeId(edge.id);
+      setSelectedNodes([]);
     }
-    setSelectedEdgeId(edge.id);
-  }, []);
+    useThinkingMapStore.getState().focusOnMap(edge.target);
+  }, [useThinkingMapStore,setSelectedNodes]);
+
+  const handleEdgesChange=useCallback((changes:EdgeChange[])=>{
+    const state=useThinkingMapStore.getState();
+    const removed=changes.filter(c=>c.type==='remove').map(c=>c.id);
+    if(removed.length)deleteElements([],removed);
+    setSelectedEdges(changedSelection(state.selectedEdgeIds,changes));
+    const picked=changes.find((c):c is Extract<EdgeChange,{type:'select'}>=>c.type==='select'&&c.selected);
+    if(picked&&state.selectedNodeIds.size===0) {
+      const edge=state.edges.find(e=>e.id===picked.id);
+      if(edge)state.focusOnMap(edge.to);
+    }
+  },[deleteElements,setSelectedEdges,useThinkingMapStore]);
 
   const handlePaneClick = useCallback(() => {
     setOpenPanelId(null);
     setSelectedEdgeId(null);
-    setEdgeMenu(null);
     setLinkingFromId(null); // 点空白取消连线态
     setSelectedNodes([]); // 点空白清选区（手势定式「点空白=全取消」；顺带兜掉任何存量幽灵 id）
   }, [setSelectedNodes]);
@@ -914,9 +957,19 @@ function ThinkingMapViewImpl(): JSX.Element {
   // Ctrl+Z 撤销 / Ctrl+Y（或 Ctrl+Shift+Z）重做（输入框内不拦——那里归浏览器原生撤销/重做）
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable || t.closest('[role="dialog"],dialog,[aria-modal="true"]'))) return;
+      if((e.key==='Delete'||e.key==='Backspace')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) {
+        const state=useThinkingMapStore.getState();
+        if(linkingFromId||state.editingNodeId||state.editingNodeBodyId||state.editingEdgeId) return;
+        if(state.selectedNodeIds.size||state.selectedEdgeIds.size) {
+          e.preventDefault();
+          deleteElements([...state.selectedNodeIds],[...state.selectedEdgeIds]);
+          setOpenPanelId(prev=>prev&&state.selectedNodeIds.has(prev)?null:prev);
+        }
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       const isRedo = key === 'y' || (key === 'z' && e.shiftKey);
       const isUndo = key === 'z' && !e.shiftKey;
@@ -928,7 +981,7 @@ function ThinkingMapViewImpl(): JSX.Element {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo,deleteElements,linkingFromId,useThinkingMapStore]);
 
   if (mapNodes.length === 0) {
     return (
@@ -943,7 +996,7 @@ function ThinkingMapViewImpl(): JSX.Element {
   }
 
   return (
-    <div className={isTidying ? `${styles.container} ${styles.tidyingAnim}` : styles.container} ref={containerRef}>
+    <div className={styles.container} ref={containerRef}>
       {/* 总览只改变阅读视野，退出后回到进入前的位置。 */}
       <button
         type="button"
@@ -973,37 +1026,18 @@ function ThinkingMapViewImpl(): JSX.Element {
       {/* 连线态提示条:hover 到不可连目标时就地解释拒因(虚线同步变红) */}
       {linkingFromId && (
         <div className={`${styles.linkingHint} ${linkVerdict ? styles.linkingHintBad : ''}`}>
-          {linkVerdict ?? '点击另一个节点完成连线（点空白取消）'}
+          {linkVerdict ?? tr('点击接着这一点展开的节点（点空白取消）')}
         </div>
       )}
-
-      {/* 多选工具条（Shift 拖框选 / Ctrl 点加选出来的）——选够 2 个才有批量语义 */}
-      {selectedNodeIds.size >= 2 && !linkingFromId && (
-        <div className={styles.multiSelectBar}>
-          已选 {selectedNodeIds.size} 个节点
-          <button
-            className={`${styles.multiSelectTidyBtn} ${isTidying ? styles.stopOnHover : ''}`}
-            onClick={() => { if (isTidying) { cancelTidy(); } else { void tidyWhitebox([...selectedNodeIds]); } }}
-            disabled={!isTidying && (isGenerating || isRefining)}
-            title={isTidying
-              ? '点击中止整理：这次整理全部作废，不保存任何改动'
-              : '整理选中范围：合并连续且重复的判断、去掉废话、写清走向；原始记录留在 Log 里。中止整次不保存，Ctrl+Z 整次退回'}
-          >{isTidying
-            ? <>
-                <span className={styles.runLabel}>🧹 整理中…{tidyRound ? `第 ${tidyRound} 轮` : ''}</span>
-                <span className={styles.stopLabel}>■ 中止</span>
-              </>
-            : '🧹 整理选中'}</button>
-          <button
-            className={styles.multiSelectBtn}
-            onClick={() => deleteNodes([...selectedNodeIds])}
-            title="删除选中的节点（脉络自动续链；Ctrl+Z 一次全回）"
-          >🗑 删除</button>
-          <button
-            className={styles.multiSelectCancel}
-            onClick={() => setSelectedNodes([])}
-            title="取消选择"
-          >✕</button>
+      {draggingNodeId && !linkingFromId && (
+        <div className={`${styles.linkingHint} ${dropTargetId && !isValidDrop ? styles.linkingHintBad : ''}`} role="status">
+          {!dropTargetId
+            ? tr('拖到节点中间改为承接它，两侧改为与它并列；空白处松手不改变关系')
+            : !isValidDrop
+              ? tr('这次移动会形成循环；松手保持原关系')
+              : dropZone === 'inside'
+                ? tr('松手后改为承接「{title}」', { title: allNodes.find(n => n.id === dropTargetId)?.title ?? '' })
+                : tr('松手后与「{title}」并列，共用它的承接来源', { title: allNodes.find(n => n.id === dropTargetId)?.title ?? '' })}
         </div>
       )}
 
@@ -1023,16 +1057,6 @@ function ThinkingMapViewImpl(): JSX.Element {
         </div>
       )}
 
-      {/* 点线浮出的删除钮：就在点击位置旁（零行程），点空白或删除后消失 */}
-      {edgeMenu && (
-        <button
-          className={styles.edgeDeleteFloat}
-          style={{ left: edgeMenu.x, top: edgeMenu.y - 38 }}
-          onClick={() => { deleteEdge(edgeMenu.id); setEdgeMenu(null); setSelectedEdgeId(null); }}
-          title="删除这条承接线"
-        >🗑 删除</button>
-      )}
-
       <EdgeGeomContext.Provider value={edgeGeom}>
       {viewport.ready && <ReactFlow
         key={generation}
@@ -1042,6 +1066,8 @@ function ThinkingMapViewImpl(): JSX.Element {
         nodeTypes={MAP_NODE_TYPES}
         edgeTypes={MAP_EDGE_TYPES}
         onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        deleteKeyCode={null}
         onEdgeClick={onEdgeClick}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}

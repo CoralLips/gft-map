@@ -4,7 +4,8 @@ import { detailPanelBelowGap, VIEWPORT_PADDING, type ContentBounds, type Viewpor
 export const DETAIL_PANEL_WIDTH = 374;
 export const DETAIL_PANEL_MAX_HEIGHT = 450;
 export const DETAIL_PANEL_GAP = 14;
-export const DETAIL_PANEL_MIN_READING_HEIGHT = 160;
+// Reserve space for the header, fixed reading action and a useful body excerpt.
+export const DETAIL_PANEL_MIN_READING_HEIGHT = 240;
 
 export type DetailSide = 'right' | 'below' | 'above';
 export type DetailPlacementInput = {
