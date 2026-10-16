@@ -1155,6 +1155,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         }
         set({ unreadIds: new Set(snap.unreadIds) });
         applyLedgerText(snap.ledger, { lastDeleted: null, lastCondensedL2Ids: null, editingNodeId: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
+        const epoch = projectEpoch;
+        const current = () => epoch === projectEpoch && get().boundProjectId === bound;
         pendingRollbacks++;
         void (async () => {
           try {
@@ -1163,11 +1165,19 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
               else await operations.rollbackTo!(bound, snap.ledger);
             }
           } catch (err) {
-            set({ error: err instanceof Error ? err.message : '撤回失败，已恢复为保存的内容。' });
+            if (current()) set({ error: err instanceof Error ? err.message : '撤回未确认，请恢复连接后检查操作历史。' });
           } finally {
             pendingRollbacks--;
           }
-          if (pendingRollbacks === 0) await get().syncFromRemote({ keepUndo: true });
+          if (pendingRollbacks === 0 && current()) {
+            try {
+              await get().syncFromRemote({ keepUndo: true });
+            } catch (err) {
+              // The write may already be durable. Keep the optimistic view;
+              // the reconnect monitor will reconcile it after connectivity returns.
+              if (current()) set({ error: err instanceof Error ? err.message : '暂时无法确认撤回结果，请恢复连接后重试。' });
+            }
+          }
         })();
         return;
       }

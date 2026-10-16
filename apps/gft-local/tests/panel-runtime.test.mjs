@@ -1554,6 +1554,37 @@ test('independent node tidy runs concurrently, changes only its node, and undoes
   );
 });
 
+test('undo keeps its immediate result when the confirmation read disconnects', async () => {
+  await fixture(
+    async () => '<node title="整理完成" body="新的说明。"/>',
+    async ({ local, a }) => {
+      const original = local.store.getState().ledger;
+      await local.store.getState().refineNode('j1');
+      const browserFetch = globalThis.fetch;
+      let rolledBack = false;
+      globalThis.fetch = async (url, options) => {
+        if (rolledBack && String(url).endsWith('/snapshot')) throw new TypeError('synthetic disconnect');
+        const response = await browserFetch(url, options);
+        if (String(url).endsWith('/rollback-operation')) rolledBack = true;
+        return response;
+      };
+      try {
+        local.store.getState().undo();
+        assert.equal(local.store.getState().ledger, original);
+        await waitFor(() => local.store.getState().error, error => !!error);
+        assert.equal(local.store.getState().ledger, original);
+        assert.equal((await backend.getView(a.id)).graph.nodes.find(n => n.id === 'j1').title, '原判断');
+        globalThis.fetch = browserFetch;
+        await local.service.retry();
+        assert.equal(local.store.getState().nodes.find(n => n.id === 'j1').title, '原判断');
+        assert.equal(body(local, 'j1'), '先保留原文。');
+      } finally {
+        globalThis.fetch = browserFetch;
+      }
+    },
+  );
+});
+
 test('two quick undos take back a hand edit and then the server operation before it', async () => {
   await fixture(
     async () => '<node title="原判断理顺" body="理顺的说明。"/>',

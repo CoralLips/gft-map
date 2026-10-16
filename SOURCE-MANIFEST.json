@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "8efdd8a31b10943f2e5a56535c7760fa42986629",
+  "sourceRevision": "99479f7f19e73b3ae350df43e6b8595975eff870",
   "sourceDirty": true,
   "version": "0.3.11",
   "files": [
@@ -579,7 +579,7 @@
     {
       "path": "apps/gft-local/tests/panel-runtime.test.mjs",
       "source": "apps/gft-local/tests/panel-runtime.test.mjs",
-      "sha256": "141fdcfae158068c1683e348bb988d26ae863300c4755986c79c37cef6056797"
+      "sha256": "4fc85c841ab17c41a5567cc260299155447a97ef7b50bb4375abf289ddfa3680"
     },
     {
       "path": "apps/gft-local/tests/pure-boundary.test.mjs",
@@ -894,7 +894,7 @@
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "3e3c1981a62de4d0f3a8582bde76eed46752e02ce157d021774a9353e7440f52"
+      "sha256": "3d08eefaa2299f92589943f9b0a257cc557b7ab97ef9713b5d9fa5be5341ef04"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -1569,7 +1569,7 @@
     {
       "path": "src/store/thinkingMap/createStore.ts",
       "source": "src/store/thinkingMap/createStore.ts",
-      "sha256": "112d1e177e9d798cd74e76be461c5069d37831c2bfb1953130bea00fd99a4c44"
+      "sha256": "f87e602f963dbe4df7f381d7aae3c9f671722dd1f8f87be0ac3f05d97858a0e2"
     },
     {
       "path": "src/store/thinkingMap/runtime.ts",
