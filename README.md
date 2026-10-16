@@ -43,13 +43,15 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-AI actions in the panel have been tested with Codex. With Claude Code, they require additional setup and are experimental. See [installation and configuration (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation).
+Choose Codex or Claude Code for AI actions in the panel. With Claude Code, run `claude auth login` once in a terminal first. First use prepares the connection components automatically and requires internet access; later runs reuse the installed versions. Preparation runs in the background so the page and saved content can open first. See [installation and configuration (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation).
 
 After installing, reopen your agent conversation and ask:
 
 > Open gft-map for me.
 
-Ask your agent to **open, restore, restart, or close GFT Map**. Opening it reuses the running service or starts it with your existing maps, settings, and executor. The service keeps running in the background when you close the page. Normal system sleep pauses it; waking should resume it. After a computer restart or an unexpected service exit, ask to open GFT Map again.
+Ask your agent to **open, restore, restart, or close GFT Map**. Opening it reuses the running service or starts it with your existing maps, settings, and executor. A background supervisor restarts the service after unexpected exits, with increasing delays, stopping after five rapid failures and retaining the cause. An initial startup failure is reported promptly. An explicit stop stays stopped. Closing or refreshing the page leaves submitted AI tasks running; reopening restores their progress and stop controls. Normal system sleep pauses it; waking should resume it. After a computer restart, or if the supervisor also exits, ask to open GFT Map again.
+
+Large pasted text and file imports use resumable batches. Completed work stays saved when paused. A temporary status-query failure reconnects without cancelling background work.
 
 The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent returns. To change the panel language, open **Settings → Language**.
 
@@ -63,7 +65,7 @@ If login succeeds but the check reports that the Codex local state database is n
 
 > Use gft-map to update to the latest stable release. Keep my maps, chat connections, and settings. Restart the panel and verify that the running version matches the installed version.
 
-Pause file processing and finish or cancel other running tasks before updating. Your data and processing progress are preserved. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+Pause file processing and finish or cancel other running tasks before updating. Your data, progress, and selected agent are preserved; connections now default to ACP. Use **Settings → Tasks → Choose processing agent** to select Codex or Claude Code without configuring adapter paths. Login, quota, and task failures are reported without switching providers automatically. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade) Page AI tasks use the provider-recommended model and default effort, without personal overrides or changes to global Agent settings. Defaults do not guarantee the lowest cost.
 
 ### 2. Connect a conversation and create a map
 
@@ -95,7 +97,7 @@ In Map, click a node to edit its title and explanation. Click a line to open the
 
 Ctrl/Cmd-click to add to a selection, or Shift-drag to select an area. Use **Delete** beside Redraw, or Delete/Backspace, to remove selected objects. Deleting a line keeps its endpoints; clearing its explanation keeps the line. With nodes selected, **Tidy** revises only those ideas and related Doc chapters; without a selection, it organizes the whole map.
 
-In Settings, **Operation history** shows actual changes and keeps the latest 30 content operations available for undo after a refresh, while preserving source material and reading progress. **Local files** shows the current topic's saved path, with actions to copy it or open its folder.
+After a refresh or reopening, **Ctrl+Z** can undo saved content changes in order. In Settings, **Operation history** shows actual changes and keeps the latest 30 content operations available for undo after a refresh, while preserving source material; undoing a chat update moves its reading progress back. **Local files** shows the current topic's saved path, with actions to copy it or open its folder.
 
 | What you want to do | Action |
 |---|---|

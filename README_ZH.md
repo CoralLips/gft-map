@@ -42,15 +42,17 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外配置，目前为实验性。见[安装与配置](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)。
+页面 AI 可选择 Codex 或 Claude Code。Claude Code 需先在终端运行一次 `claude auth login`。首次使用会自动准备对应的连接组件，需要联网；以后复用已安装版本。组件在后台准备，页面与已有内容可先打开。见[安装与配置](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)。
 
 安装后重新打开 Agent 对话，发送：
 
 > 打开 gft-map。
 
-以后直接让 Agent **打开、恢复、重启或关闭 GFT Map**。打开时会复用已有服务，或带着原有脉络、设置和执行器启动。服务持续在后台运行，关闭网页不会停止；正常睡眠时暂停，唤醒后应继续运行。电脑重启或服务意外退出后，再说“打开 gft-map”即可恢复。
+以后直接让 Agent **打开、恢复、重启或关闭 GFT Map**。打开时会复用已有服务，或带着原有脉络、设置和执行器启动。后台守护会在服务意外退出后自动重启，连续快速失败 5 次后停止并保留原因；首次启动就失败会及时报错。主动关闭则保持关闭。关闭或刷新网页不会取消已提交的 AI 任务，重新打开会恢复进度和停止入口。正常睡眠时暂停，唤醒后应继续运行；电脑重启或守护进程也退出后，再说“打开 gft-map”恢复。
 
 面板通常在 `http://127.0.0.1:4317/`，以 Agent 返回的地址为准。
+
+长文本粘贴和大文件导入使用分批处理，已完成部分会保存，可暂停后继续。任务查询短暂断线只恢复连接，不会替你取消后台工作。
 
 之前选过的执行器会自动恢复，首次使用会检查 Codex；状态和登录提示可在设置的“任务”中查看。关闭或重启时若还有任务，会先让你决定等待还是取消。已经开始但中断的 AI 任务不会自动重做；先查看结果，需要时重新发起。排队任务继续按原流程处理。
 
@@ -62,7 +64,7 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 
 > 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
 
-更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。新版保留原来选用的 Agent，默认改用统一的 ACP 连接；在“设置 → 任务 → 选择处理 Agent”中切换 Codex 或 Claude Code，不需要填写连接路径。登录、额度或任务失败会直接提示，不会自动改用另一家。页面 AI 任务采用厂商推荐模型和默认强度，不沿用个人调高的配置，也不修改 Agent 全局设置；默认不保证最低费用。 [更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
 
 ### 2. 连接讨论，生成脉络
 
@@ -92,7 +94,7 @@ Codex 页面 AI 操作已验证可用；Claude Code 的页面 AI 操作需额外
 
 按 Ctrl／Cmd 点选可加选，Shift 拖动可框选；用“重画”旁的 **删除** 或 Delete／Backspace 删除所选对象。删线保留两端节点，清空说明保留连线。选中节点后点 **整理**，只调整选中判断及相关正文；未选中时整理整份脉络。
 
-在设置的 **操作历史** 查看实际修改，刷新后仍可按顺序撤回最近 30 次内容操作，原始材料和读取进度保留。设置的 **本地文件** 提供当前主题的保存路径、复制与打开所在文件夹。
+刷新或重新打开页面后，仍可用 **Ctrl+Z** 按顺序撤回已保存的内容操作，也可在设置的 **操作历史** 查看与撤回最近 30 次修改；原始材料保留，撤回聊天更新会退回读取进度。设置的 **本地文件** 提供当前主题的保存路径、复制与打开所在文件夹。
 
 | 想做什么 | 操作 |
 |---|---|

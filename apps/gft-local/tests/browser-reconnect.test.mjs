@@ -8,18 +8,42 @@ import { build } from 'esbuild';
 const web = fileURLToPath(new URL('../web/', import.meta.url));
 const cacheRoot = path.resolve(web, '../node_modules/.cache');
 const baseLedger = '走向 p1 [主题]\n只处理合成材料。\n◆ j1 [验证] 原判断\n保留原文。';
-const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const deferred = () => {
+  let resolve;
+  const promise = new Promise(done => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
 const waitFor = async predicate => {
   const end = Date.now() + 4000;
-  while (!predicate()) { if (Date.now() > end) throw new Error('等待连接状态超时'); await new Promise(resolve => setTimeout(resolve, 5)); }
+  while (!predicate()) {
+    if (Date.now() > end) throw new Error('等待连接状态超时');
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
 };
-let directory, createLocalRuntime, createReconnectMonitor;
+let directory, createLocalRuntime, createReconnectMonitor, localRequest;
 before(async () => {
   await mkdir(cacheRoot, { recursive: true });
   directory = await mkdtemp(path.join(cacheRoot, 'gft-browser-reconnect-'));
   const outfile = path.join(directory, 'runtime.mjs');
-  await build({ stdin: { contents: 'export { createLocalRuntime } from "./localRuntime"; export { createReconnectMonitor } from "./reconnect";', resolveDir: web, loader: 'ts' }, outfile, bundle: true, platform: 'node', format: 'esm', nodePaths: [path.resolve(web, '../node_modules')], logLevel: 'silent' });
-  ({ createLocalRuntime, createReconnectMonitor } = await import(pathToFileURL(outfile).href));
+  await build({
+    stdin: {
+      contents:
+        'export { createLocalRuntime, localRequest } from "./localRuntime"; export { createReconnectMonitor } from "./reconnect";',
+      resolveDir: web,
+      loader: 'ts',
+    },
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    nodePaths: [path.resolve(web, '../node_modules')],
+    logLevel: 'silent',
+  });
+  ({ createLocalRuntime, createReconnectMonitor, localRequest } = await import(
+    pathToFileURL(outfile).href
+  ));
 });
 after(async () => {
   const relative = path.relative(cacheRoot, path.resolve(directory));
@@ -27,15 +51,42 @@ after(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 async function fixture(run) {
-  const old = { fetch: globalThis.fetch, localStorage: globalThis.localStorage, window: globalThis.window, document: globalThis.document };
+  const old = {
+    fetch: globalThis.fetch,
+    localStorage: globalThis.localStorage,
+    window: globalThis.window,
+    document: globalThis.document,
+  };
   const cache = new Map();
-  const state = { offline: false, calls: [], errors: [], loseSaveResponse: false, failSnapshotOnce: false, hold: null,
-    topic: { id: 'a', name: '合成脉络', scope: '只处理合成材料。', revision: 1, ledger: baseLedger, raw: '原始来源' } };
-  globalThis.localStorage = { getItem: key => cache.get(key) ?? null, setItem: (key, value) => cache.set(key, value), removeItem: key => cache.delete(key) };
+  const state = {
+    offline: false,
+    calls: [],
+    errors: [],
+    loseSaveResponse: false,
+    failSnapshotOnce: false,
+    hold: null,
+    topic: {
+      id: 'a',
+      name: '合成脉络',
+      scope: '只处理合成材料。',
+      revision: 1,
+      ledger: baseLedger,
+      raw: '原始来源',
+    },
+  };
+  globalThis.localStorage = {
+    getItem: key => cache.get(key) ?? null,
+    setItem: (key, value) => cache.set(key, value),
+    removeItem: key => cache.delete(key),
+  };
   globalThis.window = new EventTarget();
   globalThis.document = new EventTarget();
   globalThis.document.visibilityState = 'visible';
-  const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+  const json = (value, status = 200) =>
+    new Response(JSON.stringify(value), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
   globalThis.fetch = async (url, init) => {
     const address = new URL(url, 'http://synthetic.local');
     const body = init.body ? JSON.parse(init.body) : undefined;
@@ -43,29 +94,104 @@ async function fixture(run) {
     if (state.offline) throw new TypeError('Failed to fetch');
     if (state.hold) await state.hold.promise;
     if (address.pathname === '/api/topics') return json([{ id: 'a', name: state.topic.name }]);
+    if (address.pathname === '/api/tasks') return json([]);
     if (address.pathname === '/api/topics/a/snapshot') {
-      if (state.failSnapshotOnce) { state.failSnapshotOnce = false; throw new TypeError('Snapshot unavailable'); }
+      if (state.failSnapshotOnce) {
+        state.failSnapshotOnce = false;
+        throw new TypeError('Snapshot unavailable');
+      }
       return json({ topic: state.topic });
     }
     if (address.pathname === '/api/topics/a/state') {
       if (body.baseRevision !== state.topic.revision) return json({ error: '合成版本冲突' }, 409);
-      Object.assign(state.topic, { ledger: body.map.ledger, raw: body.map.raw, panel: body.map, revision: state.topic.revision + 1 });
-      if (state.loseSaveResponse) { state.loseSaveResponse = false; state.offline = true; throw new TypeError('Response lost'); }
+      Object.assign(state.topic, {
+        ledger: body.map.ledger,
+        raw: body.map.raw,
+        panel: body.map,
+        revision: state.topic.revision + 1,
+      });
+      if (state.loseSaveResponse) {
+        state.loseSaveResponse = false;
+        state.offline = true;
+        throw new TypeError('Response lost');
+      }
       return json({ revision: state.topic.revision });
     }
-    if (address.pathname === '/api/topics/a/compute') { state.offline = true; throw new TypeError('Enqueue response lost'); }
+    if (address.pathname === '/api/topics/a/tasks') {
+      state.offline = true;
+      throw new TypeError('Enqueue response lost');
+    }
+    if (address.pathname === '/api/runtime/executor')
+      return json({ error: '合成 Agent 不可用' }, 503);
     if (address.pathname === '/api/connections') return json([]);
     throw new Error(`未预期请求：${address.pathname}`);
   };
-  const local = createLocalRuntime({ onRequestUpdate: async () => null, onError: message => state.errors.push(message) });
-  try { await run({ local, state, cache }); }
-  finally {
+  const local = createLocalRuntime({
+    onRequestUpdate: async () => null,
+    onError: message => state.errors.push(message),
+  });
+  try {
+    await run({ local, state, cache });
+  } finally {
     local.dispose();
     // Let an already queued final save finish before restoring the test globals.
     await new Promise(resolve => setTimeout(resolve, 0));
-    for (const [key, value] of Object.entries(old)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+    for (const [key, value] of Object.entries(old)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
   }
 }
+
+test('Agent 切换不可用不误报服务掉线，但同一入口真正断线仍提示重连', async () => {
+  await fixture(async ({ local, state }) => {
+    await local.start();
+    await assert.rejects(
+      local.request('/api/runtime/executor', { agent: 'claude-acp' }),
+      /合成 Agent 不可用/,
+    );
+    assert.equal(local.service.getSnapshot().phase, 'connected');
+    state.offline = true;
+    await assert.rejects(
+      local.request('/api/runtime/executor', { agent: 'claude-acp' }),
+      /本地服务连接中断/,
+    );
+    assert.equal(local.service.getSnapshot().phase, 'disconnected');
+  });
+});
+
+test('Agent 探测允许首次组件准备，普通读取仍及时超时，关闭探测仍可立即取消', async t => {
+  const original = globalThis.fetch;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const requests = [];
+  globalThis.fetch = async (_url, { signal }) =>
+    new Promise((resolve, reject) => {
+      requests.push({ signal, resolve });
+      signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+        once: true,
+      });
+    });
+  try {
+    const ordinary = assert.rejects(localRequest('/api/topics'), /本地服务连接中断/);
+    const discovery = localRequest('/api/runtime/executors');
+    t.mock.timers.tick(10000);
+    await ordinary;
+    assert.equal(requests[1].signal.aborted, false);
+    const expired = assert.rejects(discovery, /本地服务连接中断/);
+    t.mock.timers.tick(230000);
+    await expired;
+    const controller = new AbortController();
+    const cancelled = assert.rejects(
+      localRequest('/api/runtime/executors', undefined, controller.signal),
+      { name: 'AbortError' },
+    );
+    controller.abort();
+    await cancelled;
+  } finally {
+    globalThis.fetch = original;
+    t.mock.timers.reset();
+  }
+});
 
 test('首次 API 失败仍会自动重试，恢复后正常打开；不产生循环错误提示', async () => {
   await fixture(async ({ local, state }) => {
@@ -206,7 +332,10 @@ test('模型任务入队回执丢失后重连不重新提交模型任务', async
     assert.equal(local.service.getSnapshot().phase, 'disconnected');
     state.offline = false;
     await local.service.retry();
-    assert.equal(state.calls.filter(call => call.url.endsWith('/compute')).length, 1);
+    assert.equal(
+      state.calls.filter(call => call.url.endsWith('/tasks') && call.method === 'POST').length,
+      1,
+    );
     assert.equal(local.store.getState().nodes[0].title, '原判断');
   });
 });
@@ -215,25 +344,31 @@ test('连续失败采用退避，dispose 清理唤醒事件与定时检查', asy
   await fixture(async () => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     let calls = 0;
-    const monitor = createReconnectMonitor(async () => { calls++; throw new Error('offline'); });
+    const monitor = createReconnectMonitor(async () => {
+      calls++;
+      throw new Error('offline');
+    });
     try {
-    await monitor.start();
-    assert.equal(calls, 1);
-    t.mock.timers.tick(1000);
-    await monitor.retry();
-    assert.equal(calls, 2);
-    t.mock.timers.tick(1000);
-    await Promise.resolve();
-    assert.equal(calls, 2, '第二次失败后要退避到两秒');
-    t.mock.timers.tick(1000);
-    await monitor.retry();
-    assert.equal(calls, 3);
-    monitor.dispose();
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-    t.mock.timers.tick(60000);
-    await Promise.resolve();
-    assert.equal(calls, 3);
-    } finally { monitor.dispose(); t.mock.timers.reset(); }
+      await monitor.start();
+      assert.equal(calls, 1);
+      t.mock.timers.tick(1000);
+      await monitor.retry();
+      assert.equal(calls, 2);
+      t.mock.timers.tick(1000);
+      await Promise.resolve();
+      assert.equal(calls, 2, '第二次失败后要退避到两秒');
+      t.mock.timers.tick(1000);
+      await monitor.retry();
+      assert.equal(calls, 3);
+      monitor.dispose();
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      t.mock.timers.tick(60000);
+      await Promise.resolve();
+      assert.equal(calls, 3);
+    } finally {
+      monitor.dispose();
+      t.mock.timers.reset();
+    }
   });
 });

@@ -8,22 +8,27 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const execute = promisify(execFile);
-const lifecycleUrl = new URL('../serviceLifecycle.mjs',import.meta.url).href;
+const lifecycleUrl = new URL('../serviceLifecycle.mjs', import.meta.url).href;
 const digest = text => createHash('sha256').update(text).digest('hex');
-const staleOwner = JSON.stringify({pid:-1,token:'expired-instance'});
-const staleCleaner = JSON.stringify({pid:-1,token:'expired-cleaner'});
-const delay = ms => new Promise(resolve=>setTimeout(resolve,ms));
+const staleOwner = JSON.stringify({ pid: -1, token: 'expired-instance' });
+const staleCleaner = JSON.stringify({ pid: -1, token: 'expired-cleaner' });
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function isolated(run) {
-  const directory=await mkdtemp(path.join(tmpdir(),'gft-service-lock-'));
-  await mkdir(path.join(directory,'service'));
-  const main=path.join(directory,'service','instance.lock');
-  await writeFile(main,staleOwner);
-  try {await run({directory,main,env:{...process.env,GFT_LOCAL_HOME:directory,GFT_LOCK_MODULE:lifecycleUrl}});}
-  finally {
-    const relative=path.relative(path.resolve(tmpdir()),path.resolve(directory));
+  const directory = await mkdtemp(path.join(tmpdir(), 'gft-service-lock-'));
+  await mkdir(path.join(directory, 'service'));
+  const main = path.join(directory, 'service', 'instance.lock');
+  await writeFile(main, staleOwner);
+  try {
+    await run({
+      directory,
+      main,
+      env: { ...process.env, GFT_LOCAL_HOME: directory, GFT_LOCK_MODULE: lifecycleUrl },
+    });
+  } finally {
+    const relative = path.relative(path.resolve(tmpdir()), path.resolve(directory));
     assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
-    await rm(directory,{recursive:true,force:true});
+    await rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -82,12 +87,27 @@ try {
 }
 `;
 
-test('旧清理读取延迟返回时不能删除活 owner，清理票据始终原样保留', {timeout:12000}, () => isolated(async ({directory,main,env}) => {
-  await writeFile(`${main}.reap-${digest(staleOwner)}`,staleCleaner);
-  const output=await execute(process.execPath,['--input-type=module','-e',delayedCleaner],{env,windowsHide:true,timeout:10000});
-  assert.deepEqual(JSON.parse(output.stdout),{uniqueOwner:true,retainedTickets:2,protectedUnlinks:0});
-  assert.equal((await readdir(path.join(directory,'service'))).filter(name=>name.startsWith('instance.lock.reap-')).length,2);
-}));
+test('旧清理读取延迟返回时不能删除活 owner，清理票据始终原样保留', { timeout: 12000 }, () =>
+  isolated(async ({ directory, main, env }) => {
+    await writeFile(`${main}.reap-${digest(staleOwner)}`, staleCleaner);
+    const output = await execute(process.execPath, ['--input-type=module', '-e', delayedCleaner], {
+      env,
+      windowsHide: true,
+      timeout: 10000,
+    });
+    assert.deepEqual(JSON.parse(output.stdout), {
+      uniqueOwner: true,
+      retainedTickets: 2,
+      protectedUnlinks: 0,
+    });
+    assert.equal(
+      (await readdir(path.join(directory, 'service'))).filter(name =>
+        name.startsWith('instance.lock.reap-'),
+      ).length,
+      2,
+    );
+  }),
+);
 
 const pausedOwner = String.raw`
 import fs from 'node:fs/promises';
@@ -113,47 +133,92 @@ try {
 } finally {clearInterval(keepAlive);process.disconnect();}
 `;
 function child(env) {
-  const processHandle=spawn(process.execPath,['--input-type=module','-e',pausedOwner],{env,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
-  let output='';const messages=[];
-  processHandle.stdout.on('data',value=>{output+=value;});processHandle.stderr.on('data',value=>{output+=value;});
-  processHandle.on('message',value=>{messages.push(value);});
-  const closed=new Promise((resolve,reject)=>{processHandle.once('error',reject);processHandle.once('close',(code,signal)=>resolve({code,signal,output}));});
-  void closed.catch(()=>{});
-  const event=async name=>{
-    const until=Date.now()+5000;
-    while(Date.now()<until) {
-      const value=messages.find(message=>message.event===name);if(value)return value;
-      if(processHandle.exitCode!==null || processHandle.signalCode!==null)throw new Error(`锁进程提前退出：${output}`);
+  const processHandle = spawn(process.execPath, ['--input-type=module', '-e', pausedOwner], {
+    env,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  });
+  let output = '';
+  const messages = [];
+  processHandle.stdout.on('data', value => {
+    output += value;
+  });
+  processHandle.stderr.on('data', value => {
+    output += value;
+  });
+  processHandle.on('message', value => {
+    messages.push(value);
+  });
+  const closed = new Promise((resolve, reject) => {
+    processHandle.once('error', reject);
+    processHandle.once('close', (code, signal) => resolve({ code, signal, output }));
+  });
+  void closed.catch(() => {});
+  const event = async name => {
+    const until = Date.now() + 5000;
+    while (Date.now() < until) {
+      const value = messages.find(message => message.event === name);
+      if (value) return value;
+      if (processHandle.exitCode !== null || processHandle.signalCode !== null)
+        throw new Error(`锁进程提前退出：${output}`);
       await delay(20);
     }
     throw new Error(`等待 ${name} 超时：${output}`);
   };
-  return {processHandle,closed,event};
+  return { processHandle, closed, event };
 }
 
-test('清理票据的主人被终止后，下一进程沿新票据恢复且仍保持互斥', {timeout:15000}, () => isolated(async ({directory,main,env}) => {
-  const crashed=child({...env,GFT_LOCK_PAUSE:'yes'});let successor;
-  try {
-    const held=await crashed.event('cleanup-held');assert.equal(held.pid,crashed.processHandle.pid);
-    const originalTicket=`${main}.reap-${digest(staleOwner)}`;
-    const originalText=await readFile(originalTicket,'utf8');assert.equal(JSON.parse(originalText).pid,crashed.processHandle.pid);
-    assert.equal(await readFile(main,'utf8'),staleOwner,'清理进程尚未删除死主锁');
-    // The process is our exact child and its published cleanup ticket matches it.
-    crashed.processHandle.kill('SIGKILL');await crashed.closed;
-    successor=child(env);
-    const active=await successor.event('lease-held');assert.equal(active.owner.pid,successor.processHandle.pid);
-    assert.equal(await readFile(originalTicket,'utf8'),originalText);
-    const successorTicket=`${main}.reap-${digest(`${digest(staleOwner)}\0${originalText}`)}`;
-    assert.equal(JSON.parse(await readFile(successorTicket,'utf8')).pid,successor.processHandle.pid);
-    const contender=await execute(process.execPath,['--input-type=module','-e',`const {acquireServiceLease}=await import(process.env.GFT_LOCK_MODULE);try {const release=await acquireServiceLease();await release();process.exitCode=2;}catch(error){console.log(JSON.stringify({status:error.status}));}`],{env,windowsHide:true,timeout:5000});
-    assert.equal(JSON.parse(contender.stdout).status,409);
-    assert.deepEqual(JSON.parse(await readFile(main,'utf8')),active.owner);
-    successor.processHandle.send('release');assert.equal((await successor.closed).code,0);
-    assert.equal((await readdir(path.join(directory,'service'))).filter(name=>name.startsWith('instance.lock.reap-')).length,2);
-  } finally {
-    for(const ownedChild of [crashed,successor].filter(Boolean)) {
-      if(ownedChild.processHandle.exitCode===null && ownedChild.processHandle.signalCode===null)ownedChild.processHandle.kill('SIGKILL');
-      await ownedChild.closed;
+test('清理票据的主人被终止后，下一进程沿新票据恢复且仍保持互斥', { timeout: 15000 }, () =>
+  isolated(async ({ directory, main, env }) => {
+    const crashed = child({ ...env, GFT_LOCK_PAUSE: 'yes' });
+    let successor;
+    try {
+      const held = await crashed.event('cleanup-held');
+      assert.equal(held.pid, crashed.processHandle.pid);
+      const originalTicket = `${main}.reap-${digest(staleOwner)}`;
+      const originalText = await readFile(originalTicket, 'utf8');
+      assert.equal(JSON.parse(originalText).pid, crashed.processHandle.pid);
+      assert.equal(await readFile(main, 'utf8'), staleOwner, '清理进程尚未删除死主锁');
+      // The process is our exact child and its published cleanup ticket matches it.
+      crashed.processHandle.kill('SIGKILL');
+      await crashed.closed;
+      successor = child(env);
+      const active = await successor.event('lease-held');
+      assert.equal(active.owner.pid, successor.processHandle.pid);
+      assert.equal(await readFile(originalTicket, 'utf8'), originalText);
+      const successorTicket = `${main}.reap-${digest(`${digest(staleOwner)}\0${originalText}`)}`;
+      assert.equal(
+        JSON.parse(await readFile(successorTicket, 'utf8')).pid,
+        successor.processHandle.pid,
+      );
+      const contender = await execute(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `const {acquireServiceLease}=await import(process.env.GFT_LOCK_MODULE);try {const release=await acquireServiceLease();await release();process.exitCode=2;}catch(error){console.log(JSON.stringify({status:error.status}));}`,
+        ],
+        { env, windowsHide: true, timeout: 5000 },
+      );
+      assert.equal(JSON.parse(contender.stdout).status, 409);
+      assert.deepEqual(JSON.parse(await readFile(main, 'utf8')), active.owner);
+      successor.processHandle.send('release');
+      assert.equal((await successor.closed).code, 0);
+      assert.equal(
+        (await readdir(path.join(directory, 'service'))).filter(name =>
+          name.startsWith('instance.lock.reap-'),
+        ).length,
+        2,
+      );
+    } finally {
+      for (const ownedChild of [crashed, successor].filter(Boolean)) {
+        if (
+          ownedChild.processHandle.exitCode === null &&
+          ownedChild.processHandle.signalCode === null
+        )
+          ownedChild.processHandle.kill('SIGKILL');
+        await ownedChild.closed;
+      }
     }
-  }
-}));
+  }),
+);

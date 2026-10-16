@@ -3,14 +3,44 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-let clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, nodeToolbarSpace, resizeToolbarBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING;
+let clampReadingViewport,
+  readingExtent,
+  overviewViewport,
+  unionBounds,
+  nodeReadingBounds,
+  nodeToolbarSpace,
+  resizeToolbarBounds,
+  NODE_TOOLBAR_SPACE,
+  VIEWPORT_PADDING;
 before(async () => {
-  const entry = fileURLToPath(new URL('../../../src/component/focus/ThinkingMapView/viewport.ts', import.meta.url));
-  const bundled = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
-  ({ clampReadingViewport, readingExtent, overviewViewport, unionBounds, nodeReadingBounds, nodeToolbarSpace, resizeToolbarBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`));
+  const entry = fileURLToPath(
+    new URL('../../../src/component/focus/ThinkingMapView/viewport.ts', import.meta.url),
+  );
+  const bundled = await build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  });
+  ({
+    clampReadingViewport,
+    readingExtent,
+    overviewViewport,
+    unionBounds,
+    nodeReadingBounds,
+    nodeToolbarSpace,
+    resizeToolbarBounds,
+    NODE_TOOLBAR_SPACE,
+    VIEWPORT_PADDING,
+  } = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  ));
 });
 
-const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} should equal ${expected}`);
+const close = (actual, expected) =>
+  assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} should equal ${expected}`);
 const screenBounds = (bounds, viewport) => ({
   left: bounds.x * viewport.zoom + viewport.x,
   top: bounds.y * viewport.zoom + viewport.y,
@@ -34,19 +64,32 @@ test('大图阅读可达四边，越界拖动最多留下 24px 留白', () => {
   assert.equal(screenBounds(bounds, bottom).bottom, size.height - 24);
   assert.equal(left.y, middle.y);
   assert.equal(bottom.x, middle.x);
-  for (const viewport of [left, right, top, bottom]) assert.deepEqual(clampReadingViewport(viewport, bounds, size), viewport);
+  for (const viewport of [left, right, top, bottom])
+    assert.deepEqual(clampReadingViewport(viewport, bounds, size), viewport);
 });
 
 test('小图固定左上起点，窄长图只锁横轴，不居中也不禁止纵向阅读', () => {
   const size = { width: 640, height: 480 };
   const small = { x: -100, y: -40, width: 120, height: 60 };
   for (const offset of [-10000, 0, 10000]) {
-    assert.deepEqual(clampReadingViewport({ x: offset, y: offset, zoom: 1 }, small, size), { x: 124, y: 64, zoom: 1 });
+    assert.deepEqual(clampReadingViewport({ x: offset, y: offset, zoom: 1 }, small, size), {
+      x: 124,
+      y: 64,
+      zoom: 1,
+    });
   }
   const tall = { ...small, height: 1800 };
-  assert.deepEqual(clampReadingViewport({ x: -200, y: -500, zoom: 1 }, tall, size), { x: 124, y: -500, zoom: 1 });
+  assert.deepEqual(clampReadingViewport({ x: -200, y: -500, zoom: 1 }, tall, size), {
+    x: 124,
+    y: -500,
+    zoom: 1,
+  });
   const exact = { x: 0, y: 0, width: size.width - 48, height: size.height - 48 };
-  assert.deepEqual(clampReadingViewport({ x: -200, y: -500, zoom: 1 }, exact, size), { x: 24, y: 24, zoom: 1 });
+  assert.deepEqual(clampReadingViewport({ x: -200, y: -500, zoom: 1 }, exact, size), {
+    x: 24,
+    y: 24,
+    zoom: 1,
+  });
 });
 
 test('负坐标内容仍以真实包围盒约束，不将原点误当内容边缘', () => {
@@ -61,12 +104,19 @@ test('负坐标内容仍以真实包围盒约束，不将原点误当内容边�
 
 test('视窗尺寸改变保留仍合法的位置，扩展后收回越界空白', () => {
   const bounds = { x: 0, y: 0, width: 1600, height: 1200 };
-  const previous = clampReadingViewport({ x: -10000, y: -10000, zoom: 1 }, bounds, { width: 800, height: 600 });
+  const previous = clampReadingViewport({ x: -10000, y: -10000, zoom: 1 }, bounds, {
+    width: 800,
+    height: 600,
+  });
   assert.deepEqual(clampReadingViewport(previous, bounds, { width: 400, height: 300 }), previous);
   const expanded = clampReadingViewport(previous, bounds, { width: 1000, height: 800 });
   assert.equal(screenBounds(bounds, expanded).right, 976);
   assert.equal(screenBounds(bounds, expanded).bottom, 776);
-  assert.deepEqual(clampReadingViewport(previous, bounds, { width: 2000, height: 1600 }), { x: 24, y: 24, zoom: 1 });
+  assert.deepEqual(clampReadingViewport(previous, bounds, { width: 2000, height: 1600 }), {
+    x: 24,
+    y: 24,
+    zoom: 1,
+  });
 });
 
 test('阅读模式忽略外部缩放值，恢复原始比例且不修改输入', () => {
@@ -141,19 +191,28 @@ test('尚未测得尺寸或收到无效视窗数据时，几何结果保持有�
     assert.deepEqual(overviewViewport(bounds, size), { x: 124, y: -16, zoom: 1 });
     assert.ok(readingExtent(bounds, size).flat().every(Number.isFinite));
   }
-  assert.deepEqual(clampReadingViewport({ x: NaN, y: -300, zoom: 1 }, bounds, { width: 800, height: 600 }), { x: 124, y: -300, zoom: 1 });
+  assert.deepEqual(
+    clampReadingViewport({ x: NaN, y: -300, zoom: 1 }, bounds, { width: 800, height: 600 }),
+    { x: 124, y: -300, zoom: 1 },
+  );
 });
 
 test('短标题节点到达左右边界时，居中的悬浮工具条仍有完整留白', () => {
   const size = { width: 580, height: 480 };
-  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 600, width: 208, height: 60 }];
+  const nodes = [
+    { x: -200, y: 0, width: 44, height: 38 },
+    { x: 400, y: 600, width: 208, height: 60 },
+  ];
   const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
   for (const x of [-10000, 10000]) {
     const viewport = clampReadingViewport({ x, y: 0, zoom: 1 }, bounds, size);
     const node = x > 0 ? nodes[0] : nodes[1];
-    const toolbar = { x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
+    const toolbar = {
+      x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
       y: node.y + node.height + NODE_TOOLBAR_SPACE.gap,
-      width: NODE_TOOLBAR_SPACE.width, height: NODE_TOOLBAR_SPACE.height };
+      width: NODE_TOOLBAR_SPACE.width,
+      height: NODE_TOOLBAR_SPACE.height,
+    };
     const screen = screenBounds(toolbar, viewport);
     assert.ok(screen.left >= VIEWPORT_PADDING);
     assert.ok(screen.right <= size.width - VIEWPORT_PADDING);
@@ -166,18 +225,27 @@ test('最下方节点拖到阅读末尾时，工具条与阴影留白都处于�
   const size = { width: 580, height: 480 };
   const viewport = clampReadingViewport({ x: 10000, y: -10000, zoom: 1 }, bounds, size);
   const screen = screenBounds(node, viewport);
-  assert.equal(size.height - screen.bottom, VIEWPORT_PADDING + NODE_TOOLBAR_SPACE.gap + NODE_TOOLBAR_SPACE.height);
+  assert.equal(
+    size.height - screen.bottom,
+    VIEWPORT_PADDING + NODE_TOOLBAR_SPACE.gap + NODE_TOOLBAR_SPACE.height,
+  );
 });
 
 test('总览中的边缘工具条同样完整进入视窗', () => {
-  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 56, height: 60 }];
+  const nodes = [
+    { x: -200, y: 0, width: 44, height: 38 },
+    { x: 400, y: 900, width: 56, height: 60 },
+  ];
   const size = { width: 580, height: 480 };
   const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
   const viewport = overviewViewport(bounds, size);
   for (const node of nodes) {
-    const toolbar = { x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
+    const toolbar = {
+      x: node.x + (node.width - NODE_TOOLBAR_SPACE.width) / 2,
       y: node.y + node.height + NODE_TOOLBAR_SPACE.gap,
-      width: NODE_TOOLBAR_SPACE.width, height: NODE_TOOLBAR_SPACE.height };
+      width: NODE_TOOLBAR_SPACE.width,
+      height: NODE_TOOLBAR_SPACE.height,
+    };
     const screen = screenBounds(toolbar, viewport);
     assert.ok(screen.left >= VIEWPORT_PADDING - 1e-8);
     assert.ok(screen.right <= size.width - VIEWPORT_PADDING + 1e-8);
@@ -187,15 +255,28 @@ test('总览中的边缘工具条同样完整进入视窗', () => {
 
 test('320窄栏为两行工具条保留四边24px，底部按钮不被截断', () => {
   const size = { width: 320, height: 480 };
-  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 208, height: 60 }];
+  const nodes = [
+    { x: -200, y: 0, width: 44, height: 38 },
+    { x: 400, y: 900, width: 208, height: 60 },
+  ];
   const toolbar = nodeToolbarSpace(size);
   assert.equal(toolbar.width, 272);
   assert.equal(toolbar.height, 72);
   const bounds = unionBounds(nodes.map(node => nodeReadingBounds(node, size)));
-  for (const [node, x, y] of [[nodes[0], 10000, 10000], [nodes[1], -10000, -10000]]) {
+  for (const [node, x, y] of [
+    [nodes[0], 10000, 10000],
+    [nodes[1], -10000, -10000],
+  ]) {
     const viewport = clampReadingViewport({ x, y, zoom: 1 }, bounds, size);
-    const screen = screenBounds({ x: node.x + (node.width - toolbar.width) / 2,
-      y: node.y + node.height + toolbar.gap, width: toolbar.width, height: toolbar.height }, viewport);
+    const screen = screenBounds(
+      {
+        x: node.x + (node.width - toolbar.width) / 2,
+        y: node.y + node.height + toolbar.gap,
+        width: toolbar.width,
+        height: toolbar.height,
+      },
+      viewport,
+    );
     assert.ok(screen.left >= VIEWPORT_PADDING);
     assert.ok(screen.right <= size.width - VIEWPORT_PADDING);
     assert.ok(screen.top >= VIEWPORT_PADDING);
@@ -215,25 +296,43 @@ test('工具条边界在宽窄切换时同步变化，宽屏保持原来的单�
     assert.equal(bounds.height, node.height + toolbar.gap + toolbar.height);
     if (width >= 368) assert.deepEqual(toolbar, NODE_TOOLBAR_SPACE);
   }
-  for (const size of [{ width: 0, height: 0 }, { width: NaN, height: 480 }, { width: 20, height: 20 }]) {
-    assert.ok(Object.values(nodeToolbarSpace(size)).every(value => Number.isFinite(value) && value >= 0));
+  for (const size of [
+    { width: 0, height: 0 },
+    { width: NaN, height: 480 },
+    { width: 20, height: 20 },
+  ]) {
+    assert.ok(
+      Object.values(nodeToolbarSpace(size)).every(value => Number.isFinite(value) && value >= 0),
+    );
   }
 });
 
 test('总览宽窄切换更新工具条预留，不改变冻结节点或累计空白', () => {
-  const nodes = [{ x: -200, y: 0, width: 44, height: 38 }, { x: 400, y: 900, width: 44, height: 38 }];
+  const nodes = [
+    { x: -200, y: 0, width: 44, height: 38 },
+    { x: 400, y: 900, width: 44, height: 38 },
+  ];
   for (const initialWidth of [320, 900]) {
     const originalSize = { width: initialWidth, height: 480 };
     const originalToolbar = nodeToolbarSpace(originalSize);
-    const originalBounds = Object.freeze(unionBounds(nodes.map(node => nodeReadingBounds(node, originalSize))));
+    const originalBounds = Object.freeze(
+      unionBounds(nodes.map(node => nodeReadingBounds(node, originalSize))),
+    );
     for (const width of [900, 320, 520, initialWidth]) {
       const size = { width, height: 480 };
       const toolbar = nodeToolbarSpace(size);
       const bounds = resizeToolbarBounds(originalBounds, originalToolbar, toolbar);
       const viewport = overviewViewport(bounds, size);
       for (const node of nodes) {
-        const screen = screenBounds({ x: node.x + (node.width - toolbar.width) / 2,
-          y: node.y + node.height + toolbar.gap, width: toolbar.width, height: toolbar.height }, viewport);
+        const screen = screenBounds(
+          {
+            x: node.x + (node.width - toolbar.width) / 2,
+            y: node.y + node.height + toolbar.gap,
+            width: toolbar.width,
+            height: toolbar.height,
+          },
+          viewport,
+        );
         assert.ok(screen.left >= VIEWPORT_PADDING - 1e-8);
         assert.ok(screen.right <= size.width - VIEWPORT_PADDING + 1e-8);
         assert.ok(screen.bottom <= size.height - VIEWPORT_PADDING + 1e-8);

@@ -5,8 +5,16 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 let mode = args.find(arg => arg.startsWith('--fixture-mode='))?.split('=')[1] || 'success';
 const event = value => process.stdout.write(`${JSON.stringify(value)}\n`);
-if (args.includes('--version')) { console.log('codex-cli fixture'); process.exit(0); }
-if (args.includes('--help')) { console.log('--ignore-user-config --ignore-rules --strict-config --ephemeral --json --output-last-message'); process.exit(0); }
+if (args.includes('--version')) {
+  console.log('codex-cli fixture');
+  process.exit(0);
+}
+if (args.includes('--help')) {
+  console.log(
+    '--ignore-user-config --ignore-rules --strict-config --ephemeral --json --output-last-message',
+  );
+  process.exit(0);
+}
 if (args.includes('login')) {
   console.error(mode === 'auth-failure' ? 'Not logged in' : 'Logged in using ChatGPT');
   process.exit(mode === 'auth-failure' ? 1 : 0);
@@ -18,30 +26,57 @@ for await (const chunk of process.stdin) input += chunk;
 if (mode === 'select-by-input') mode = input.includes('RUN_NEXT_SUCCESS') ? 'success' : 'hang-tree';
 if (mode === 'protocol-by-input') mode = input.match(/PROTOCOL_CASE=([a-z-]+)/)?.[1] || 'success';
 const instructionsArg = args.find(value => value.startsWith('model_instructions_file='));
-const instructions = instructionsArg ? await readFile(JSON.parse(instructionsArg.slice('model_instructions_file='.length)), 'utf8') : '';
-await writeFile(path.join(dir, 'invocation.json'), JSON.stringify({ args, input, instructions, pid: process.pid }), 'utf8');
-if (mode === 'failure') { event({ type: 'turn.failed', error: { message: '合成执行错误' } }); process.exit(7); }
+const instructions = instructionsArg
+  ? await readFile(JSON.parse(instructionsArg.slice('model_instructions_file='.length)), 'utf8')
+  : '';
+await writeFile(
+  path.join(dir, 'invocation.json'),
+  JSON.stringify({ args, input, instructions, pid: process.pid }),
+  'utf8',
+);
+if (mode === 'failure') {
+  event({ type: 'turn.failed', error: { message: '合成执行错误' } });
+  process.exit(7);
+}
 const invalidEvents = {
-  'protocol-item-object': {type:'item.started',item:{type:'mcp_tool_call',id:{toString:null}}},
-  'protocol-item-array': {type:'item.started',item:{type:'mcp_tool_call',id:[{toString:null}]}},
-  'protocol-error-object': {type:'turn.failed',error:{message:{toString:null}}},
-  'protocol-message-object': {type:'error',message:{toString:null}},
-  'protocol-fragmented': {type:'item.started',item:{type:'mcp_tool_call',id:{toString:null},server:'模拟😀'}},
-  'protocol-tail': {type:'error',message:{toString:null}},
+  'protocol-item-object': {
+    type: 'item.started',
+    item: { type: 'mcp_tool_call', id: { toString: null } },
+  },
+  'protocol-item-array': {
+    type: 'item.started',
+    item: { type: 'mcp_tool_call', id: [{ toString: null }] },
+  },
+  'protocol-error-object': { type: 'turn.failed', error: { message: { toString: null } } },
+  'protocol-message-object': { type: 'error', message: { toString: null } },
+  'protocol-fragmented': {
+    type: 'item.started',
+    item: { type: 'mcp_tool_call', id: { toString: null }, server: '模拟😀' },
+  },
+  'protocol-tail': { type: 'error', message: { toString: null } },
 };
 if (invalidEvents[mode]) {
-  const line=Buffer.from(JSON.stringify(invalidEvents[mode])+(mode==='protocol-tail'?'':'\n'));
-  if(mode==='protocol-fragmented') {
-    for(let offset=0;offset<line.length;offset+=7){process.stdout.write(line.subarray(offset,offset+7));await new Promise(resolve=>setTimeout(resolve,3));}
+  const line = Buffer.from(
+    JSON.stringify(invalidEvents[mode]) + (mode === 'protocol-tail' ? '' : '\n'),
+  );
+  if (mode === 'protocol-fragmented') {
+    for (let offset = 0; offset < line.length; offset += 7) {
+      process.stdout.write(line.subarray(offset, offset + 7));
+      await new Promise(resolve => setTimeout(resolve, 3));
+    }
   } else process.stdout.write(line);
   // Exit even when testing an old runner that crashes on this event.
-  await new Promise(resolve=>setTimeout(resolve,100));
-}
-else if (mode === 'malformed-events') { console.log('not-json'); setInterval(() => {}, 1000); }
-else if (mode === 'hang' || mode === 'hang-tree') {
+  await new Promise(resolve => setTimeout(resolve, 100));
+} else if (mode === 'malformed-events') {
+  console.log('not-json');
+  setInterval(() => {}, 1000);
+} else if (mode === 'hang' || mode === 'hang-tree') {
   event({ type: 'thread.started', thread_id: 'fixture-hanging' });
   if (mode === 'hang-tree') {
-    const child = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { windowsHide: true, stdio: ['ignore', 'inherit', 'inherit'] });
+    const child = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {
+      windowsHide: true,
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
     await writeFile(path.join(dir, 'descendant.pid'), String(child.pid));
   }
   setInterval(() => {}, 1000);
@@ -49,15 +84,44 @@ else if (mode === 'hang' || mode === 'hang-tree') {
   event({ type: 'thread.started', thread_id: 'fixture-thread' });
   event({ type: 'turn.started' });
   // Deliberately split a UTF-8 JSON line across writes to exercise streaming.
-  const line = Buffer.from(JSON.stringify({ type: 'item.started', item: { id: 'fixture-tool', type: 'mcp_tool_call', server: '模拟工具', tool: 'inspect', arguments: { private: '不应进入指标' } } }) + '\n');
+  const line = Buffer.from(
+    JSON.stringify({
+      type: 'item.started',
+      item: {
+        id: 'fixture-tool',
+        type: 'mcp_tool_call',
+        server: '模拟工具',
+        tool: 'inspect',
+        arguments: { private: '不应进入指标' },
+      },
+    }) + '\n',
+  );
   const split = line.indexOf(Buffer.from('模拟')) + 1;
   process.stdout.write(line.subarray(0, split));
   await new Promise(resolve => setTimeout(resolve, 10));
   process.stdout.write(line.subarray(split));
-  event({ type: 'item.completed', item: { id: 'fixture-tool', type: 'mcp_tool_call', server: '模拟工具', tool: 'inspect', status: 'completed', result: '不应进入指标' } });
-  event({ type: 'turn.completed', usage: { input_tokens: 120, cached_input_tokens: 30, output_tokens: 24 } });
+  event({
+    type: 'item.completed',
+    item: {
+      id: 'fixture-tool',
+      type: 'mcp_tool_call',
+      server: '模拟工具',
+      tool: 'inspect',
+      status: 'completed',
+      result: '不应进入指标',
+    },
+  });
+  event({
+    type: 'turn.completed',
+    usage: { input_tokens: 120, cached_input_tokens: 30, output_tokens: 24 },
+  });
   if (mode !== 'missing-output') {
-    const output = mode === 'empty-output' ? '' : mode === 'invalid-output' ? '没有协议内容' : '<doc>\n## 真实进程回放\n### ◇ 子进程结果已回填\n这是合成材料，没有调用真实模型。\n</doc>\n<prose domain="真实进程回放" refs="d1">子进程结果已回填，本次仅回放合成材料，没有调用真实模型。</prose>';
+    const output =
+      mode === 'empty-output'
+        ? ''
+        : mode === 'invalid-output'
+          ? '没有协议内容'
+          : '<doc>\n## 真实进程回放\n### ◇ 子进程结果已回填\n这是合成材料，没有调用真实模型。\n</doc>\n<prose domain="真实进程回放" refs="d1">子进程结果已回填，本次仅回放合成材料，没有调用真实模型。</prose>';
     await writeFile(outputFile, output, 'utf8');
   }
 }

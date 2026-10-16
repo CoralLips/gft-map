@@ -10,20 +10,39 @@ import * as store from '../store.mjs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
 const fixture = fileURLToPath(new URL('./fixtures/fake-acp.mjs', import.meta.url));
-const call = (args, env = {}) => spawnSync(process.execPath, [cli, ...args], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 10000, windowsHide: true });
+const call = (args, env = {}) =>
+  spawnSync(process.execPath, [cli, ...args], {
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
 const fixtureArgs = adapter => [fixture, '--fixture-mode=success', `--fixture-adapter=${adapter}`];
 
 test('CLI doctor 经打包的 ACP SDK 握手，支持显式参数和每种适配器的环境配置', () => {
   for (const adapter of ['codex', 'claude']) {
-    const explicit = call(['doctor', '--agent', `${adapter}-acp`, '--acp-bin', process.execPath, ...fixtureArgs(adapter).flatMap(arg => ['--acp-arg', arg]), '--model', 'fixture-model']);
+    const explicit = call([
+      'doctor',
+      '--agent',
+      `${adapter}-acp`,
+      '--acp-bin',
+      process.execPath,
+      ...fixtureArgs(adapter).flatMap(arg => ['--acp-arg', arg]),
+    ]);
     assert.equal(explicit.status, 0, explicit.stderr);
     const status = JSON.parse(explicit.stdout);
     assert.equal(status.engine, `${adapter}-acp`);
     assert.equal(status.protocol, 'acp');
     assert.equal(status.status, 'ready');
+    assert.equal(status.modelSource, 'provider-default');
+    assert.equal(status.model, adapter === 'codex' ? 'fixture-default' : 'default');
+    assert.equal(status.effort, adapter === 'codex' ? 'medium' : 'auto');
     assert.equal(status.authenticated, null, 'initialize 握手不能冒充模型认证已通过');
     const prefix = `GFT_${adapter.toUpperCase()}_ACP`;
-    const fromEnv = call(['doctor', '--agent', `${adapter}-acp`], { [`${prefix}_BIN`]: process.execPath, [`${prefix}_ARGS`]: JSON.stringify(fixtureArgs(adapter)) });
+    const fromEnv = call(['doctor', '--agent', `${adapter}-acp`], {
+      [`${prefix}_BIN`]: process.execPath,
+      [`${prefix}_ARGS`]: JSON.stringify(fixtureArgs(adapter)),
+    });
     assert.equal(fromEnv.status, 0, fromEnv.stderr);
     assert.equal(JSON.parse(fromEnv.stdout).engine, `${adapter}-acp`);
   }
@@ -32,6 +51,7 @@ test('CLI doctor 经打包的 ACP SDK 握手，支持显式参数和每种适配
 test('CLI 拒绝坏 ACP 配置，不把参数字符串当作 shell 命令执行', () => {
   for (const [args, env] of [
     [['doctor', '--agent', 'unknown'], {}],
+    [['doctor', '--agent', 'codex-acp', '--model', 'personal-model'], {}],
     [['doctor', '--agent', 'codex-acp', '--acp-bin', 'relative.exe'], {}],
     [['doctor', '--agent', 'codex-acp'], { GFT_CODEX_ACP_ARGS: '{not-json' }],
     [['doctor', '--agent', 'claude-acp'], { GFT_CLAUDE_ACP_ARGS: '"whole shell command"' }],
@@ -49,11 +69,19 @@ test('两个 ACP 服务入口均通过任务队列回填并公开实际执行协
   process.env.GFT_LOCAL_HOME = directory;
   try {
     for (const adapter of ['codex', 'claude']) {
-      const server = await startServer({ port: 0, agent: `${adapter}-acp`, runnerOptions: { binary: process.execPath, prefixArgs: fixtureArgs(adapter) } });
+      const server = await startServer({
+        port: 0,
+        agent: `${adapter}-acp`,
+        runnerOptions: { binary: process.execPath, prefixArgs: fixtureArgs(adapter) },
+      });
       try {
         const origin = `http://127.0.0.1:${server.address().port}`;
         const topic = await store.createTopic(`${adapter} 合成接线`, '只验证任务协议');
-        const response = await fetch(`${origin}/api/topics/${topic.id}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', input: '这是合成协议回放，不调用真实模型。' }) });
+        const response = await fetch(`${origin}/api/topics/${topic.id}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', input: '这是合成协议回放，不调用真实模型。' }),
+        });
         assert.equal(response.status, 200);
         const created = await response.json();
         let task;
@@ -68,10 +96,13 @@ test('两个 ACP 服务入口均通过任务队列回填并公开实际执行协
         assert.equal(runtime.agent, `${adapter}-acp`);
         assert.equal(runtime.executor.protocol, 'acp');
         assert.match((await store.getView(topic.id)).doc, /ACP 合成结果已回填/);
-      } finally { await server.shutdown(); }
+      } finally {
+        await server.shutdown();
+      }
     }
   } finally {
-    if (previous === undefined) delete process.env.GFT_LOCAL_HOME; else process.env.GFT_LOCAL_HOME = previous;
+    if (previous === undefined) delete process.env.GFT_LOCAL_HOME;
+    else process.env.GFT_LOCAL_HOME = previous;
     const relative = path.relative(path.resolve(tmpdir()), path.resolve(directory));
     assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
     await rm(directory, { recursive: true, force: true });

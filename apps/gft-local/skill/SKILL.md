@@ -11,7 +11,7 @@ description: 通过本地 GFT 白盒保存、读取和整理按主题组织的�
 
 用户要求升级本地 GFT Map 时，执行下文“更新安装”，不要把“更新程序”当成“更新聊天材料”。
 
-需要 Node.js 20 或更高版本。以下命令均相对于本技能目录执行；从其他工作目录调用时，把 `scripts/cli.mjs` 替换为本技能目录下的绝对路径。不要假设用户当前目录就是技能目录。
+需要 Node.js 22 或更高版本及 npm。以下命令均相对于本技能目录执行；从其他工作目录调用时，把 `scripts/cli.mjs` 替换为本技能目录下的绝对路径。不要假设用户当前目录就是技能目录。
 
 ```text
 node scripts/cli.mjs list --remote
@@ -20,7 +20,7 @@ node scripts/cli.mjs connections --provider codex --session SESSION
 node scripts/cli.mjs read-connected --provider codex --session SESSION --project PROJECT_ID
 ```
 
-开始实际使用时先执行 `node scripts/cli.mjs start` 检查并按需启动；用户要看面板时用 `open`。连接相关 CLI／MCP 每次请求前也会检查同一安装和数据的服务，列主题用 `list --remote`。原有文件命令仍可离线使用，不会为了读取或手动处理任务启动模型。默认数据为 `~/.gft-local`；已有 `GFT_LOCAL_HOME` 时沿用指定目录。除非用户要求迁移或隔离测试，不改变数据位置，不安装组件，不改 Agent 配置。
+开始实际使用时先执行 `node scripts/cli.mjs start` 检查并按需启动；用户要看面板时用 `open`。连接相关 CLI／MCP 每次请求前也会检查同一安装和数据的服务，列主题用 `list --remote`。原有文件命令仍可离线使用，不会为了读取或手动处理任务启动模型。默认数据为 `~/.gft-local`；已有 `GFT_LOCAL_HOME` 时沿用指定目录。除非用户要求迁移或隔离测试，不改变数据位置，不改 Agent 全局配置；启动时由产品准备固定版本连接组件。
 
 ## 更新安装
 
@@ -126,7 +126,7 @@ node scripts/cli.mjs complete --id TASK_ID --file MODEL_OUTPUT_FILE
 
 用户说打开或恢复面板时执行 `open`，说重启时执行 `restart`，说关闭 GFT Map 时执行 `stop`。打开会复用同一安装和数据的健康服务；未运行时启动，确认可用后打开浏览器。命令结束后面板仍运行，无需 Agent 自己拼后台启动命令。服务管理默认使用 `GFT_LOCAL_URL` 或 `http://127.0.0.1:4317`，自定义端口传 `--port` 并保持后续请求地址一致。不要新建数据目录或关闭其他 Node 进程。
 
-服务持续后台运行，关闭网页或结束当前任务不调用 `stop`；正常睡眠暂停、唤醒后应继续。只有用户要求关闭／重启或升级流程需要时才主动停服。当前没有开机自启动或异常退出后持续守护；恢复入口是 `open`／`start` 和连接请求前的按需检查，不能声称已实现自动常驻恢复。
+`open`／`start`／`restart` 启动独立后台守护：服务意外退出会按退避间隔重启，沿用数据和当前执行器；首次启动失败直接退出并报错，连续快速失败 5 次后停止自动重试；主动 `stop` 或升级停服会关闭本轮守护，禁止自行复活。关闭／刷新网页只断开显示，已提交的服务端任务继续，重开后恢复进度和停止入口，以及基于已保存操作历史的 Ctrl+Z 撤回。正常睡眠暂停、唤醒后应继续，但尚未做真实睡眠验收。没有开机自启动；电脑重启或守护进程本身退出后仍通过 `open` 恢复。前台排障的 `serve` 不带守护。不要声称任何情况下都能自动恢复，也不要自动重放中断的普通 AI 请求。
 
 ```text
 node scripts/cli.mjs open
@@ -139,7 +139,7 @@ node scripts/cli.mjs task --id TASK_ID
 
 `start` 只确保面板可用，不打开浏览器；`status` 和 `stop` 不会启动已关闭的面板。关闭或重启遇到未完成任务返回 409，向用户说明具体任务，让其选择等待还是取消后再执行，不擅自取消。恢复服务不代表模型任务成功；用 `task-status --id TASK_ID --remote` 核对结果。已开始但中断的普通模型任务需按需重新发起，排队任务按原流程处理，HTTP请求失败后不自动重发。大文件按既有存档续做，主动暂停的保持暂停。
 
-默认恢复之前成功连接的执行器，首次检查 Codex；纯手动模式用 `open --manual`。用户明确要求更换执行器时使用 `restart --agent AGENT`，支持 `codex-acp`、`claude-acp` 和原有 `codex`，不重复索要启用许可。ACP 的可执行路径和参数见 [ACP 配置](references/acp.md)。`codex` 入口使用执行器默认模型与思考强度，任务采用 ephemeral，不继承当前聊天或仓库指令、不保存新的聊天历史；这不能套用到所有 ACP 适配器。前台诊断仍可用 `serve`，手动任务沿用 `task`／`complete`。
+默认保留之前选择的 Agent，以 ACP 连接；首次检查 Codex。页面任务使用厂商推荐模型及默认强度，清除 GFT 旧模型固定值，不沿用个人调高的设置。页面设置只选择 Codex 或 Claude Code，不暴露协议。页面先可用，后台通过锁定完整依赖树的 npm ci --ignore-scripts 准备连接组件（Node.js 22+ 与 npm，需要网络），复用原登录；不要要求用户配置适配器路径。切换可在设置的“任务 → 选择处理 Agent”完成，或 `restart --agent codex-acp` / `restart --agent claude-acp`。只有确认 ACP 兼容障碍时才临时使用原生 `--agent codex` / `--agent claude`；不要因登录、额度或限流问题自动回退。检查不等于真实模型成功，需用合成材料验收。纯手动模式用 `open --manual`。详见 [连接与排障](references/acp.md)。
 
 启动命令返回的 `runtime` 或 `/api/runtime` 才是验收依据：页面处理需要所选 `agent`、`mode: automatic`，以及执行器为 `ready` 或正在处理。若执行器未就绪，报告实际登录或配置提示；手动模式可在任务页点击“连接 Codex”。保留相同端口与 `GFT_LOCAL_HOME`，不把“页面能打开”当成“Agent 已连接”。
 

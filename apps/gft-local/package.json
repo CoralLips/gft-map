@@ -1,17 +1,19 @@
 {
   "name": "gft-map",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "node build.mjs",
     "start": "node cli.mjs serve",
     "test": "node release/run-tests.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "pack:skill": "node build.mjs --skill"
+    "pack:skill": "node build.mjs --skill",
+    "format": "prettier --write \"**/*.{mjs,js,ts,tsx,css}\"",
+    "format:check": "prettier --check \"**/*.{mjs,js,ts,tsx,css}\""
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
@@ -39,6 +41,7 @@
     "autoprefixer": "10.4.21",
     "esbuild": "0.21.5",
     "postcss": "8.5.15",
+    "prettier": "3.3.3",
     "tailwindcss": "4.1.13",
     "typescript": "5.9.3"
   }

@@ -33,7 +33,10 @@ test('共享核心的完整 TypeScript 依赖闭包可独立检查，不经过�
     types: [],
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
-  assert.deepEqual(diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')), []);
+  assert.deepEqual(
+    diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+    [],
+  );
   const allowedFiles = new Set([
     ...entries,
     'src/type/focusCard.ts',
@@ -44,15 +47,29 @@ test('共享核心的完整 TypeScript 依赖闭包可独立检查，不经过�
     'src/service/mapDocContract.ts',
     'src/service/relationReason.ts',
   ]);
-  const sources = program.getSourceFiles().filter(file => !file.isDeclarationFile).map(file => path.relative(root, file.fileName).replaceAll('\\', '/'));
+  const sources = program
+    .getSourceFiles()
+    .filter(file => !file.isDeclarationFile)
+    .map(file => path.relative(root, file.fileName).replaceAll('\\', '/'));
   for (const file of sources) {
-    assert.ok(allowedFiles.has(file) || /^src\/service\/ledger\/[\w-]+\.ts$/.test(file), `Unexpected shared dependency: ${file}`);
+    assert.ok(
+      allowedFiles.has(file) || /^src\/service\/ledger\/[\w-]+\.ts$/.test(file),
+      `Unexpected shared dependency: ${file}`,
+    );
   }
 });
 
 test('宿主共用生成请求与最终解析，重画和增量使用同一套完整规则', async () => {
-  const bundled = await build({ entryPoints: [path.join(root, 'src/service/thinkingMapCore.ts')], bundle: true, platform: 'node', format: 'esm', write: false });
-  const core = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
+  const bundled = await build({
+    entryPoints: [path.join(root, 'src/service/thinkingMapCore.ts')],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+  });
+  const core = await import(
+    `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
+  );
   const firstRaw = '<doc>\n## 验证\n### ◆ 先验证问题\n用户已决定先验证问题。\n</doc>';
   const first = core.buildFreshMap(core.parseThinkingMapTags(firstRaw));
   first.nodes[0].id = 'j1';
@@ -66,11 +83,17 @@ test('宿主共用生成请求与最终解析，重画和增量使用同一套�
   const ctx = core.createBuildCtx();
   const preview = core.parseGenerateResponse(nextRaw, options, ctx, { streaming: true });
   const result = core.parseGenerateResponse(nextRaw, options, ctx);
-  assert.deepEqual(result.nodes.map(node => node.id), preview.nodes.map(node => node.id));
+  assert.deepEqual(
+    result.nodes.map(node => node.id),
+    preview.nodes.map(node => node.id),
+  );
   assert.equal(result.nodes.length, 2);
   assert.equal(result.nodes[0].id, first.nodes[0].id);
   assert.equal(result.edges.length, 1);
   assert.equal(result.docMarks.length, 1);
   assert.equal(result.digest, '样本数尚未决定。');
-  assert.equal(core.buildGenerateRequest('原始记录', { ...options, rewrite: true }).system, core.buildRewritePrompt(options.theme,core.serializePreviousMap(first).text));
+  assert.equal(
+    core.buildGenerateRequest('原始记录', { ...options, rewrite: true }).system,
+    core.buildRewritePrompt(options.theme, core.serializePreviousMap(first).text),
+  );
 });

@@ -21,7 +21,7 @@ export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, sec
   const [importState, setImportState] = useState('');
   const importBusy = useRef(false);
 
-  return <div className={styles.networkPanel}>
+  return <div className={styles.networkPanel} data-gft-workspace>
     <div className={styles.networkHeader}>
       <div className={styles.networkHeaderLeft}>
         <ProjectDropdown

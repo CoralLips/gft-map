@@ -483,11 +483,11 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
       >
         <div
           className={nodeClassName}
-          onClick={() => { if (!isEditing) onNodeClick(id); }}
+          onClick={event => { if (!isEditing && !event.ctrlKey && !event.metaKey && !event.shiftKey) onNodeClick(id); }}
         >
-          {inlineBody && refining && <span className={styles.nodeProcessing} role="status" aria-label="正在处理这个节点"><span className={styles.relationSpinner}/></span>}
+          {inlineBody && refining && <span className={styles.nodeProcessing} role="status" aria-label={tr('正在处理这个节点')}><span className={styles.relationSpinner}/></span>}
           {/* 未读红点（增量新增未点开）：右上角外挂小圆点，单击节点即清——微信未读点同款 */}
-          {inlineBody && unread && !isEditing && <span className={styles.unreadDot} />}
+          {inlineBody && unread && !isEditing && !refining && <span className={styles.unreadDot} />}
 
           {/* ⚡来源角标已删（2026-8-7 用户拍：agent 写入与站内长出同权，不留视觉血统——
               与 proposal 转正"不留血统"同一哲学；知情靠 submit 回执+未读红点，不靠常驻标。
@@ -588,27 +588,26 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
             onClick={(e) => e.stopPropagation()}
           >
             {onContinueFrom && (
-              <button className={styles.selectedToolbarBtn} onClick={() => onContinueFrom(id)} title="在这个判断后面添加一个新节点（承接它）">＋ 添加</button>
+              <button className={styles.selectedToolbarBtn} onClick={() => onContinueFrom(id)} title={tr('在这个判断后面添加一个新节点（承接它）')}>＋ {tr('添加')}</button>
             )}
             {onStartLinking && (
-              <button className={styles.selectedToolbarBtn} onClick={() => onStartLinking(id)} title="牵一条承接线到另一个节点">🔗 连线</button>
+              <button className={styles.selectedToolbarBtn} onClick={() => onStartLinking(id)} title={tr('牵一条承接线到另一个节点')}>🔗 {tr('连线')}</button>
             )}
             {onRefine && (
               <button
                 className={styles.selectedToolbarBtn}
                 onClick={() => onRefine(id)}
-                disabled={refining}
-                title={tr('根据现有材料整理这个要点的表达；可撤回')}
-              >{refining ? '✨ 整理中…' : '✨ 整理'}</button>
+                title={tr(refining ? '停止这次整理，保留已保存内容' : '根据现有材料整理这个要点的表达；可撤回')}
+              >{refining ? '■' : '✨'} {tr(refining ? '停止' : '整理')}</button>
             )}
             {onViewDoc && (
               <button className={styles.selectedToolbarBtn} onClick={() => onViewDoc(id)} title={tr('查看相关正文')}>📄 Doc</button>
             )}
             {/* L2 判断的"删除"=拆开（成员回图面，数据无损）；普通节点=删除（3 秒撤销） */}
             {memberCount && onDissolve ? (
-              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDissolve(id)} title="拆开这组：上层判断移除，成员节点回到图面">⊗ 拆开</button>
+              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDissolve(id)} title={tr('拆开这组：上层判断移除，成员节点回到图面')}>⊗ {tr('拆开')}</button>
             ) : onDeleteSelf ? (
-              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDeleteSelf(id)} disabled={isEditingBody} title="删除（3 秒内可撤销）">🗑 删除</button>
+              <button className={`${styles.selectedToolbarBtn} ${styles.selectedToolbarBtnDanger}`} onClick={() => onDeleteSelf(id)} disabled={isEditingBody} title={tr('删除（3 秒内可撤销）')}>🗑 {tr('删除')}</button>
             ) : null}
           </div>
         )}
@@ -683,7 +682,7 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
                     e.stopPropagation();
                     if (!isViewingPast && !isReadonly && onTitleChange) setIsEditingPanelTitle(true);
                   }}
-                  title={isReadonly ? '只读模式' : isViewingPast ? '历史版本下不能改名' : '点击改名'}
+                  title={isReadonly ? '只读模式' : isViewingPast ? '历史版本下不能改名' : tr('点击改名')}
                 >
                   {displayTitle}
                 </span>
@@ -708,12 +707,12 @@ export const ExploreTreeNode = memo(({ data }: NodeProps<ExploreNodeData>): JSX.
               <button
                 className={styles.detailCopyBtn}
                 onClick={(e) => { e.stopPropagation(); void handleCopySnippet(); }}
-                title="复制为 Markdown 到剪贴板"
+                title={tr('复制为 Markdown 到剪贴板')}
               >{copyJustClicked ? '✓' : '📋'}</button>
               <button
                 className={styles.detailCloseBtn}
                 onClick={(e) => { e.stopPropagation(); onTogglePanel?.(id); }}
-                title="关闭"
+                title={tr('关闭')}
               >×</button>
             </div>
 

@@ -50,18 +50,32 @@
   padding: 0;
 }
 
-/* A result occupies its own line without changing the action labels or widths. */
+/* Transient results float over the workspace; the toolbar never gains a row. */
 .statusNote {
-  order: 1;
-  flex: 1 0 100%;
-  width: 0;
-  min-width: 0;
-  font-size: 12px;
+  position: absolute;
+  z-index: 850;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  padding: 10px 14px;
+  border: 1px solid var(--poe-gray-200);
+  border-radius: 8px;
+  background: var(--poe-surface);
+  box-shadow: 0 5px 20px #0001;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--poe-gray-500);
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.statusNote span { min-width: 0; }
+.statusNote button { border: 0; padding: 0 3px; background: transparent; color: var(--poe-purple); cursor: pointer; }
 
 /* Map and Doc share the same flex toolbar, wrapping only when needed. */
 :global(div[data-gft-action-toolbar]) {

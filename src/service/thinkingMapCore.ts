@@ -915,8 +915,14 @@ export function buildRefinePrompt(
   down: FocusCard[],
   birthContext: string,
   chatContext: string,
+  /** fullBody: rewrite the whole explanation (local map nodes) instead of a one-line support. */
+  options: { fullBody?: boolean } = {},
 ): string {
   const fmt = (n: FocusCard) => `- ${n.title}${n.body?.trim() ? `（${n.body.trim()}）` : ''}`;
+  const bodyExample = options.fullBody ? '理顺后的完整说明' : '一句支撑（可省略）';
+  const bodyRule = options.fullBody
+    ? 'body：理顺后的完整说明——保留原说明的全部信息、依据与限定条件，可以多句，不压缩成一句；原说明为空时可省略'
+    : 'body：≤40 字一句支撑——它为什么成立/它具体指什么；用上下文校准原意';
   return `你的任务：**就地润色**用户思维脉络图上的一个节点——把它的表述整理得更清楚、更锐利。只改这个节点自己的文字，绝不新增内容、绝不替它下结论。
 
 # 目标节点
@@ -933,13 +939,13 @@ ${down.length ? down.map(fmt).join('\n') : '（无）'}
 ${birthContext ? `\n出生时的对话：\n${birthContext}\n` : ''}${chatContext ? `\n最近的对话：\n${chatContext}\n` : ''}
 # 你只许输出以下两种之一（单个标签，无其他文字）
 
-<node title="润色后的锐利短句" body="一句支撑（可省略）"/>
+<node title="润色后的锐利短句" body="${bodyExample}"/>
 <noop/>
 
 # 规则
 
 - title：≤16 字锐利短句；**目标节点是问句就保持问句**（问题的润色=把问题问得更准，不是回答它）
-- body：≤40 字一句支撑——它为什么成立/它具体指什么；用上下文校准原意
+- ${bodyRule}
 - **只润色，不发明**：不新增观点、不替用户解决问题、不改变节点的立场与语义
 - 已经足够好 → <noop/>`;
 }

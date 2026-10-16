@@ -39544,7 +39544,13 @@ new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 import { spawn as spawn2 } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createInterface as createInterface2 } from "node:readline";
-var READ_METHODS = /* @__PURE__ */ new Set(["initialize", "thread/list", "thread/read", "thread/turns/list", "model/list"]);
+var READ_METHODS = /* @__PURE__ */ new Set([
+  "initialize",
+  "thread/list",
+  "thread/read",
+  "thread/turns/list",
+  "model/list"
+]);
 var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var TERMINAL_TURNS = /* @__PURE__ */ new Set(["completed", "interrupted", "failed"]);
 var SourceReaderError = class extends Error {
@@ -39561,38 +39567,52 @@ function briefProcessError(value) {
   return String(value || "").replace(/\u001b\[[0-9;]*m/g, "").replace(/\s+/g, " ").trim().slice(-1200);
 }
 function providerOf(provider) {
-  if (provider !== "codex" && provider !== "claude") fail("SOURCE_UNSUPPORTED", "\u76EE\u524D\u53EA\u652F\u6301\u672C\u673A Codex \u548C Claude Code \u4F1A\u8BDD\u3002");
+  if (provider !== "codex" && provider !== "claude")
+    fail("SOURCE_UNSUPPORTED", "\u76EE\u524D\u53EA\u652F\u6301\u672C\u673A Codex \u548C Claude Code \u4F1A\u8BDD\u3002");
   return provider;
 }
 function sourceOf(source) {
-  if (!source || !UUID.test(source.id || "")) fail("SOURCE_INVALID", "\u8BF7\u4F7F\u7528\u771F\u5B9E\u4F1A\u8BDD ID\uFF0C\u4E0D\u80FD\u7528\u4F1A\u8BDD\u540D\u79F0\u4EE3\u66FF\u3002");
+  if (!source || !UUID.test(source.id || ""))
+    fail("SOURCE_INVALID", "\u8BF7\u4F7F\u7528\u771F\u5B9E\u4F1A\u8BDD ID\uFF0C\u4E0D\u80FD\u7528\u4F1A\u8BDD\u540D\u79F0\u4EE3\u66FF\u3002");
   return { ...source, provider: providerOf(source.provider) };
 }
 function bounded(value, fallback, maximum) {
   const n = value === void 0 ? fallback : Number(value);
-  if (!Number.isSafeInteger(n) || n < 1 || n > maximum) fail("SOURCE_INVALID", "\u8BFB\u53D6\u6570\u91CF\u8D85\u51FA\u5141\u8BB8\u8303\u56F4\u3002");
+  if (!Number.isSafeInteger(n) || n < 1 || n > maximum)
+    fail("SOURCE_INVALID", "\u8BFB\u53D6\u6570\u91CF\u8D85\u51FA\u5141\u8BB8\u8303\u56F4\u3002");
   return n;
 }
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 function initialCursor(source) {
-  return { v: 1, provider: source.provider, sessionId: source.id, kind: "messages", position: null };
+  return {
+    v: 1,
+    provider: source.provider,
+    sessionId: source.id,
+    kind: "messages",
+    position: null
+  };
 }
 function decodeCursor(source, cursor) {
   if (cursor === null || cursor === void 0) return initialCursor(source);
-  if (typeof cursor !== "object" || ![1, 2].includes(cursor.v) || cursor.kind !== "messages" || cursor.provider !== source.provider || cursor.sessionId !== source.id || !Object.hasOwn(cursor, "position")) fail("SOURCE_CURSOR_INVALID", "\u6765\u6E90\u6E38\u6807\u65E0\u6548\u6216\u5C5E\u4E8E\u53E6\u4E00\u573A\u4F1A\u8BDD\uFF0C\u8BF7\u91CD\u65B0\u9009\u62E9\u8BFB\u53D6\u8D77\u70B9\u3002");
+  if (typeof cursor !== "object" || ![1, 2].includes(cursor.v) || cursor.kind !== "messages" || cursor.provider !== source.provider || cursor.sessionId !== source.id || !Object.hasOwn(cursor, "position"))
+    fail("SOURCE_CURSOR_INVALID", "\u6765\u6E90\u6E38\u6807\u65E0\u6548\u6216\u5C5E\u4E8E\u53E6\u4E00\u573A\u4F1A\u8BDD\uFF0C\u8BF7\u91CD\u65B0\u9009\u62E9\u8BFB\u53D6\u8D77\u70B9\u3002");
   return cursor;
 }
 function changed() {
-  fail("SOURCE_CURSOR_STALE", "\u5DF2\u8BFB\u4F4D\u7F6E\u53D1\u751F\u53D8\u5316\uFF1A\u4F1A\u8BDD\u53EF\u80FD\u88AB\u622A\u65AD\u3001\u538B\u7F29\u6216\u5207\u6362\u5206\u652F\u3002\u8BF7\u91CD\u65B0\u9009\u62E9\u8BFB\u53D6\u8D77\u70B9\u3002");
+  fail(
+    "SOURCE_CURSOR_STALE",
+    "\u5DF2\u8BFB\u4F4D\u7F6E\u53D1\u751F\u53D8\u5316\uFF1A\u4F1A\u8BDD\u53EF\u80FD\u88AB\u622A\u65AD\u3001\u538B\u7F29\u6216\u5207\u6362\u5206\u652F\u3002\u8BF7\u91CD\u65B0\u9009\u62E9\u8BFB\u53D6\u8D77\u70B9\u3002"
+  );
 }
 function dateOf(value) {
   if (typeof value === "number") return new Date(value < 1e12 ? value * 1e3 : value).toISOString();
   return typeof value === "string" ? value : null;
 }
 function codexDescriptor(thread) {
-  if (!thread?.id || !UUID.test(thread.id)) fail("SOURCE_RESPONSE_INVALID", "Codex \u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u4F1A\u8BDD\u6807\u8BC6\u3002");
+  if (!thread?.id || !UUID.test(thread.id))
+    fail("SOURCE_RESPONSE_INVALID", "Codex \u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u4F1A\u8BDD\u6807\u8BC6\u3002");
   return {
     provider: "codex",
     id: thread.id,
@@ -39616,21 +39636,24 @@ function textContent(content) {
   return content.filter((block) => block?.type === "text" || block?.type === "input_text").map((block) => block.text || "").filter(Boolean).join("\n");
 }
 function codexMessages(turn) {
-  if (!Array.isArray(turn.items)) fail("SOURCE_CAPABILITY_MISSING", "\u5F53\u524D Codex \u672A\u63D0\u4F9B\u5B8C\u6574\u6D88\u606F\u5185\u5BB9\uFF0C\u8BF7\u5347\u7EA7\u672C\u5730 Codex\u3002");
+  if (!Array.isArray(turn.items))
+    fail("SOURCE_CAPABILITY_MISSING", "\u5F53\u524D Codex \u672A\u63D0\u4F9B\u5B8C\u6574\u6D88\u606F\u5185\u5BB9\uFF0C\u8BF7\u5347\u7EA7\u672C\u5730 Codex\u3002");
   return turn.items.flatMap((item) => {
     const role = item.type === "userMessage" ? "user" : item.type === "agentMessage" ? "assistant" : null;
     if (!role) return [];
     const content = (role === "assistant" ? item.text : textContent(item.content)) || "";
     if (!content.trim()) return [];
     if (!item.id) fail("SOURCE_RESPONSE_INVALID", "Codex \u6D88\u606F\u7F3A\u5C11\u7A33\u5B9A\u6807\u8BC6\uFF0C\u65E0\u6CD5\u5B89\u5168\u8BB0\u5F55\u8BFB\u53D6\u4F4D\u7F6E\u3002");
-    return [{
-      id: String(item.id),
-      role,
-      content,
-      turnStatus: turn.status,
-      ...item.phase ? { phase: item.phase } : {},
-      ...item.timestamp ? { timestamp: item.timestamp } : {}
-    }];
+    return [
+      {
+        id: String(item.id),
+        role,
+        content,
+        turnStatus: turn.status,
+        ...item.phase ? { phase: item.phase } : {},
+        ...item.timestamp ? { timestamp: item.timestamp } : {}
+      }
+    ];
   });
 }
 function terminalTurn(turn) {
@@ -39640,7 +39663,9 @@ function terminalTurn(turn) {
 }
 function readableTurn(turn, hasLaterTurn = false) {
   if (!terminalTurn(turn)) return false;
-  return turn.status === "completed" || hasLaterTurn || turn.items?.some((item) => item.type === "agentMessage" && ["final", "final_answer"].includes(item.phase) && item.text?.trim());
+  return turn.status === "completed" || hasLaterTurn || turn.items?.some(
+    (item) => item.type === "agentMessage" && ["final", "final_answer"].includes(item.phase) && item.text?.trim()
+  );
 }
 function codexContentDigest(value) {
   const content = ({ turnStatus, ...message }) => message;
@@ -39649,7 +39674,11 @@ function codexContentDigest(value) {
 function matchesCodexDigest(value, digest, version) {
   if (version === 2) return codexContentDigest(value) === digest;
   if (version !== void 0) fail("SOURCE_CURSOR_INVALID", "Codex \u6765\u6E90\u6E38\u6807\u6458\u8981\u7248\u672C\u65E0\u6548\u3002");
-  return [...TERMINAL_TURNS].some((turnStatus) => hash(Array.isArray(value) ? value.map((message) => ({ ...message, turnStatus })) : { ...value, turnStatus }) === digest);
+  return [...TERMINAL_TURNS].some(
+    (turnStatus) => hash(
+      Array.isArray(value) ? value.map((message) => ({ ...message, turnStatus })) : { ...value, turnStatus }
+    ) === digest
+  );
 }
 function codexPosition(before, turnId, entries, consumed, offset) {
   return {
@@ -39661,8 +39690,13 @@ function codexPosition(before, turnId, entries, consumed, offset) {
     ...offset === void 0 ? {} : { offset, messageDigest: codexContentDigest(entries[consumed]) }
   };
 }
-async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "codex", timeoutMs = 2e4, spawnImpl = spawn2 } = {}) {
-  if (/\.(?:cmd|bat|ps1)$/i.test(binary)) fail("SOURCE_CAPABILITY_MISSING", "\u8BF7\u914D\u7F6E\u539F\u751F Codex \u53EF\u6267\u884C\u6587\u4EF6\uFF0C\u4E0D\u80FD\u4F7F\u7528 shell \u5305\u88C5\u811A\u672C\u3002");
+async function connectCodexReadOnly({
+  binary = process.env.GFT_CODEX_BIN || "codex",
+  timeoutMs = 2e4,
+  spawnImpl = spawn2
+} = {}) {
+  if (/\.(?:cmd|bat|ps1)$/i.test(binary))
+    fail("SOURCE_CAPABILITY_MISSING", "\u8BF7\u914D\u7F6E\u539F\u751F Codex \u53EF\u6267\u884C\u6587\u4EF6\uFF0C\u4E0D\u80FD\u4F7F\u7528 shell \u5305\u88C5\u811A\u672C\u3002");
   const child = spawnImpl(binary, ["app-server", "--listen", "stdio://"], {
     shell: false,
     windowsHide: true,
@@ -39693,9 +39727,20 @@ async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "cod
   });
   child.stdin.on("error", () => {
   });
-  child.once("error", (error) => rejectAll(new SourceReaderError("SOURCE_CAPABILITY_MISSING", "\u65E0\u6CD5\u542F\u52A8\u672C\u5730 Codex \u53EA\u8BFB\u63A5\u53E3\uFF0C\u8BF7\u68C0\u67E5 Codex \u5B89\u88C5\u3002", error)));
+  child.once(
+    "error",
+    (error) => rejectAll(
+      new SourceReaderError(
+        "SOURCE_CAPABILITY_MISSING",
+        "\u65E0\u6CD5\u542F\u52A8\u672C\u5730 Codex \u53EA\u8BFB\u63A5\u53E3\uFF0C\u8BF7\u68C0\u67E5 Codex \u5B89\u88C5\u3002",
+        error
+      )
+    )
+  );
   child.once("exit", () => {
-    const detail = /readonly database|attempt to write a readonly database|拒绝访问|access is denied/i.test(stderr) ? "Codex \u672C\u5730\u72B6\u6001\u5E93\u4E0D\u53EF\u5199\uFF1B\u8BF7\u4ECE\u6709\u6743\u9650\u7684\u672C\u673A\u7EC8\u7AEF\u542F\u52A8 GFT\uFF0C\u6216\u5148\u4FEE\u590D Codex \u7684\u72B6\u6001\u5E93\u6743\u9650\u3002GFT \u6570\u636E\u6CA1\u6709\u88AB\u4FEE\u6539\u3002" : "Codex \u53EA\u8BFB\u63A5\u53E3\u63D0\u524D\u9000\u51FA\u3002";
+    const detail = /readonly database|attempt to write a readonly database|拒绝访问|access is denied/i.test(
+      stderr
+    ) ? "Codex \u672C\u5730\u72B6\u6001\u5E93\u4E0D\u53EF\u5199\uFF1B\u8BF7\u4ECE\u6709\u6743\u9650\u7684\u672C\u673A\u7EC8\u7AEF\u542F\u52A8 GFT\uFF0C\u6216\u5148\u4FEE\u590D Codex \u7684\u72B6\u6001\u5E93\u6743\u9650\u3002GFT \u6570\u636E\u6CA1\u6709\u88AB\u4FEE\u6539\u3002" : "Codex \u53EA\u8BFB\u63A5\u53E3\u63D0\u524D\u9000\u51FA\u3002";
     rejectAll(new SourceReaderError("SOURCE_CONNECTION_CLOSED", detail, briefProcessError(stderr)));
     lines.close();
   });
@@ -39707,7 +39752,12 @@ async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "cod
       return;
     }
     if (message.method && message.id !== void 0) {
-      child.stdin.write(JSON.stringify({ id: message.id, error: { code: -32601, message: "Read-only client does not execute server requests" } }) + "\n");
+      child.stdin.write(
+        JSON.stringify({
+          id: message.id,
+          error: { code: -32601, message: "Read-only client does not execute server requests" }
+        }) + "\n"
+      );
       return;
     }
     const request2 = pending.get(message.id);
@@ -39716,7 +39766,13 @@ async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "cod
     clearTimeout(request2.timer);
     if (message.error) {
       const code = message.error.code === -32601 || /unsupported|not supported|experimental/i.test(message.error.message || "") ? "SOURCE_CAPABILITY_MISSING" : "SOURCE_READ_FAILED";
-      request2.reject(new SourceReaderError(code, code === "SOURCE_CAPABILITY_MISSING" ? "\u5F53\u524D Codex \u4E0D\u652F\u6301\u6240\u9700\u7684\u53EA\u8BFB\u4F1A\u8BDD\u63A5\u53E3\uFF0C\u8BF7\u5347\u7EA7 Codex\u3002" : "\u65E0\u6CD5\u8BFB\u53D6\u6240\u9009 Codex \u4F1A\u8BDD\u3002", message.error));
+      request2.reject(
+        new SourceReaderError(
+          code,
+          code === "SOURCE_CAPABILITY_MISSING" ? "\u5F53\u524D Codex \u4E0D\u652F\u6301\u6240\u9700\u7684\u53EA\u8BFB\u4F1A\u8BDD\u63A5\u53E3\uFF0C\u8BF7\u5347\u7EA7 Codex\u3002" : "\u65E0\u6CD5\u8BFB\u53D6\u6240\u9009 Codex \u4F1A\u8BDD\u3002",
+          message.error
+        )
+      );
     } else request2.resolve(message.result);
   });
   const request = (method, params) => {
@@ -39734,7 +39790,10 @@ async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "cod
     });
   };
   try {
-    await request("initialize", { clientInfo: { name: "gft_history_reader", title: "GFT history reader", version: "0.1.0" }, capabilities: { experimentalApi: true } });
+    await request("initialize", {
+      clientInfo: { name: "gft_history_reader", title: "GFT history reader", version: "0.1.0" },
+      capabilities: { experimentalApi: true }
+    });
     child.stdin.write(JSON.stringify({ method: "initialized", params: {} }) + "\n");
     return { request, close };
   } catch (error) {
@@ -39745,13 +39804,21 @@ async function connectCodexReadOnly({ binary = process.env.GFT_CODEX_BIN || "cod
 async function defaultClaudeSdk() {
   try {
     const sdk = await Promise.resolve().then(() => (init_sdk(), sdk_exports));
-    if (!sdk.getSessionInfo || !sdk.getSessionMessages || !sdk.listSessions) throw new Error("missing history helpers");
+    if (!sdk.getSessionInfo || !sdk.getSessionMessages || !sdk.listSessions)
+      throw new Error("missing history helpers");
     return sdk;
   } catch (error) {
-    throw new SourceReaderError("SOURCE_CAPABILITY_MISSING", "Claude Code \u4F1A\u8BDD\u8BFB\u53D6\u7EC4\u4EF6\u672A\u5B89\u88C5\u6216\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u5B89\u88C5\u672C\u5730 GFT\u3002", error);
+    throw new SourceReaderError(
+      "SOURCE_CAPABILITY_MISSING",
+      "Claude Code \u4F1A\u8BDD\u8BFB\u53D6\u7EC4\u4EF6\u672A\u5B89\u88C5\u6216\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u5B89\u88C5\u672C\u5730 GFT\u3002",
+      error
+    );
   }
 }
-function createSourceReaders({ codexConnect = connectCodexReadOnly, claudeSdk = defaultClaudeSdk } = {}) {
+function createSourceReaders({
+  codexConnect = connectCodexReadOnly,
+  claudeSdk = defaultClaudeSdk
+} = {}) {
   const sdk = async () => typeof claudeSdk === "function" ? claudeSdk() : claudeSdk;
   const withCodex = async (fn2) => {
     const connection = await codexConnect();
@@ -39763,17 +39830,29 @@ function createSourceReaders({ codexConnect = connectCodexReadOnly, claudeSdk = 
   };
   const codexSession = async (request, source) => {
     const result = await request("thread/read", { threadId: source.id, includeTurns: false });
-    if (!result?.thread || result.thread.id !== source.id) fail("SOURCE_NOT_FOUND", "\u6CA1\u6709\u627E\u5230\u6307\u5B9A\u7684 Codex \u4F1A\u8BDD\u3002");
+    if (!result?.thread || result.thread.id !== source.id)
+      fail("SOURCE_NOT_FOUND", "\u6CA1\u6709\u627E\u5230\u6307\u5B9A\u7684 Codex \u4F1A\u8BDD\u3002");
     return codexDescriptor(result.thread);
   };
   const claudeSession = async (api, source) => {
-    const result = await api.getSessionInfo(source.id, source.cwd ? { dir: source.cwd } : void 0);
-    if (!result || result.sessionId !== source.id) fail("SOURCE_NOT_FOUND", "\u6CA1\u6709\u627E\u5230\u6307\u5B9A\u7684 Claude Code \u4F1A\u8BDD\uFF0C\u8BF7\u68C0\u67E5\u6765\u6E90\u76EE\u5F55\u3002");
+    const result = await api.getSessionInfo(
+      source.id,
+      source.cwd ? { dir: source.cwd } : void 0
+    );
+    if (!result || result.sessionId !== source.id)
+      fail("SOURCE_NOT_FOUND", "\u6CA1\u6709\u627E\u5230\u6307\u5B9A\u7684 Claude Code \u4F1A\u8BDD\uFF0C\u8BF7\u68C0\u67E5\u6765\u6E90\u76EE\u5F55\u3002");
     return claudeDescriptor(result);
   };
   const turns = async (request, source, cursor, direction = "asc") => {
-    const result = await request("thread/turns/list", { threadId: source.id, limit: 1, sortDirection: direction, itemsView: "full", ...cursor ? { cursor } : {} });
-    if (!Array.isArray(result?.data)) fail("SOURCE_RESPONSE_INVALID", "Codex \u672A\u8FD4\u56DE\u6709\u6548\u7684\u4F1A\u8BDD\u5206\u9875\u3002");
+    const result = await request("thread/turns/list", {
+      threadId: source.id,
+      limit: 1,
+      sortDirection: direction,
+      itemsView: "full",
+      ...cursor ? { cursor } : {}
+    });
+    if (!Array.isArray(result?.data))
+      fail("SOURCE_RESPONSE_INVALID", "Codex \u672A\u8FD4\u56DE\u6709\u6548\u7684\u4F1A\u8BDD\u5206\u9875\u3002");
     return result;
   };
   async function getChatSession2(input) {
@@ -39785,58 +39864,96 @@ function createSourceReaders({ codexConnect = connectCodexReadOnly, claudeSdk = 
     limit = bounded(limit, 30, 200);
     query = String(query).trim();
     const scope = { provider, query, cwd: cwd || null };
-    if (cursor && (cursor.v !== 1 || cursor.kind !== "sessions" || cursor.scope !== hash(scope))) fail("SOURCE_CURSOR_INVALID", "\u4F1A\u8BDD\u5217\u8868\u6E38\u6807\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u52A0\u8F7D\u5217\u8868\u3002");
+    if (cursor && (cursor.v !== 1 || cursor.kind !== "sessions" || cursor.scope !== hash(scope)))
+      fail("SOURCE_CURSOR_INVALID", "\u4F1A\u8BDD\u5217\u8868\u6E38\u6807\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u52A0\u8F7D\u5217\u8868\u3002");
     if (UUID.test(query)) {
       if (cursor) return { sessions: [], nextCursor: null };
       try {
-        return { sessions: [await getChatSession2({ provider, id: query, ...cwd ? { cwd } : {} })], nextCursor: null };
+        return {
+          sessions: [await getChatSession2({ provider, id: query, ...cwd ? { cwd } : {} })],
+          nextCursor: null
+        };
       } catch (error) {
         if (error.code === "SOURCE_NOT_FOUND") return { sessions: [], nextCursor: null };
         throw error;
       }
     }
-    if (provider === "codex") return withCodex(async (request) => {
-      const result = await request("thread/list", {
-        limit,
-        sortKey: "updated_at",
-        sortDirection: "desc",
-        useStateDbOnly: true,
-        ...query ? { searchTerm: query } : {},
-        ...cwd ? { cwd } : {},
-        ...cursor?.native ? { cursor: cursor.native } : {}
+    if (provider === "codex")
+      return withCodex(async (request) => {
+        const result = await request("thread/list", {
+          limit,
+          sortKey: "updated_at",
+          sortDirection: "desc",
+          useStateDbOnly: true,
+          ...query ? { searchTerm: query } : {},
+          ...cwd ? { cwd } : {},
+          ...cursor?.native ? { cursor: cursor.native } : {}
+        });
+        if (!Array.isArray(result?.data))
+          fail("SOURCE_RESPONSE_INVALID", "Codex \u672A\u8FD4\u56DE\u6709\u6548\u4F1A\u8BDD\u5217\u8868\u3002");
+        return {
+          sessions: result.data.map(codexDescriptor),
+          nextCursor: result.nextCursor ? { v: 1, kind: "sessions", scope: hash(scope), native: result.nextCursor } : null
+        };
       });
-      if (!Array.isArray(result?.data)) fail("SOURCE_RESPONSE_INVALID", "Codex \u672A\u8FD4\u56DE\u6709\u6548\u4F1A\u8BDD\u5217\u8868\u3002");
-      return { sessions: result.data.map(codexDescriptor), nextCursor: result.nextCursor ? { v: 1, kind: "sessions", scope: hash(scope), native: result.nextCursor } : null };
-    });
     const api = await sdk();
-    const sessions = (await api.listSessions({ ...cwd ? { dir: cwd } : {}, includeWorktrees: false, includeProgrammatic: false })).map(claudeDescriptor).filter((session) => !query || `${session.title}
-${session.id}`.toLowerCase().includes(query.toLowerCase()));
+    const sessions = (await api.listSessions({
+      ...cwd ? { dir: cwd } : {},
+      includeWorktrees: false,
+      includeProgrammatic: false
+    })).map(claudeDescriptor).filter(
+      (session) => !query || `${session.title}
+${session.id}`.toLowerCase().includes(query.toLowerCase())
+    );
     const offset = cursor?.offset ?? 0;
-    if (!Number.isSafeInteger(offset) || offset < 0 || offset && sessions[offset - 1]?.id !== cursor.anchor) fail("SOURCE_CURSOR_STALE", "\u4F1A\u8BDD\u5217\u8868\u5DF2\u7ECF\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u52A0\u8F7D\u5217\u8868\u3002");
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset && sessions[offset - 1]?.id !== cursor.anchor)
+      fail("SOURCE_CURSOR_STALE", "\u4F1A\u8BDD\u5217\u8868\u5DF2\u7ECF\u53D8\u5316\uFF0C\u8BF7\u91CD\u65B0\u52A0\u8F7D\u5217\u8868\u3002");
     const page = sessions.slice(offset, offset + limit);
     const nextOffset = offset + page.length;
-    return { sessions: page, nextCursor: nextOffset < sessions.length ? { v: 1, kind: "sessions", scope: hash(scope), offset: nextOffset, anchor: page.at(-1).id } : null };
+    return {
+      sessions: page,
+      nextCursor: nextOffset < sessions.length ? {
+        v: 1,
+        kind: "sessions",
+        scope: hash(scope),
+        offset: nextOffset,
+        anchor: page.at(-1).id
+      } : null
+    };
   }
   const claudeComplete = async (api, source) => {
     const descriptor = await claudeSession(api, source);
-    const raw = await api.getSessionMessages(source.id, { ...source.cwd || descriptor.cwd ? { dir: source.cwd || descriptor.cwd } : {}, includeSystemMessages: false });
+    const raw = await api.getSessionMessages(source.id, {
+      ...source.cwd || descriptor.cwd ? { dir: source.cwd || descriptor.cwd } : {},
+      includeSystemMessages: false
+    });
     if (!Array.isArray(raw)) fail("SOURCE_RESPONSE_INVALID", "Claude Code \u672A\u8FD4\u56DE\u6709\u6548\u6D88\u606F\u5217\u8868\u3002");
     let complete = -1;
     for (let i = 0; i < raw.length; i++) {
       const message = raw[i];
-      if (message.type === "assistant" && !message.interruptedByShutdown && ["end_turn", "stop_sequence", "max_tokens"].includes(message.message?.stop_reason)) complete = i;
+      if (message.type === "assistant" && !message.interruptedByShutdown && ["end_turn", "stop_sequence", "max_tokens"].includes(message.message?.stop_reason))
+        complete = i;
     }
     const messages = [];
     const ids = /* @__PURE__ */ new Set();
     for (const item of raw.slice(0, complete + 1)) {
-      if (!["user", "assistant"].includes(item.type) || item.isMeta || item.is_meta || item.isCompactSummary || item.parent_tool_use_id || item.parent_agent_id) continue;
-      if (item.type === "user" && Array.isArray(item.message?.content) && item.message.content.some((block) => block?.type === "tool_result")) continue;
-      if (item.session_id && item.session_id !== source.id) fail("SOURCE_RESPONSE_INVALID", "Claude Code \u8FD4\u56DE\u4E86\u4E0D\u5C5E\u4E8E\u6240\u9009\u4F1A\u8BDD\u7684\u6D88\u606F\u3002");
+      if (!["user", "assistant"].includes(item.type) || item.isMeta || item.is_meta || item.isCompactSummary || item.parent_tool_use_id || item.parent_agent_id)
+        continue;
+      if (item.type === "user" && Array.isArray(item.message?.content) && item.message.content.some((block) => block?.type === "tool_result"))
+        continue;
+      if (item.session_id && item.session_id !== source.id)
+        fail("SOURCE_RESPONSE_INVALID", "Claude Code \u8FD4\u56DE\u4E86\u4E0D\u5C5E\u4E8E\u6240\u9009\u4F1A\u8BDD\u7684\u6D88\u606F\u3002");
       const content = textContent(item.message?.content);
       if (!content.trim()) continue;
-      if (!item.uuid || ids.has(item.uuid)) fail("SOURCE_RESPONSE_INVALID", "Claude Code \u6D88\u606F\u6807\u8BC6\u7F3A\u5931\u6216\u91CD\u590D\uFF0C\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u3002");
+      if (!item.uuid || ids.has(item.uuid))
+        fail("SOURCE_RESPONSE_INVALID", "Claude Code \u6D88\u606F\u6807\u8BC6\u7F3A\u5931\u6216\u91CD\u590D\uFF0C\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u3002");
       ids.add(item.uuid);
-      messages.push({ id: item.uuid, role: item.type, content, ...item.timestamp ? { timestamp: item.timestamp } : {} });
+      messages.push({
+        id: item.uuid,
+        role: item.type,
+        content,
+        ...item.timestamp ? { timestamp: item.timestamp } : {}
+      });
     }
     return messages;
   };
@@ -39845,7 +39962,8 @@ ${session.id}`.toLowerCase().includes(query.toLowerCase()));
     const cursor = initialCursor(source);
     if (source.provider === "claude") {
       const messages = await claudeComplete(await sdk(), source);
-      if (messages.length) cursor.position = { id: messages.at(-1).id, digest: hash(messages.at(-1)) };
+      if (messages.length)
+        cursor.position = { id: messages.at(-1).id, digest: hash(messages.at(-1)) };
       return cursor;
     }
     return withCodex(async (request) => {
@@ -39854,7 +39972,8 @@ ${session.id}`.toLowerCase().includes(query.toLowerCase()));
       let hasLaterTurn = false;
       const visited = /* @__PURE__ */ new Set();
       for (; ; ) {
-        if (visited.has(native)) fail("SOURCE_CURSOR_STALE", "\u6765\u6E90\u5206\u9875\u672A\u63A8\u8FDB\uFF0C\u8BF7\u66F4\u65B0 Codex \u540E\u91CD\u8BD5\u3002");
+        if (visited.has(native))
+          fail("SOURCE_CURSOR_STALE", "\u6765\u6E90\u5206\u9875\u672A\u63A8\u8FDB\uFF0C\u8BF7\u66F4\u65B0 Codex \u540E\u91CD\u8BD5\u3002");
         visited.add(native);
         const page = await turns(request, source, native, "desc");
         const turn = page.data[0];
@@ -39875,85 +39994,111 @@ ${session.id}`.toLowerCase().includes(query.toLowerCase()));
   async function getChatPreview2(input) {
     const source = sourceOf(input);
     let selected = [];
-    if (source.provider === "claude") selected = (await claudeComplete(await sdk(), source)).slice(-12);
-    else selected = await withCodex(async (request) => {
-      await codexSession(request, source);
-      let native = null;
-      const entries = [];
-      let hasLaterTurn = false;
-      for (let i = 0; i < 12; i++) {
-        const page = await turns(request, source, native, "desc");
-        const turn = page.data[0];
-        if (!turn) break;
-        if (readableTurn(turn, hasLaterTurn)) entries.unshift(...codexMessages(turn));
-        if (entries.length >= 12 || !page.nextCursor) break;
-        hasLaterTurn = true;
-        native = page.nextCursor;
-      }
-      return entries.slice(-12);
-    });
+    if (source.provider === "claude")
+      selected = (await claudeComplete(await sdk(), source)).slice(-12);
+    else
+      selected = await withCodex(async (request) => {
+        await codexSession(request, source);
+        let native = null;
+        const entries = [];
+        let hasLaterTurn = false;
+        for (let i = 0; i < 12; i++) {
+          const page = await turns(request, source, native, "desc");
+          const turn = page.data[0];
+          if (!turn) break;
+          if (readableTurn(turn, hasLaterTurn)) entries.unshift(...codexMessages(turn));
+          if (entries.length >= 12 || !page.nextCursor) break;
+          hasLaterTurn = true;
+          native = page.nextCursor;
+        }
+        return entries.slice(-12);
+      });
     const text = selected.map((message) => `${message.role === "user" ? "\u7528\u6237" : "\u52A9\u624B"}\uFF1A${message.content}`).join("\n\n").slice(-6e3);
-    return { text, chars: text.length, description: "\u6240\u9009\u4F1A\u8BDD\u6700\u8FD1\u5DF2\u7ED3\u675F\u7684\u6D88\u606F\u8282\u9009\uFF0C\u6700\u591A 6000 \u5B57\u7B26" };
+    return {
+      text,
+      chars: text.length,
+      description: "\u6240\u9009\u4F1A\u8BDD\u6700\u8FD1\u5DF2\u7ED3\u675F\u7684\u6D88\u606F\u8282\u9009\uFF0C\u6700\u591A 6000 \u5B57\u7B26"
+    };
   }
-  async function readChatDelta2(input, suppliedCursor = null, { limit = 100, maxChars = 6e4, until } = {}) {
-    const source = sourceOf(input);
-    limit = bounded(limit, 100, 1e3);
-    maxChars = Math.max(2, bounded(maxChars, 6e4, 1e6));
-    const start = decodeCursor(source, suppliedCursor);
-    const end = until === void 0 ? void 0 : decodeCursor(source, until);
-    if (end && !end.position) return { messages: [], cursor: start, hasMore: false };
+  function deltaCollector(limit, maxChars) {
     const messages = [];
     let chars = 0;
     const append = (message, offset = 0) => {
-      if (!Number.isSafeInteger(offset) || offset < 0 || offset >= message.content.length) changed();
-      if (messages.length >= limit || messages.length && chars + message.content.length - offset > maxChars) return null;
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset >= message.content.length)
+        changed();
+      if (messages.length >= limit || messages.length && chars + message.content.length - offset > maxChars)
+        return null;
       let next = Math.min(message.content.length, offset + maxChars - chars);
-      if (next < message.content.length && /[\uD800-\uDBFF]/.test(message.content[next - 1])) next--;
+      if (next < message.content.length && /[\uD800-\uDBFF]/.test(message.content[next - 1]))
+        next--;
       const content = message.content.slice(offset, next);
-      messages.push({ ...message, content, ...offset || next < message.content.length ? { id: `${message.id}#gft-part-${offset}` } : {} });
+      messages.push({
+        ...message,
+        content,
+        ...offset || next < message.content.length ? { id: `${message.id}#gft-part-${offset}` } : {}
+      });
       chars += content.length;
       return next;
     };
-    if (source.provider === "claude") {
-      const all = await claudeComplete(await sdk(), source);
-      let endOffset = all.length;
-      if (end?.position) {
-        const index = all.findIndex((message) => message.id === end.position.id);
-        if (index < 0 || hash(all[index]) !== end.position.digest) changed();
-        endOffset = index + 1;
-      }
-      let offset = 0, charOffset = 0;
-      if (start.position) {
-        if (typeof start.position.id !== "string" || typeof start.position.digest !== "string") fail("SOURCE_CURSOR_INVALID", "Claude Code \u6765\u6E90\u6E38\u6807\u683C\u5F0F\u65E0\u6548\u3002");
-        const index = all.findIndex((message) => message.id === start.position.id);
-        if (index < 0 || hash(all[index]) !== start.position.digest) changed();
-        offset = index + (start.position.offset === void 0 ? 1 : 0);
-        charOffset = start.position.offset ?? 0;
-      }
-      let cursor = start;
-      for (; offset < endOffset; offset++) {
-        const next = append(all[offset], charOffset);
-        if (next === null) break;
-        const partial = next < all[offset].content.length;
-        cursor = { ...start, v: partial ? 2 : 1, position: { id: all[offset].id, digest: hash(all[offset]), ...partial ? { offset: next } : {} } };
-        if (partial) break;
-        charOffset = 0;
-      }
-      return { messages, cursor, hasMore: offset < endOffset };
+    return { messages, append };
+  }
+  async function readClaudeDelta(source, start, end, { messages, append }) {
+    const all = await claudeComplete(await sdk(), source);
+    const indexOf = (position) => {
+      const index = all.findIndex((message) => message.id === position.id);
+      if (index < 0 || hash(all[index]) !== position.digest) changed();
+      return index;
+    };
+    const endOffset = end?.position ? indexOf(end.position) + 1 : all.length;
+    let offset = 0;
+    let charOffset = 0;
+    if (start.position) {
+      if (typeof start.position.id !== "string" || typeof start.position.digest !== "string")
+        fail("SOURCE_CURSOR_INVALID", "Claude Code \u6765\u6E90\u6E38\u6807\u683C\u5F0F\u65E0\u6548\u3002");
+      offset = indexOf(start.position) + (start.position.offset === void 0 ? 1 : 0);
+      charOffset = start.position.offset ?? 0;
     }
+    let cursor = start;
+    for (; offset < endOffset; offset++) {
+      const next = append(all[offset], charOffset);
+      if (next === null) break;
+      const partial = next < all[offset].content.length;
+      cursor = {
+        ...start,
+        v: partial ? 2 : 1,
+        position: {
+          id: all[offset].id,
+          digest: hash(all[offset]),
+          ...partial ? { offset: next } : {}
+        }
+      };
+      if (partial) break;
+      charOffset = 0;
+    }
+    return { messages, cursor, hasMore: offset < endOffset };
+  }
+  const validCodexAnchor = (anchor) => typeof anchor.turnId === "string" && Number.isSafeInteger(anchor.consumed) && anchor.consumed >= 0 && typeof anchor.digest === "string" && (anchor.before === null || typeof anchor.before === "string");
+  const sameConsumed = (entries, consumed, position) => Number.isSafeInteger(consumed) && consumed >= 0 && consumed <= entries.length && matchesCodexDigest(entries.slice(0, consumed), position.digest, position.digestVersion);
+  async function readCodexDelta(source, start, end, { messages, append }) {
     return withCodex(async (request) => {
       await codexSession(request, source);
       let native = start.position?.before ?? null;
       let cursor = start;
       let anchor = start.position;
       const waitForBoundary = () => {
-        if (end?.position) fail("SOURCE_NOT_READY", "\u6240\u9009\u8BFB\u53D6\u8303\u56F4\u5185\u8FD8\u6709\u672A\u7ED3\u675F\u7684\u8F6E\u6B21\uFF0C\u8BF7\u7B49\u672C\u8F6E\u7ED3\u675F\u540E\u91CD\u8BD5\uFF1B\u8BFB\u53D6\u4F4D\u7F6E\u672A\u6539\u53D8\u3002");
+        if (end?.position)
+          fail(
+            "SOURCE_NOT_READY",
+            "\u6240\u9009\u8BFB\u53D6\u8303\u56F4\u5185\u8FD8\u6709\u672A\u7ED3\u675F\u7684\u8F6E\u6B21\uFF0C\u8BF7\u7B49\u672C\u8F6E\u7ED3\u675F\u540E\u91CD\u8BD5\uFF1B\u8BFB\u53D6\u4F4D\u7F6E\u672A\u6539\u53D8\u3002"
+          );
         return { messages, cursor, hasMore: false };
       };
-      if (anchor && (typeof anchor.turnId !== "string" || !Number.isSafeInteger(anchor.consumed) || anchor.consumed < 0 || typeof anchor.digest !== "string" || anchor.before !== null && typeof anchor.before !== "string")) fail("SOURCE_CURSOR_INVALID", "Codex \u6765\u6E90\u6E38\u6807\u683C\u5F0F\u65E0\u6548\u3002");
+      if (anchor && !validCodexAnchor(anchor))
+        fail("SOURCE_CURSOR_INVALID", "Codex \u6765\u6E90\u6E38\u6807\u683C\u5F0F\u65E0\u6548\u3002");
       const visited = /* @__PURE__ */ new Set();
       for (; ; ) {
-        if (visited.has(native)) fail("SOURCE_CURSOR_STALE", "\u6765\u6E90\u5206\u9875\u672A\u63A8\u8FDB\uFF0C\u8BF7\u66F4\u65B0 Codex \u540E\u91CD\u8BD5\u3002");
+        if (visited.has(native))
+          fail("SOURCE_CURSOR_STALE", "\u6765\u6E90\u5206\u9875\u672A\u63A8\u8FDB\uFF0C\u8BF7\u66F4\u65B0 Codex \u540E\u91CD\u8BD5\u3002");
         visited.add(native);
         const page = await turns(request, source, native);
         const turn = page.data[0];
@@ -39966,22 +40111,37 @@ ${session.id}`.toLowerCase().includes(query.toLowerCase()));
         if (!terminal && !anchor && end?.position?.turnId !== turn.id) return waitForBoundary();
         const entries = codexMessages(turn);
         let readable = readableTurn(turn);
-        if (!readable && terminal && page.nextCursor) readable = !!(await turns(request, source, page.nextCursor)).data[0];
+        if (!readable && terminal && page.nextCursor)
+          readable = !!(await turns(request, source, page.nextCursor)).data[0];
         const lastTurn = end?.position?.turnId === turn.id;
         const endConsumed = lastTurn ? end.position.consumed : entries.length;
-        if (lastTurn && (!Number.isSafeInteger(endConsumed) || endConsumed < 0 || endConsumed > entries.length || !matchesCodexDigest(entries.slice(0, endConsumed), end.position.digest, end.position.digestVersion))) changed();
+        if (lastTurn && !sameConsumed(entries, endConsumed, end.position)) changed();
         let consumed = anchor?.consumed ?? 0;
-        if (anchor && (consumed > entries.length || !matchesCodexDigest(entries.slice(0, consumed), anchor.digest, anchor.digestVersion))) changed();
+        if (anchor && !sameConsumed(entries, consumed, anchor)) changed();
         let offset = anchor?.offset ?? 0;
-        if (anchor?.offset !== void 0 && (!entries[consumed] || !matchesCodexDigest(entries[consumed], anchor.messageDigest, anchor.digestVersion))) changed();
+        if (anchor?.offset !== void 0 && (!entries[consumed] || !matchesCodexDigest(entries[consumed], anchor.messageDigest, anchor.digestVersion)))
+          changed();
         if (!readable) return waitForBoundary();
         anchor = null;
         for (; consumed < endConsumed; consumed++) {
           const next = append(entries[consumed], offset);
           if (next === null) return { messages, cursor, hasMore: true };
-          if (next < entries[consumed].content.length) return { messages, hasMore: true, cursor: { ...start, v: 2, position: codexPosition(native, turn.id, entries, consumed, next) } };
+          if (next < entries[consumed].content.length)
+            return {
+              messages,
+              hasMore: true,
+              cursor: {
+                ...start,
+                v: 2,
+                position: codexPosition(native, turn.id, entries, consumed, next)
+              }
+            };
           offset = 0;
-          cursor = { ...start, v: 1, position: codexPosition(native, turn.id, entries, consumed + 1) };
+          cursor = {
+            ...start,
+            v: 1,
+            position: codexPosition(native, turn.id, entries, consumed + 1)
+          };
         }
         cursor = { ...start, v: 1, position: codexPosition(native, turn.id, entries, endConsumed) };
         if (lastTurn) return { messages, cursor, hasMore: false };
@@ -39993,6 +40153,17 @@ ${session.id}`.toLowerCase().includes(query.toLowerCase()));
       }
     });
   }
+  async function readChatDelta2(input, suppliedCursor = null, { limit = 100, maxChars = 6e4, until } = {}) {
+    const source = sourceOf(input);
+    const collector = deltaCollector(
+      bounded(limit, 100, 1e3),
+      Math.max(2, bounded(maxChars, 6e4, 1e6))
+    );
+    const start = decodeCursor(source, suppliedCursor);
+    const end = until === void 0 ? void 0 : decodeCursor(source, until);
+    if (end && !end.position) return { messages: [], cursor: start, hasMore: false };
+    return source.provider === "claude" ? readClaudeDelta(source, start, end, collector) : readCodexDelta(source, start, end, collector);
+  }
   return { listChatSessions: listChatSessions2, getChatSession: getChatSession2, getChatHead: getChatHead2, getChatPreview: getChatPreview2, readChatDelta: readChatDelta2 };
 }
 var readers = createSourceReaders();
@@ -40001,9 +40172,16 @@ async function getCodexDefaults(options) {
   try {
     let cursor;
     do {
-      const page = await client.request("model/list", { limit: 100, ...cursor ? { cursor } : {} });
+      const page = await client.request("model/list", {
+        limit: 100,
+        ...cursor ? { cursor } : {}
+      });
       const item = page.data?.find((model) => model.isDefault);
-      if (item?.model) return { model: item.model, ...item.defaultReasoningEffort ? { effort: item.defaultReasoningEffort } : {} };
+      if (item?.model)
+        return {
+          model: item.model,
+          ...item.defaultReasoningEffort ? { effort: item.defaultReasoningEffort } : {}
+        };
       cursor = page.nextCursor;
     } while (cursor);
     fail("MODEL_DEFAULT_MISSING", "\u6267\u884C\u5668\u672A\u63D0\u4F9B\u9ED8\u8BA4\u6A21\u578B\uFF0C\u8BF7\u66F4\u65B0 Codex \u540E\u91CD\u8BD5\u3002");

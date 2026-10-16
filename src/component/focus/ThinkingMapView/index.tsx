@@ -231,7 +231,7 @@ function ThinkingMapViewImpl(): JSX.Element {
   const jumpToDoc = useThinkingMapStore(s => s.jumpToDoc);
   const focusNodeId = useThinkingMapStore(s => s.focusNodeId);
   const clearMapFocus = useThinkingMapStore(s => s.clearMapFocus);
-  const refiningNodeId = useThinkingMapStore(s => s.refiningNodeId);
+  const refiningNodeIds = useThinkingMapStore(s => s.refiningNodeIds);
   const acceptProposal = useThinkingMapStore(s => s.acceptProposal);
   const dismissProposal = useThinkingMapStore(s => s.dismissProposal);
   const setSelectedNodes = useThinkingMapStore(s => s.setSelectedNodes);
@@ -265,6 +265,7 @@ function ThinkingMapViewImpl(): JSX.Element {
   },[mapNodes,openPanelId]);
   // Hover highlights only the element under the pointer.
   const explainingEdgeIds=useThinkingMapStore(s=>s.explainingEdgeIds);
+  const canExplainRelations = useThinkingMapStore(s => s.canExplainRelations);
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null);
   // hover 线浮出的 🗑（就在鼠标进入位置旁——零行程；离开走 250ms 延迟收起）
 
@@ -394,8 +395,10 @@ function ThinkingMapViewImpl(): JSX.Element {
 
   const handleDelete = useCallback(async ({ id, title }: { id: string; title: string }) => {
     const ok = await confirmDialog({
-      title: '删除节点',
-      message: `确定删除「${title || '未命名'}」？触及它的关系线会一并删除。`,
+      title: tGlobal('删除节点'),
+      message: tGlobal('确定删除「{title}」？触及它的关系线会一并删除。', { title: title || tGlobal('未命名') }),
+      confirmText: tGlobal('删除'),
+      cancelText: tGlobal('取消'),
       danger: true,
     });
     if (ok) {
@@ -664,7 +667,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         incomingRelations:mapEdges.filter(e=>e.to===n.id).map(e=>({id:e.id,reason:e.reason || '',pending:explainingEdgeIds.has(e.id),selected:selectedEdgeIds.has(e.id)})),
         onRelationHover:setHoveredEdgeId,
         onRelationSelect:(id)=>{setSelectedNodes([]);setSelectedEdges([id]);},
-        onRelationExplain:(id)=>void useThinkingMapStore.getState().explainEdge(id),
+        onRelationExplain: canExplainRelations ? (id) => void useThinkingMapStore.getState().explainEdge(id) : undefined,
         onRelationCancel:useThinkingMapStore.getState().cancelEdgeExplanation,
         onRelationChange:(id,text)=>useThinkingMapStore.getState().editEdgeReason(id,text),
         onRelationEditing:useThinkingMapStore.getState().setEditingEdge,
@@ -738,20 +741,24 @@ function ThinkingMapViewImpl(): JSX.Element {
         type: 'exploreNode',
         data,
         position: layoutPositions.get(n.id) ?? { x: 0, y: 0 },
+        // Preserve measured dimensions on controlled updates. Otherwise ReactFlow
+        // hides the node to measure it again on every hover/selection change.
+        width: measured.get(n.id)?.w,
+        height: measured.get(n.id)?.h,
         // 受控模式必须回填 selected，否则框选高亮/再次框选的 deselect 都不生效（覆盖层 patch）
         selected: false,
         zIndex: 1,
         style: {},
       };
     });
-  }, [mapNodes, mapEdges, explainingEdgeIds,selectedEdgeIds, allNodes, layoutPositions, docContentByAnchor, acceptProposal, dismissProposal, handleNodeBodyClick, handleTogglePanel, handleTitleChange, handleBodyChange, handleBodyEditingChange, handleCancelEdit, handleDelete, handleContinueFrom, handleStartLinking, handleToolbarDelete, dissolveGroup, refineNodeAction, jumpToDoc, hasOutEdge]);
+  }, [mapNodes, mapEdges, explainingEdgeIds, canExplainRelations,selectedEdgeIds, allNodes, layoutPositions, measured, docContentByAnchor, acceptProposal, dismissProposal, handleNodeBodyClick, handleTogglePanel, handleTitleChange, handleBodyChange, handleBodyEditingChange, handleCancelEdit, handleDelete, handleContinueFrom, handleStartLinking, handleToolbarDelete, dissolveGroup, refineNodeAction, jumpToDoc, hasOutEdge]);
 
   const readingHighlights=useMemo(()=>mapHighlights({edges:mapEdges,hoverNodeId,hoveredEdgeId,selectedEdgeIds:[...selectedEdgeIds]}),[mapEdges,hoverNodeId,hoveredEdgeId,selectedEdgeIds]);
 
   // 瞬态覆盖:只 clone 被触及的节点,其余引用原样(无任何瞬态时直接返回底座数组本身)
   const flowNodes = useMemo<Node[]>(() => {
     const hasTransient = readingHighlights.hasFocus || openPanelId !== null || dragPos !== null || draggingNodeId !== null
-      || dropTargetId !== null || selectedNodeIds.size > 0 || refiningNodeId !== null
+      || dropTargetId !== null || selectedNodeIds.size > 0 || refiningNodeIds.size > 0
       || editingNodeId !== null || isTidying;
     if (!hasTransient) return flowNodesBase;
     return flowNodesBase.map(n => {
@@ -759,7 +766,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       const isOpen = openPanelId === id;
       const isSel = selectedNodeIds.has(id);
       const isDropT = dropTargetId === id;
-      const isRefining = refiningNodeId === id || (isTidying && (tidyScopeIds===null || tidyScopeIds.has(id)));
+      const isRefining = refiningNodeIds.has(id) || (isTidying && tidyScopeIds !== null && tidyScopeIds.has(id));
       const isReadingFocus=readingHighlights.nodeId===id;
       const touched = isReadingFocus || isOpen || isSel || isDropT || isRefining
         || draggingNodeId === id || editingNodeId === id || (dragPos !== null && dragPos.id === id);
@@ -789,7 +796,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         },
       };
     });
-  }, [flowNodesBase, readingHighlights, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeId, editingNodeId, isTidying,tidyScopeIds]);
+  }, [flowNodesBase, readingHighlights, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeIds, editingNodeId, isTidying,tidyScopeIds]);
 
   // ===== 边几何共享值:节点盒一份共算(见 EdgeGeomContext 注释)=====
   // 幽灵节点(连线预览)不进盒:原实现就把它排除在障碍集外;预览边端点走 props 直传不受影响
@@ -1001,6 +1008,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       <button
         type="button"
         className={styles.resetViewBtn}
+        data-gft-viewport-control=""
         aria-pressed={overview}
         onClick={viewport.toggleOverview}
         title={overview ? tGlobal('关闭总览，回到之前的阅读位置') : tGlobal('总览全部节点，锁定视图')}
@@ -1009,6 +1017,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       <button
         type="button"
         className={styles.resetViewBtn}
+        data-gft-viewport-control=""
         style={{ top: 44 }}
         aria-pressed={focusFollowOn}
         onClick={toggleFocusFollow}
@@ -1019,6 +1028,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       <button
         type="button"
         className={styles.addNodeBtn}
+        data-gft-viewport-control=""
         disabled={editingNodeId !== null}
         onClick={() => { if (overview) viewport.toggleOverview(); handleSeedNode(); }}
         title={tr('手动补充一个判断')}
@@ -1026,7 +1036,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       {/* 连线态提示条:hover 到不可连目标时就地解释拒因(虚线同步变红) */}
       {linkingFromId && (
         <div className={`${styles.linkingHint} ${linkVerdict ? styles.linkingHintBad : ''}`}>
-          {linkVerdict ?? tr('点击接着这一点展开的节点（点空白取消）')}
+          {tr(linkVerdict ?? '点击接着这一点展开的节点（点空白取消）')}
         </div>
       )}
       {draggingNodeId && !linkingFromId && (
@@ -1052,8 +1062,8 @@ function ThinkingMapViewImpl(): JSX.Element {
       {/* 删除撤销 toast（3 秒窗口） */}
       {undoVisible && lastDeleted && (
         <div className={styles.undoToast}>
-          已删除「{lastDeleted.node.title || '未命名'}」
-          <button className={styles.undoBtn} onClick={handleUndoDelete}>撤销</button>
+          {tr('已删除「{title}」', { title: lastDeleted.node.title || tr('未命名') })}
+          <button className={styles.undoBtn} onClick={handleUndoDelete}>{tr('撤销')}</button>
         </div>
       )}
 

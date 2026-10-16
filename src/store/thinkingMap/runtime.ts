@@ -46,10 +46,34 @@ export interface ThinkingMapHost {
 export interface MapComputeContext {
   projectId: string | null;
   signal: AbortSignal;
+  /** Reattach to an existing server task without submitting a second operation. */
+  taskId?: string;
+  /** Output-only calculation; the caller revalidates its input before committing. */
+  revalidateResult?: boolean;
+}
+/** A model operation the host can run and save on its own server. */
+export type MapOperationRequest =
+  | { kind: 'update'; input: string }
+  | { kind: 'redraw' }
+  | { kind: 'tidy'; scopeIds?: string[]; unreadIds?: string[] }
+  | { kind: 'refine'; nodeId: string }
+  | { kind: 'relation'; from: string; to: string };
+export interface MapOperationOutcome {
+  /** Also the receipt ID used to roll the operation back. */
+  taskId: string;
+  report?: Record<string, number | boolean>;
 }
 export interface ThinkingMapRuntime {
-  /** Local node editing uses the graph/document contract; older platform refinement remains compatible. */
-  nodeRefinement?: 'title' | 'document';
+  /**
+   * When present, model operations run on the host's server, which writes the
+   * result and its receipt; the store syncs, and undo rolls back by receipt.
+   */
+  operations?: {
+    run(projectId: string, request: MapOperationRequest, context: MapComputeContext): Promise<MapOperationOutcome>;
+    rollback(projectId: string, receiptIds: string[]): Promise<void>;
+    history?(map: PersistedThinkingMap): Array<{ ledger: string; receipts: string[] }>;
+    rollbackTo?(projectId: string, ledger: string): Promise<void>;
+  };
   host: ThinkingMapHost;
   persistence: {
     migrateLegacySources?: boolean;

@@ -15,6 +15,7 @@ import { mapToBundle } from '../../../service/topicBundle';
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
+import { createPortal } from 'react-dom';
 import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapHost, useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import type { MapFeedMessage } from '../../../store/thinkingMap/runtime';
@@ -104,6 +105,7 @@ export function UpdateMapButton(): JSX.Element {
   const streamingCount = useThinkingMapStore(s => s.streamingCount);
   const isHydrating = useThinkingMapStore(s => s.isHydrating);
   const isTidying = useThinkingMapStore(s => s.isTidying);
+  const isRefining = useThinkingMapStore(s => s.isRefining);
   const hasMap = useThinkingMapStore(s => s.nodes.length > 0);
   const cancelGeneration = useThinkingMapStore(s => s.cancelGeneration);
   const generateMode = useThinkingMapStore(s => s.generateMode);
@@ -115,7 +117,7 @@ export function UpdateMapButton(): JSX.Element {
     <button
       className={`${styles.generateBtn} ${running ? styles.stopOnHover : ''}`}
       onClick={() => { if (running) { cancelGeneration(); } else if (!isGenerating) { void handleGenerate(); } }}
-      disabled={!running && (isGenerating || isHydrating || (!host.requestUpdate && (!hasChat || noFresh)) || isTidying)}
+      disabled={!running && (isGenerating || isHydrating || (!host.requestUpdate && (!hasChat || noFresh)) || isTidying || isRefining)}
       title={running
         ? tr('点击中止本次生成——图会回到生成前的样子')
         : host.requestUpdate
@@ -170,6 +172,7 @@ export function RedrawButton(): JSX.Element | null {
   const isGenerating = useThinkingMapStore(s => s.isGenerating);
   const isTidying = useThinkingMapStore(s => s.isTidying);
   const redrawFromLedger = useThinkingMapStore(s => s.redrawFromLedger);
+  const isRefining = useThinkingMapStore(s => s.isRefining);
   const generateMode = useThinkingMapStore(s => s.generateMode);
   const cancelGeneration = useThinkingMapStore(s => s.cancelGeneration);
   const streamingCount = useThinkingMapStore(s => s.streamingCount);
@@ -212,7 +215,7 @@ export function RedrawButton(): JSX.Element | null {
     <button
       className={styles.freshBtn}
       onClick={() => void handleRedraw()}
-      disabled={isGenerating || isTidying}
+      disabled={isGenerating || isTidying || isRefining}
       title={tr(note ? '原始记录保留在 Log；可 Ctrl+Z 撤销。来源未对应不影响查看和继续整理。' : '根据 Log 重写文档和图；可 Ctrl+Z 撤销')}
     >{note ? tr(note) : `↺ ${tr('重画')}`}</button>
   );
@@ -231,9 +234,17 @@ export function TidyButton(): JSX.Element | null {
   const isGenerating = useThinkingMapStore(s => s.isGenerating);
   const isRefining = useThinkingMapStore(s => s.isRefining);
   const selectedNodeIds = useThinkingMapStore(s => s.selectedNodeIds);
+  const refiningNodeIds = useThinkingMapStore(s => s.refiningNodeIds);
+  const refineNode = useThinkingMapStore(s => s.refineNode);
+  const singleNode = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
+  const singleRunning = singleNode !== null && refiningNodeIds.has(singleNode);
   const tidyWhitebox = useThinkingMapStore(s => s.tidyWhitebox);
   const cancelTidy = useThinkingMapStore(s => s.cancelTidy);
   const [note, setNote] = useState<string | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const noticeRoot = useRef<Element | null>(null);
+  const projectId = useThinkingMapHost(s => s.currentProjectId);
+  const noteProject = useRef<string | null>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (noteTimer.current) clearTimeout(noteTimer.current);
@@ -244,6 +255,8 @@ export function TidyButton(): JSX.Element | null {
     if (isTidying) return;
     const selection = [...selectedNodeIds];
     const isScoped = selection.length > 0;
+    noticeRoot.current = buttonRef.current?.closest('[data-gft-workspace]') || null;
+    noteProject.current = projectId;
     setNote(null);
     const report = await tidyWhitebox(isScoped ? selection : undefined);
     if (!report) return; // 失败：错误横幅已由 store 显示
@@ -255,7 +268,7 @@ export function TidyButton(): JSX.Element | null {
     setNote(reduced ? t('✓ {scope}已收拢 · {details}（Ctrl+Z 整次退回）', {scope:t(isScoped ? '选区' : '全图'),details:bits.join(' · ')}) : report.changed ? t('已调整图文，节点未减少 · {details}（Ctrl+Z 整次退回）', {details:bits.join(' · ')}) : t('本次未找到可合并的判断，原图文保留'));
     if (noteTimer.current) clearTimeout(noteTimer.current);
     noteTimer.current = setTimeout(() => setNote(null), 8000);
-  }, [isTidying, selectedNodeIds, tidyWhitebox]);
+  }, [isTidying, selectedNodeIds, tidyWhitebox, projectId]);
 
   const tr = useT();
   if (!hasDoc && !isTidying) return null;
@@ -274,13 +287,16 @@ export function TidyButton(): JSX.Element | null {
   return (
     <>
       <button
+        ref={buttonRef}
         className={styles.addNodeBtn}
-        onClick={() => void handleTidy()}
-        disabled={isGenerating || isRefining}
-        aria-label={selectedNodeIds.size > 0 ? `${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}` : undefined}
+        onClick={() => { if (singleNode) { setNote(null); void refineNode(singleNode); } else void handleTidy(); }}
+        disabled={isGenerating || (isRefining && !singleNode)}
+        aria-label={singleRunning ? tr('停止整理') : selectedNodeIds.size > 0 ? `${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}` : undefined}
         title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
-      >{selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} · ${selectedNodeIds.size}` : `🧹 ${tr('整理')}`}</button>
-      {note && <span className={ownStyles.statusNote} role="status" data-gft-tidy-feedback>{note}</span>}
+      >{singleRunning ? `■ ${tr('停止整理')}` : selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} · ${selectedNodeIds.size}` : `🧹 ${tr('整理')}`}</button>
+      {note && noteProject.current === projectId && noticeRoot.current && createPortal(<div className={ownStyles.statusNote} role="status" data-gft-tidy-feedback>
+        <span>{note}</span><button aria-label={tr('关闭整理提示')} onClick={() => setNote(null)}>×</button>
+      </div>, noticeRoot.current)}
     </>
   );
 }

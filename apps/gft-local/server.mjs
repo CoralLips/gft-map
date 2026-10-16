@@ -1,345 +1,987 @@
 import http from 'node:http';
-import {execFile} from 'node:child_process';
-import {promisify} from 'node:util';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 import * as materials from './materials.mjs';
-import {archive as materialArchive,restore as restoreMaterialArchive} from './materialArchive.mjs';
-import {Readable} from 'node:stream';
-import {pipeline} from 'node:stream/promises';
+import { archiveStream, restore as restoreMaterialArchive } from './materialArchive.mjs';
 import * as store from './store.mjs';
 import { createAccount } from './account.mjs';
 import { createCloudSync } from './sync.mjs';
-import {pendingNotices,acknowledgeNotices} from './notifications.mjs';
+import { pendingNotices, acknowledgeNotices } from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
-import {programVersion,installationId} from './version.mjs';
-import { prepareImport, parseImportSummary, redrawSummaryInput } from './dist/core.mjs';
-import { loadExecutorConfig, saveExecutorConfig, agents as executorAgents } from './executor-config.mjs';
-import { acquireServiceLease, checkRecordedService, recordServiceStart, serviceEvent } from './serviceLifecycle.mjs';
+import { createClaudeRunner } from './claudeRunner.mjs';
+import { ensureAdapter } from './acpAdapters.mjs';
+import { programVersion, installationId } from './version.mjs';
+import {
+  prepareImport,
+  parseImportSummary,
+  redrawSummaryInput,
+  tidyOperation,
+  refineOperation,
+  relationOperation,
+} from './dist/core.mjs';
+import {
+  acpArguments,
+  acpBinary,
+  agents as executorAgents,
+  loadExecutorConfig,
+  saveExecutorConfig,
+  defaultExecutor,
+} from './executor-config.mjs';
+import {
+  acquireServiceLease,
+  checkRecordedService,
+  recordServiceStart,
+  serviceEvent,
+  disableSupervision,
+} from './serviceLifecycle.mjs';
+
 const root = path.dirname(fileURLToPath(import.meta.url));
 const agents = [...executorAgents];
-export function revealCommand(filename, platform=process.platform) {
-  return platform==='darwin'?['open',['-R',filename]]:platform==='win32'?['explorer.exe',[`/select,${filename}`]]:['xdg-open',[path.dirname(filename)]];
+
+const TICK_INTERVAL_MS = 800;
+const CANCELLATION_POLL_MS = 250;
+const MAX_NODE_JOBS = 2;
+const JSON_BODY_LIMIT = 4 * 1024 * 1024;
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+/** POST actions that would start model work; refused while the executor is being switched. */
+const TASK_STARTING_ACTIONS = new Set(['compute', 'tasks', 'update-from-chat', 'resume']);
+const STOPPED_TASK_MESSAGE = '本地服务已停止，当前内容保留；可重新发起任务。';
+const CANCELLED_TASK_MESSAGE = '任务已取消，当前内容保留。';
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+const STATIC_FILES = new Map([
+  ['', ['index.html', 'text/html']],
+  ['app.js', ['app.js', 'text/javascript']],
+  ['app.css', ['app.css', 'text/css']],
+]);
+const ASSET_TYPES = {
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+};
+const TOPIC_READS = new Map([
+  ['local-file', store.localFileLocation],
+  ['operations', store.getOperations],
+  ['update-receipt', store.getUpdateReceipt],
+  ['history', store.history],
+  ['export', store.exportTopic],
+  ['snapshot', store.getSnapshot],
+  ['sources', store.sourceEvents],
+]);
+/** Server-run model operations; tasks carrying `params` use these instead of a single prompt. */
+const OPERATIONS = { tidy: tidyOperation, refine: refineOperation, relation: relationOperation };
+/** Marks a request whose handler has already written the response. */
+const RESPONDED = Symbol('responded');
+
+export function revealCommand(filename, platform = process.platform) {
+  if (platform === 'darwin') return ['open', ['-R', filename]];
+  if (platform === 'win32') return ['explorer.exe', [`/select,${filename}`]];
+  return ['xdg-open', [path.dirname(filename)]];
 }
+
 async function revealSavedFile(filename) {
-  const [binary,args]=revealCommand(filename);
-  try { await promisify(execFile)(binary,args,{timeout:10000,windowsHide:true}); }
-  catch { throw store.fail('无法打开文件夹，请复制路径在文件管理器中打开。',503); }
+  const [binary, args] = revealCommand(filename);
+  try {
+    await promisify(execFile)(binary, args, { timeout: 10000, windowsHide: true });
+  } catch {
+    throw store.fail('无法打开文件夹，请复制路径在文件管理器中打开。', 503);
+  }
 }
 
 export async function createRunner(agent = 'codex', options) {
   if (agent === 'codex') return createCodexRunner(options);
+  if (agent === 'claude') return createClaudeRunner(options);
   if (!agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
   const { createAcpRunner } = await import('./dist/acp.mjs');
-  return createAcpRunner({ ...options, adapter: agent === 'codex-acp' ? 'codex' : 'claude' });
+  const configured = { binary: acpBinary(agent), prefixArgs: acpArguments(agent), ...options };
+  if (!configured.binary) {
+    Object.assign(configured, await ensureAdapter(agent));
+  }
+  return createAcpRunner({
+    ...configured,
+    model: undefined,
+    providerDefaults: true,
+    adapter: agent === 'codex-acp' ? 'codex' : 'claude',
+  });
 }
 
-async function body(req) {
-  if (!req.headers['content-type']?.startsWith('application/json')) throw store.fail('需要 JSON 请求',415);
-  let length = 0; const chunks = [];
-  for await (const chunk of req) { length += chunk.length; if(length > 4 * 1024 * 1024) throw store.fail('内容过大',413); chunks.push(chunk); }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw store.fail('JSON 无法解析'); }
+const errorRecord = (error, code = error.code || null) => ({
+  message: error.message,
+  code,
+  at: new Date().toISOString(),
+});
+
+function sendJson(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...NO_STORE_HEADERS });
+  res.end(JSON.stringify(data));
 }
-export async function startServer({ port = 4317, agent = null, execute, runnerOptions, sourceReaders, connectionService, accountService, syncIntervalMs, managed = false, revealFile = revealSavedFile } = {}) {
-  if (agent && !agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
-  const releaseLease = managed ? await acquireServiceLease() : null;
+
+/** Only the panel's own address may call the API (blocks DNS rebinding and cross-site requests). */
+function checkLocalOrigin(req, port) {
+  const allowed = [`127.0.0.1:${port}`, `localhost:${port}`];
+  const { host, origin } = req.headers;
+  if (!allowed.includes(host) || (origin && !allowed.some(item => `http://${item}` === origin)))
+    throw store.fail('不允许此来源', 403);
+}
+
+async function readLimited(req, limit, message) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw store.fail(message, 413);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readJson(req) {
+  if (!req.headers['content-type']?.startsWith('application/json'))
+    throw store.fail('需要 JSON 请求', 415);
+  const body = await readLimited(req, JSON_BODY_LIMIT, '内容过大');
   try {
+    return JSON.parse(body.toString('utf8'));
+  } catch {
+    throw store.fail('JSON 无法解析');
+  }
+}
+
+async function receiveUpload(req, url, materialId) {
+  if (req.headers['content-type'] !== 'application/octet-stream')
+    throw store.fail('需要文件分块', 415);
+  const chunk = await readLimited(req, materials.UPLOAD_BYTES, '分块过大，请分批发送');
+  return materials.upload(materialId, Number(url.searchParams.get('offset')), chunk);
+}
+
+async function serveStatic(req, parts, res) {
+  if (req.method !== 'GET') throw store.fail('不支持的请求', 405);
+  const assetPath = parts.join('/');
+  const font = /^assets\/[\w.-]+\.(woff2?|ttf|svg|png)$/.exec(assetPath);
+  const asset = STATIC_FILES.get(assetPath) ?? (font ? [assetPath, ASSET_TYPES[font[1]]] : null);
+  if (!asset) throw store.fail('页面不存在', 404);
+  const [file, type] = asset;
+  const content = await readFile(path.join(root, 'dist/web', file));
+  res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, ...NO_STORE_HEADERS });
+  res.end(content);
+}
+
+/** A topic with file materials downloads as a .gftpack archive, otherwise as JSON. */
+async function sendTopicDownload(res, topicId) {
+  const topic = await store.getTopic(topicId);
+  const safeName = topic.name.replace(/[\\/:*?"<>|]/g, '_');
+  const disposition = extension =>
+    `attachment; filename*=UTF-8''${encodeURIComponent(safeName + extension)}`;
+  if ((await materials.list(topicId)).length > 0) {
+    const stream = await archiveStream(topicId);
+    res.writeHead(200, {
+      'Content-Type': 'application/octet-stream',
+      'Cache-Control': 'no-store',
+      'Content-Disposition': disposition('.gftpack'),
+    });
+    await pipeline(stream, res);
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'Content-Disposition': disposition('.gft.json'),
+  });
+  res.end(JSON.stringify(await store.exportTopic(topicId), null, 2));
+}
+
+const readTopic = (id, action) => (TOPIC_READS.get(action) ?? store.getView)(id);
+
+function readTask(id, action) {
+  if (action === 'status') return store.getTaskStatus(id);
+  if (action === 'result') return store.computationResult(id);
+  return store.taskPrompt(id);
+}
+
+const searchParams = (url, keys) =>
+  Object.fromEntries(
+    keys.filter(key => url.searchParams.has(key)).map(key => [key, url.searchParams.get(key)]),
+  );
+
+const outputOf = result => (typeof result === 'string' ? result : result.output);
+
+/** Metrics of every model call in one task; a single call is stored unchanged. */
+function combinedExecution(runs) {
+  if (runs.length === 1) return runs[0];
+  const total = key => runs.reduce((sum, run) => sum + (run[key] || 0), 0);
+  return {
+    ...runs.at(-1),
+    calls: runs.length,
+    runs: [...runs],
+    elapsedMs: total('elapsedMs'),
+    toolCallCount: total('toolCallCount'),
+  };
+}
+
+/** Long histories are condensed chunk by chunk; the final call works from that summary. */
+async function runPrompt(task, prompt, callModel) {
+  let summary = '';
+  for (const chunk of prompt.historyChunks || []) {
+    const request = prepareImport(await store.getTopic(task.topicId), chunk, summary);
+    const part = await callModel({ ...prompt, ...request, historyChunks: undefined });
+    summary = parseImportSummary(outputOf(part));
+  }
+  const final = await callModel({
+    ...prompt,
+    ...(prompt.historyChunks ? { user: redrawSummaryInput(summary) } : {}),
+    historyChunks: undefined,
+  });
+  return outputOf(final);
+}
+
+export async function startServer(options = {}) {
+  if (options.agent && !agents.includes(options.agent))
+    throw store.fail(`执行器应为 ${agents.join('、')}`);
+  const releaseLease = options.managed ? await acquireServiceLease() : null;
+  try {
+    return await createService(options, releaseLease);
+  } catch (error) {
+    await releaseLease?.();
+    throw error;
+  }
+}
+
+async function createService(
+  {
+    port = 4317,
+    agent = null,
+    execute,
+    runnerOptions,
+    sourceReaders,
+    connectionService,
+    accountService,
+    syncIntervalMs,
+    managed = false,
+    revealFile = revealSavedFile,
+  },
+  releaseLease,
+) {
   if (managed) await checkRecordedService();
   await store.recover();
+
+  // Executor. A switch replaces `runner` only after the new one passes its check.
   let activeAgent = agent;
   let activeRunnerOptions = runnerOptions;
-  let runner = activeAgent && !execute ? await createRunner(activeAgent, activeRunnerOptions) : null;
-  let startupError = null;
-  if (runner) try { await runner.check(); } catch (error) { startupError = {message:error.message,code:error.code,at:new Date().toISOString()}; }
+  let runner = null;
+  let lastError = null;
+  let executorCheckPromise = null;
+  let executorCheckAgent = null;
+  let discoveryPromise = null;
+  let preparingInitial = false;
+  async function prepareInitialExecutor() {
+    try {
+      runner = await createRunner(activeAgent, activeRunnerOptions);
+      await runner.check();
+      if (managed && !closed) {
+        const saved = await loadExecutorConfig();
+        if (
+          saved?.agent !== activeAgent ||
+          JSON.stringify(saved?.runnerOptions) !== JSON.stringify(activeRunnerOptions)
+        )
+          await saveExecutorConfig({ agent: activeAgent, runnerOptions: activeRunnerOptions });
+      }
+    } catch (error) {
+      lastError = errorRecord(error, error.code);
+    }
+  }
+
   const version = await programVersion();
-  const readers = sourceReaders || await import('./dist/sources.mjs');
+  const readers = sourceReaders || (await import('./dist/sources.mjs'));
   const { createConnections } = await import('./connections.mjs');
   const connections = connectionService || createConnections({ readers });
   const account = accountService || createAccount({ home: store.homeDir() });
-  const sync = createCloudSync({ account, intervalMs:syncIntervalMs });
-  let initialized = false, busy = false, closed = false, checkingStop = false, mutations = 0, activeTaskId = null, activeController = null, lastError = startupError, shutdownPromise = null;
-  let tickPromise = null, executionClosePromise = null;
-  const backgroundFailure = error => {
-    lastError = {message:error.message,code:error.code || error.name,at:new Date().toISOString()};
-    void serviceEvent('background-error',{code:error.code || error.name}).catch(()=>{});
-  };
+  const sync = createCloudSync({ account, intervalMs: syncIntervalMs });
+  const serviceInstanceId = randomUUID();
+
+  // Lifecycle.
+  let initialized = false;
+  let closed = false;
+  let checkingStop = false;
+  let mutations = 0; // mutating requests in flight, including the current one
+  let timer = null;
+  let recordStop = null;
+  let shutdownPromise = null;
+  let executionClosePromise = null;
+
+  // Work: one serial task or material batch at a time, plus bounded node jobs.
+  let busy = false;
+  let activeTaskId = null;
+  let activeController = null;
+  let tickPromise = null;
+  const nodeJobs = new Map();
+  const hasActiveWork = () => busy || nodeJobs.size > 0;
+
+  const materialWorker = materials.createWorker({
+    run: async (request, signal) => {
+      if (runner?.snapshot().status === 'unavailable') await runner.check();
+      if (execute) return execute(request, { signal });
+      if (!runner) throw store.fail('请先启用本地 Agent 执行器', 503);
+      const directory = path.join(
+        store.homeDir(),
+        'runs',
+        `material-${request.materialId}-${Date.now()}`,
+      );
+      return runner.run(request, { directory, signal });
+    },
+  });
+  await materialWorker.recover();
+
+  function backgroundFailure(error) {
+    lastError = errorRecord(error, error.code || error.name);
+    void serviceEvent('background-error', { code: error.code || error.name }).catch(() => {});
+  }
+
+  function executorStatus() {
+    if (preparingInitial) return { status: 'checking', message: '正在准备 Agent 连接…', lastError };
+    if (runner)
+      return { ...runner.snapshot(), ...(hasActiveWork() ? { status: 'running' } : {}), lastError };
+    let status = 'manual';
+    if (activeAgent) status = lastError ? 'unavailable' : hasActiveWork() ? 'running' : 'ready';
+    return { status, activeTaskId, lastError };
+  }
+
+  function serviceState() {
+    if (closed || checkingStop) return 'stopping';
+    return initialized ? 'running' : 'starting';
+  }
+
+  function runtime() {
+    return {
+      product: 'gft-map',
+      version,
+      installationId,
+      dataDirectory: store.homeDir(),
+      serviceInstanceId,
+      serviceState: serviceState(),
+      pid: process.pid,
+      agent: activeAgent,
+      mode: activeAgent ? 'automatic' : 'manual',
+      executor: executorStatus(),
+    };
+  }
+
+  const hasQueuedTasks = async () =>
+    (await store.listTasks()).some(task => ['pending', 'running'].includes(task.status));
+  const hasMaterialsIn = async states =>
+    (await materials.list()).some(job => states.includes(job.state));
+
+  /** Work a stop or upgrade must not interrupt. The stop request itself is one mutation. */
+  async function busyForShutdown() {
+    return (
+      hasActiveWork() ||
+      mutations > 1 ||
+      !!executorCheckPromise ||
+      (await hasQueuedTasks()) ||
+      (await hasMaterialsIn(['queued', 'running']))
+    );
+  }
+
+  function requireExecutor(message) {
+    if (!activeAgent) throw store.fail(message, 503);
+  }
+
+  // ---- Executors ----
+
+  async function optionsFor(requested) {
+    if (requested === activeAgent && activeRunnerOptions) return activeRunnerOptions;
+    const saved = await loadExecutorConfig();
+    if (saved?.agent === requested) return saved.runnerOptions;
+    if (saved?.profiles?.[requested]) return saved.profiles[requested];
+    const native = requested.replace(/-acp$/, '');
+    return requested.endsWith('-acp')
+      ? defaultExecutor({
+          agent: native,
+          runnerOptions: saved?.agent === native ? saved.runnerOptions : saved?.profiles?.[native],
+        }).runnerOptions
+      : undefined;
+  }
+
+  async function checkExecutor(agentName) {
+    if (agentName === activeAgent && runner && hasActiveWork())
+      return { agent: agentName, ...runner.snapshot() };
+    let candidate;
+    try {
+      candidate = await createRunner(agentName, await optionsFor(agentName));
+      return { agent: agentName, ...(await candidate.check()) };
+    } catch (error) {
+      return { agent: agentName, status: 'unavailable', error: error.message };
+    } finally {
+      await candidate?.waitForIdle();
+    }
+  }
+
+  function discoverExecutors() {
+    discoveryPromise ||= Promise.all(['codex-acp', 'claude-acp'].map(checkExecutor)).finally(() => {
+      discoveryPromise = null;
+    });
+    return discoveryPromise;
+  }
+
+  async function switchExecutor(requested) {
+    if (!agents.includes(requested)) throw store.fail(`执行器应为 ${agents.join('、')}`);
+    if (closed) throw store.fail('本地服务正在关闭，请重新打开页面后重试。', 409);
+    if (
+      hasActiveWork() ||
+      activeTaskId ||
+      (await hasQueuedTasks()) ||
+      (await hasMaterialsIn(['uploading', 'queued', 'running']))
+    )
+      throw store.fail('当前有任务或材料正在处理，请完成或暂停后再连接执行器。', 409);
+    if (executorCheckPromise) {
+      if (executorCheckAgent !== requested)
+        throw store.fail('正在检查另一种执行器，请等待检查完成后再切换。', 409);
+      await executorCheckPromise;
+      if (lastError) throw store.fail(lastError.message || 'Agent 连接准备失败。', 503);
+      return runtime();
+    }
+    if (hasActiveWork()) throw store.fail('任务正在处理，请稍后检查执行器。', 409);
+    executorCheckAgent = requested;
+    executorCheckPromise = activateExecutor(requested);
+    try {
+      return await executorCheckPromise;
+    } finally {
+      executorCheckPromise = null;
+      executorCheckAgent = null;
+    }
+  }
+
+  async function activateExecutor(requested) {
+    const options = await optionsFor(requested);
+    const candidate = await createRunner(requested, options);
+    try {
+      await candidate.check();
+      if (closed || hasActiveWork() || (await hasQueuedTasks()))
+        throw store.fail('仍有任务正在处理，请完成或停止后再切换。', 409);
+      await saveExecutorConfig({ agent: requested, runnerOptions: options });
+      runner = candidate;
+      activeAgent = requested;
+      activeRunnerOptions = options;
+      lastError = null;
+      return runtime();
+    } catch (error) {
+      // A failed switch keeps the current executor and its status.
+      if (!activeAgent || activeAgent === requested) lastError = errorRecord(error);
+      throw store.fail(error.message, error.status || 503);
+    }
+  }
+
+  // ---- Requests ----
+
+  const server = http.createServer(async (req, res) => {
+    const mutating = MUTATING_METHODS.has(req.method);
+    if (mutating) mutations++;
+    try {
+      checkLocalOrigin(req, server.address()?.port);
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts[0] !== 'api') {
+        await serveStatic(req, parts, res);
+        return;
+      }
+      if ((closed || checkingStop) && mutating)
+        throw store.fail('本地服务正在关闭，请稍后重新打开。', 503);
+      if (!initialized && mutating) throw store.fail('本地服务正在启动，请稍后重试。', 503);
+      const [, group, id, action] = parts;
+      const route = { res, url, group, id, action };
+      let value;
+      if (req.method === 'PUT' && group === 'materials' && action === 'upload')
+        value = await receiveUpload(req, url, id);
+      else if (req.method === 'GET') value = await handleGet(route);
+      else if (req.method === 'POST') value = await handlePost(route, await readJson(req));
+      else throw store.fail('不支持的请求', 405);
+      if (value === RESPONDED) return;
+      sendJson(res, 200, value);
+      if (req.method === 'POST') void sync.run();
+    } catch (error) {
+      if (res.headersSent) res.destroy(error);
+      else sendJson(res, error.status || 500, { error: error.message });
+    } finally {
+      if (mutating) mutations--;
+    }
+  });
+
+  async function handleGet({ res, url, group, id, action }) {
+    const query = name => url.searchParams.get(name);
+    switch (group) {
+      case 'topics':
+        if (action === 'download') {
+          await sendTopicDownload(res, id);
+          return RESPONDED;
+        }
+        return id ? readTopic(id, action) : store.listTopics();
+      case 'runtime':
+        return id === 'executors' ? discoverExecutors() : runtime();
+      case 'material-evidence':
+        return {
+          text: await materials.evidence(query('topicId'), url.searchParams.getAll('node')),
+        };
+      case 'materials':
+        if (!id) return materials.list(query('topicId'));
+        return action === 'page'
+          ? materials.page(id, Number(query('start') || 0))
+          : materials.get(id);
+      case 'account':
+        return { ...(await account.status()), sync: sync.snapshot() };
+      case 'chat-sessions':
+        return listChatSessions(url);
+      case 'chat-session':
+        return readers.getChatSession({
+          provider: query('provider'),
+          id: query('id'),
+          cwd: query('cwd') || undefined,
+        });
+      case 'connections':
+        return connections.listConnections(searchParams(url, ['topicId', 'provider', 'sessionId']));
+      case 'sessions':
+        return store.listSessions();
+      case 'tasks':
+        return id ? readTask(id, action) : store.listTasks();
+      default:
+        throw store.fail('接口不存在', 404);
+    }
+  }
+
+  async function handlePost({ res, group, id, action }, data) {
+    if (executorCheckPromise && TASK_STARTING_ACTIONS.has(action))
+      throw store.fail('正在切换处理 Agent，请稍后再开始任务。', 409);
+    switch (group) {
+      case 'runtime':
+        if (id === 'executor') return switchExecutor(data?.agent);
+        break;
+      case 'service':
+        if (id === 'stop') {
+          await stopOnRequest(res, data);
+          return RESPONDED;
+        }
+        break;
+      case 'upgrade':
+        if (id === 'prepare') {
+          await prepareUpgrade(res, data);
+          return RESPONDED;
+        }
+        break;
+      case 'materials':
+        return materialAction(id, action, data);
+      case 'import':
+        return store.importTopic(data);
+      case 'account':
+        if (id === 'login') return account.begin();
+        if (id === 'logout') return account.logout();
+        if (id === 'cancel') return account.cancel();
+        break;
+      case 'connections':
+        return connectionAction(id, data);
+      case 'chat-preview':
+        return readers.getChatPreview(data.source);
+      case 'topics':
+        return topicAction(id, action, data);
+      case 'tasks':
+        if (action === 'cancel') return cancelTask(id);
+        if (action === 'complete') return store.completeTask(id, data.output);
+        break;
+    }
+    throw store.fail('接口不存在', 404);
+  }
+
+  async function listChatSessions(url) {
+    const encoded = url.searchParams.get('cursor');
+    let cursor;
+    if (encoded) {
+      try {
+        cursor = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+      } catch {
+        throw store.fail('会话列表读取位置无效，请重新搜索');
+      }
+    }
+    const page = await readers.listChatSessions({
+      provider: url.searchParams.get('provider'),
+      query: url.searchParams.get('query') || '',
+      cursor,
+      limit: 30,
+    });
+    const nextCursor = page.nextCursor
+      ? Buffer.from(JSON.stringify(page.nextCursor)).toString('base64url')
+      : null;
+    return { ...page, nextCursor };
+  }
+
+  async function materialAction(id, action, data) {
+    if (!id) return materials.create(data);
+    switch (action) {
+      case 'finish':
+        return materials.finish(id);
+      case 'restore':
+        return restoreMaterialArchive(id);
+      case 'discard':
+        return materials.discard(id);
+      case 'pause':
+      case 'resume':
+        return materialWorker.control(id, action);
+      case 'edit':
+        return materials.editPage(id, data.start, data.end, data.text, data.etag);
+      default:
+        throw store.fail('接口不存在', 404);
+    }
+  }
+
+  async function connectionAction(id, data) {
+    switch (id) {
+      case 'notices':
+        return pendingNotices(data);
+      case 'ack-notices':
+        return acknowledgeNotices(data);
+      case 'connect':
+        return connections.connectSource(data);
+      case 'disconnect':
+        return connections.disconnectSource(data);
+      case 'read':
+        return connections.readConnectedContext(data);
+      case 'sources':
+        return connections.readConnectedSources(data);
+      default:
+        throw store.fail('接口不存在', 404);
+    }
+  }
+
+  async function topicAction(id, action, data) {
+    if (!id) return store.createTopic(data.name, data.scope, undefined, data.id);
+    switch (action) {
+      case 'reveal-file':
+        await revealFile((await store.localFileLocation(id)).path);
+        return { opened: true };
+      case 'rollback-operation':
+        return store.rollbackOperation(id, data.baseRevision, data.receiptId);
+      case 'rollback-update':
+        return store.rollbackUpdate(id, data.baseRevision, data.receiptId);
+      case 'doc':
+        return store.saveDoc(id, data.baseRevision, data.doc);
+      case 'graph':
+        return store.saveGraph(id, data.baseRevision, data.op);
+      case 'state':
+        return store.saveState(id, data.baseRevision, data.map);
+      case 'rename':
+        return store.renameTopic(id, data.baseRevision, data.name);
+      case 'archive':
+        return store.archiveTopic(id, data.baseRevision);
+      case 'sources':
+        await store.saveSourceEvent(id, data.event);
+        return { saved: true };
+      case 'clear-sources':
+        await store.clearSourceEvents(id);
+        return { saved: true };
+      case 'compute':
+        requireExecutor(
+          `本地执行器尚未启用，请选择 ${agents.join('、')}，并用 serve --agent 启动服务。`,
+        );
+        return store.createComputation(id, data.baseRevision, data.request);
+      case 'tasks':
+        return store.createTask(id, data.action, data.input, {
+          params: data.params,
+          origin: data.origin,
+        });
+      case 'update-from-chat':
+        requireExecutor('本地执行器尚未启用，请用 serve --agent 启动服务后再更新。');
+        return connections.createSourceUpdate(id, {
+          connectionId: data.connectionId,
+          continuous: data.continuous === true,
+          until: data.until,
+        });
+      default:
+        throw store.fail('接口不存在', 404);
+    }
+  }
+
+  async function cancelTask(id) {
+    const task = await store.setTaskStatus(id, 'cancelled');
+    if (activeTaskId === id) activeController?.abort('cancelled');
+    nodeJobs.get(id)?.controller.abort('cancelled');
+    return task;
+  }
+
+  async function stopOnRequest(res, data) {
+    if (
+      data.installationId !== installationId ||
+      data.dataDirectory !== store.homeDir() ||
+      data.serviceInstanceId !== serviceInstanceId
+    )
+      throw store.fail('服务身份已变化，未停止任何进程。', 409);
+    checkingStop = true;
+    try {
+      if (await busyForShutdown())
+        throw store.fail(
+          '仍有任务正在处理，请等待完成，或先在页面暂停材料、取消任务，再关闭服务。',
+          409,
+        );
+    } catch (error) {
+      checkingStop = false;
+      throw error;
+    }
+    closed = true;
+    await disableSupervision();
+    sendJson(res, 200, { stopping: true });
+    setImmediate(() => void server.shutdown('requested-stop').catch(backgroundFailure));
+  }
+
+  async function prepareUpgrade(res, data) {
+    if (data.installationId !== installationId)
+      throw store.fail('此服务属于另一份安装，未停止。', 409);
+    if (await busyForShutdown()) throw store.fail('请等待任务完成或暂停后再更新。', 409);
+    closed = true;
+    await disableSupervision();
+    sendJson(res, 200, { stopped: true, version });
+    setImmediate(() => void server.shutdown('upgrade').catch(backgroundFailure));
+  }
+
+  // ---- Task queue ----
+
+  const isNodeJob = task =>
+    !!task && ((task.mode === 'compute' && task.concurrent) || store.isConcurrentOperation(task));
+
+  async function tick() {
+    if (busy || closed || checkingStop || executorCheckPromise || !activeAgent) return;
+    const pending = (await store.listTasks())
+      .filter(task => task.status === 'pending' && !nodeJobs.has(task.id))
+      .reverse(); // oldest first
+    const next = pending[0];
+    if (isNodeJob(next)) {
+      startNodeJobs(pending);
+      return;
+    }
+    if (nodeJobs.size || closed) return;
+    busy = true;
+    try {
+      if (!next) {
+        await materialWorker.tick();
+        return;
+      }
+      activeTaskId = next.id;
+      activeController = new AbortController();
+      await runTask(next, activeController, false);
+    } finally {
+      activeTaskId = null;
+      activeController = null;
+      busy = false;
+    }
+  }
+
+  /** Node computations run concurrently, bounded, and never overlap topic writers. */
+  function startNodeJobs(pending) {
+    for (const task of pending) {
+      if (nodeJobs.size >= MAX_NODE_JOBS || !isNodeJob(task) || closed) break;
+      const job = { controller: new AbortController(), promise: null };
+      nodeJobs.set(task.id, job);
+      job.promise = runTask(task, job.controller, true)
+        .catch(backgroundFailure)
+        .finally(() => nodeJobs.delete(task.id));
+    }
+  }
+
+  async function runTask(task, controller, independent) {
+    let claimed = false;
+    let cancellation;
+    let taskRunner = runner;
+    try {
+      await store.setTaskStatus(task.id, 'running');
+      claimed = true;
+      if (closed) {
+        await store.setTaskStatus(task.id, 'failed', STOPPED_TASK_MESSAGE);
+        return;
+      }
+      lastError = null;
+      cancellation = watchCancellation(task.id, controller);
+      // Each concurrent node job gets its own executor process.
+      if (independent && !execute)
+        taskRunner = await createRunner(activeAgent, activeRunnerOptions);
+      if (taskRunner && (independent || taskRunner.snapshot().status === 'unavailable'))
+        await taskRunner.check();
+      if (task.params) {
+        // A server-run operation: the shared core calls the model and returns lines to write.
+        const callModel = modelCaller(task, controller, taskRunner, () => store.getTask(task.id));
+        const topic = await store.getTopic(task.topicId);
+        // The executor reads only system/user; task fields identify the call for logs and tests.
+        const result = await OPERATIONS[task.action](topic, task.params, async request =>
+          outputOf(await callModel({ ...task, ...request })),
+        );
+        if (!closed) await store.completeOperation(task.id, result);
+        return;
+      }
+      const prompt = await store.taskPrompt(task.id);
+      const output = await runPrompt(task, prompt, modelCaller(task, controller, taskRunner));
+      if (!closed) await store.completeTask(task.id, output);
+    } catch (error) {
+      if (!controller.signal.aborted) lastError = errorRecord(error);
+      if (claimed) {
+        if (error.execution) await saveExecution(task.id, error.execution).catch(() => {});
+        await store.setTaskStatus(task.id, 'failed', error.message).catch(() => {});
+      }
+    } finally {
+      clearInterval(cancellation);
+      if (independent && taskRunner) await taskRunner.waitForIdle();
+    }
+  }
+
+  /** The CLI or another panel may cancel the task through the store. */
+  function watchCancellation(taskId, controller) {
+    return setInterval(async () => {
+      try {
+        if ((await store.getTask(taskId)).status !== 'running') controller.abort('cancelled');
+      } catch {
+        controller.abort('cancelled');
+      }
+    }, CANCELLATION_POLL_MS);
+  }
+
+  /** `verify` re-reads the task before each call; by default it also re-checks edits and the source. */
+  function modelCaller(task, controller, taskRunner, verify = () => store.taskPrompt(task.id)) {
+    const runs = [];
+    return async request => {
+      if (controller.signal.aborted) throw store.fail(CANCELLED_TASK_MESSAGE, 409);
+      const current = await verify();
+      if (current.status !== 'running') throw store.fail(CANCELLED_TASK_MESSAGE, 409);
+      const result = execute
+        ? await execute(request, { signal: controller.signal })
+        : await taskRunner.run(request, {
+            directory: path.join(store.homeDir(), 'runs', task.id),
+            signal: controller.signal,
+          });
+      if (result?.execution) {
+        runs.push(result.execution);
+        await saveExecution(task.id, combinedExecution(runs));
+      }
+      return result;
+    };
+  }
+
   async function saveExecution(id, execution) {
     // Cancellation may be committing its task state as the child closes. Keep
     // the metrics without ever replacing that independently committed status.
     for (let attempt = 0; ; attempt++) {
-      try { await store.saveTaskExecution(id,execution); return; }
-      catch (error) { if (error.status !== 409 || attempt >= 19) throw error; await new Promise(resolve=>setTimeout(resolve,25)); }
+      try {
+        await store.saveTaskExecution(id, execution);
+        return;
+      } catch (error) {
+        if (error.status !== 409 || attempt >= 19) throw error;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
     }
   }
-  const materialWorker=materials.createWorker({run:async (request,signal)=>{
-    if(runner?.snapshot().status==='unavailable')await runner.check();
-    if(execute)return execute(request,{signal});
-    if(!runner)throw store.fail('请先启用本地 Agent 执行器',503);
-    return runner.run(request,{directory:path.join(store.homeDir(),'runs',`material-${request.materialId}-${Date.now()}`),signal});
-  }});
-  await materialWorker.recover();
-  let executorCheckPromise = null, executorCheckAgent = null;
-  const serviceInstanceId = randomUUID();
-  const runtime = () => ({ product:'gft-map',version,installationId,dataDirectory:store.homeDir(),serviceInstanceId,serviceState:closed || checkingStop ? 'stopping' : initialized ? 'running' : 'starting',pid:process.pid,agent:activeAgent, mode: activeAgent ? 'automatic' : 'manual', executor: runner ? { ...runner.snapshot(), lastError } : { status: activeAgent ? (busy ? 'running' : 'ready') : 'manual', activeTaskId, lastError } });
-  const server = http.createServer(async (req,res) => {
-    const mutating = ['POST','PUT','DELETE','PATCH'].includes(req.method);
-    if (mutating) mutations++;
-    const send = (status,data) => { res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(JSON.stringify(data)); };
-    try {
-      const authority = req.headers.host;
-      const actualPort = server.address()?.port;
-      const allowed = [`127.0.0.1:${actualPort}`, `localhost:${actualPort}`];
-      if (!allowed.includes(authority) || (req.headers.origin && !allowed.map(h=>`http://${h}`).includes(req.headers.origin))) throw store.fail('不允许此来源',403);
-      const url = new URL(req.url, `http://${authority}`);
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (parts[0] !== 'api') {
-        if(req.method !== 'GET') throw store.fail('不支持的请求',405);
-        const assets = { '': ['index.html','text/html'], 'app.js':['app.js','text/javascript'], 'app.css':['app.css','text/css'] };
-        const assetPath = parts.join('/');
-        const fontTypes = { woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', svg: 'image/svg+xml', png: 'image/png' };
-        const font = /^assets\/[\w.-]+\.(woff2?|ttf|svg|png)$/.exec(assetPath);
-        const asset = assets[assetPath] || (font ? [assetPath, fontTypes[font[1]]] : null);
-        if(!asset) throw store.fail('页面不存在',404);
-        const content = await readFile(path.join(root,'dist/web',asset[0]));
-        res.writeHead(200,{'Content-Type':`${asset[1]}; charset=utf-8`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(content);return;
-      }
-      const [,group,id,action] = parts;
-      if ((closed || checkingStop) && mutating) throw store.fail('本地服务正在关闭，请稍后重新打开。',503);
-      if (!initialized && mutating) throw store.fail('本地服务正在启动，请稍后重试。',503);
-      let value;
-      if(req.method==='PUT'&&group==='materials'&&action==='upload') {
-        if(req.headers['content-type']!=='application/octet-stream')throw store.fail('需要文件分块',415);
-        let size=0;const chunks=[];
-        for await(const chunk of req){size+=chunk.length;if(size>materials.UPLOAD_BYTES)throw store.fail('分块过大，请分批发送',413);chunks.push(chunk);}
-        value=await materials.upload(id,Number(url.searchParams.get('offset')),Buffer.concat(chunks));
-        send(200,value);return;
-      }
-      if(req.method === 'GET') {
-        if(group==='topics'&&action==='download') {
-          const topic=await store.getTopic(id),hasMaterials=(await materials.list(id)).length>0;
-          if(hasMaterials){
-            const stream=materialArchive(id),first=await stream.next();
-            res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(topic.name.replace(/[\\/:*?"<>|]/g,'_')+'.gftpack')}`});
-            await pipeline(Readable.from((async function*(){yield first.value;yield* stream;})()),res);return;
-          }
-          res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(topic.name.replace(/[\\/:*?"<>|]/g,'_')+'.gft.json')}`});
-          res.end(JSON.stringify(await store.exportTopic(id),null,2));return;
-        }
-        if(group === 'runtime') value = runtime();
-        else if(group==='material-evidence')value={text:await materials.evidence(url.searchParams.get('topicId'),url.searchParams.getAll('node'))};
-        else if(group==='materials') value=!id ? await materials.list(url.searchParams.get('topicId')) : action==='page' ? await materials.page(id,Number(url.searchParams.get('start') || 0)) : await materials.get(id);
-        else if(group === 'account') value = {...await account.status(),sync:sync.snapshot()};
-        else if(group === 'chat-sessions') {
-          let cursor;
-          const encoded = url.searchParams.get('cursor');
-          if (encoded) {
-            try { cursor = JSON.parse(Buffer.from(encoded,'base64url').toString('utf8')); }
-            catch { throw store.fail('会话列表读取位置无效，请重新搜索'); }
-          }
-          const page = await readers.listChatSessions({provider:url.searchParams.get('provider'),query:url.searchParams.get('query') || '',cursor,limit:30});
-          value = {...page,nextCursor:page.nextCursor ? Buffer.from(JSON.stringify(page.nextCursor)).toString('base64url') : null};
-        }
-        else if(group === 'chat-session') value = await readers.getChatSession({provider:url.searchParams.get('provider'),id:url.searchParams.get('id'),cwd:url.searchParams.get('cwd') || undefined});
-        else if(group === 'connections') value = await connections.listConnections(Object.fromEntries(['topicId','provider','sessionId'].flatMap(key=>url.searchParams.has(key)?[[key,url.searchParams.get(key)]]:[])));
-        else if(group === 'sessions') value = await store.listSessions();
-        else if(group === 'topics') value = !id ? await store.listTopics() : action === 'local-file' ? await store.localFileLocation(id) : action === 'operations' ? await store.getOperations(id) : action === 'update-receipt' ? await store.getUpdateReceipt(id) : action === 'history' ? await store.history(id) : action === 'export' ? await store.exportTopic(id) : action === 'snapshot' ? await store.getSnapshot(id) : action === 'sources' ? await store.sourceEvents(id) : await store.getView(id);
-        else if(group === 'tasks') value = id ? action === 'status' ? await store.getTaskStatus(id) : action === 'result' ? await store.computationResult(id) : await store.taskPrompt(id) : await store.listTasks();
-        else throw store.fail('接口不存在',404);
-      } else if(req.method === 'POST') {
-        const data = await body(req);
-        if(group === 'runtime' && id === 'executor') {
-          const requested = data?.agent;
-          if (!agents.includes(requested)) throw store.fail(`执行器应为 ${agents.join('、')}`);
-          if (closed) throw store.fail('本地服务正在关闭，请重新打开页面后重试。',409);
-          if (activeAgent && activeAgent !== requested) throw store.fail(`当前服务已选择 ${activeAgent}，不能在运行中切换执行器。`,409);
-          if (busy || activeTaskId || (await store.listTasks()).some(item => ['pending','running'].includes(item.status)) || (await materials.list()).some(item => ['uploading','queued','running'].includes(item.state))) throw store.fail('当前有任务或材料正在处理，请完成或暂停后再连接执行器。',409);
-          if (executorCheckPromise) {
-            if (executorCheckAgent !== requested) throw store.fail('正在检查另一种执行器，请等待检查完成后再切换。',409);
-            value = await executorCheckPromise;
-          }
-          else {
-            if (busy) throw store.fail('任务正在处理，请稍后检查执行器。',409);
-            executorCheckAgent = requested;
-            executorCheckPromise = (async () => {
-              const saved = await loadExecutorConfig();
-              const options = activeRunnerOptions || (saved?.agent === requested ? saved.runnerOptions : undefined);
-              const candidate = await createRunner(requested, options);
-              try {
-                await candidate.check();
-                runner = candidate;
-                activeAgent = requested;
-                activeRunnerOptions = options;
-                lastError = null;
-                await saveExecutorConfig({ agent: requested, runnerOptions: options });
-                return runtime();
-              } catch (error) {
-                lastError = { message: error.message, code: error.code || null, at: new Date().toISOString() };
-                throw store.fail(error.message, 503);
-              }
-            })();
-            try { value = await executorCheckPromise; }
-            finally { executorCheckPromise = null; executorCheckAgent = null; }
-          }
-        }
-        else if(group === 'service' && id === 'stop') {
-          if(data.installationId !== installationId || data.dataDirectory !== store.homeDir() || data.serviceInstanceId !== serviceInstanceId) throw store.fail('服务身份已变化，未停止任何进程。',409);
-          checkingStop=true;
-          try {
-            if(busy || mutations > 1 || executorCheckPromise || (await store.listTasks()).some(t=>['pending','running'].includes(t.status)) || (await materials.list()).some(j=>['queued','running'].includes(j.state)) || mutations > 1) throw store.fail('仍有任务正在处理，请等待完成，或先在页面暂停材料、取消任务，再关闭服务。',409);
-          } catch (error) { checkingStop=false; throw error; }
-          closed=true;
-          send(200,{stopping:true});
-          setImmediate(()=>void server.shutdown('requested-stop').catch(backgroundFailure)); return;
-        }
-        else if(group === 'upgrade' && id === 'prepare') {
-          if(data.installationId !== installationId) throw store.fail('此服务属于另一份安装，未停止。',409);
-          if(busy || (await store.listTasks()).some(t=>['pending','running'].includes(t.status)) || (await materials.list()).some(j=>['queued','running'].includes(j.state))) throw store.fail('请等待任务完成或暂停后再更新。',409);
-          closed=true;
-          send(200,{stopped:true,version});
-          setImmediate(()=>void server.shutdown('upgrade').catch(backgroundFailure)); return;
-        }
-        else if(group==='materials') {
-          if(!id)value=await materials.create(data);
-          else if(action==='finish')value=await materials.finish(id);
-          else if(action==='restore')value=await restoreMaterialArchive(id);
-          else if(action==='discard')value=await materials.discard(id);
-          else if(action==='pause'||action==='resume')value=await materialWorker.control(id,action);
-          else if(action==='edit')value=await materials.editPage(id,data.start,data.end,data.text,data.etag);
-          else throw store.fail('接口不存在',404);
-        }
-        else if(group === 'import') value = await store.importTopic(data);
-        else if(group === 'account' && id === 'login') value = await account.begin();
-        else if(group === 'account' && id === 'logout') value = await account.logout();
-        else if(group === 'account' && id === 'cancel') value = await account.cancel();
-        else if(group === 'connections' && id === 'notices') value = await pendingNotices(data);
-        else if(group === 'connections' && id === 'ack-notices') value = await acknowledgeNotices(data);
-        else if(group === 'connections' && id === 'connect') value = await connections.connectSource(data);
-        else if(group === 'connections' && id === 'disconnect') value = await connections.disconnectSource(data);
-        else if(group === 'connections' && id === 'read') value = await connections.readConnectedContext(data);
-        else if(group === 'connections' && id === 'sources') value = await connections.readConnectedSources(data);
-        else if(group === 'chat-preview') value = await readers.getChatPreview(data.source);
-        else if(group === 'topics' && !id) value = await store.createTopic(data.name,data.scope,undefined,data.id);
-        else if(group === 'topics' && action === 'reveal-file') { const location=await store.localFileLocation(id);await revealFile(location.path);value={opened:true}; }
-        else if(group === 'topics' && action === 'rollback-operation') value = await store.rollbackOperation(id,data.baseRevision,data.receiptId);
-        else if(group === 'topics' && action === 'rollback-update') value = await store.rollbackUpdate(id,data.baseRevision,data.receiptId);
-        else if(group === 'topics' && action === 'doc') value = await store.saveDoc(id,data.baseRevision,data.doc);
-        else if(group === 'topics' && action === 'graph') value = await store.saveGraph(id,data.baseRevision,data.op);
-        else if(group === 'topics' && action === 'state') value = await store.saveState(id,data.baseRevision,data.map);
-        else if(group === 'topics' && action === 'rename') value = await store.renameTopic(id,data.baseRevision,data.name);
-        else if(group === 'topics' && action === 'archive') value = await store.archiveTopic(id,data.baseRevision);
-        else if(group === 'topics' && action === 'sources') { await store.saveSourceEvent(id,data.event); value = {saved:true}; }
-        else if(group === 'topics' && action === 'clear-sources') { await store.clearSourceEvents(id); value = {saved:true}; }
-        else if(group === 'topics' && action === 'compute') {
-          if (!activeAgent) throw store.fail('本地执行器尚未启用，请选择 codex、codex-acp 或 claude-acp，并用 serve --agent 启动服务。', 503);
-          value = await store.createComputation(id,data.baseRevision,data.request);
-        }
-        else if(group === 'topics' && action === 'tasks') value = await store.createTask(id,data.action,data.input);
-        else if(group === 'topics' && action === 'update-from-chat') {
-          if (!activeAgent) throw store.fail('本地执行器尚未启用，请用 serve --agent 启动服务后再更新。',503);
-          value = await connections.createSourceUpdate(id,{connectionId:data.connectionId,continuous:data.continuous === true,until:data.until});
-        }
-        else if(group === 'tasks' && action === 'cancel') { value = await store.setTaskStatus(id,'cancelled'); if (activeTaskId === id) activeController?.abort('cancelled'); }
-        else if(group === 'tasks' && action === 'complete') value = await store.completeTask(id,data.output);
-        else throw store.fail('接口不存在',404);
-      } else throw store.fail('不支持的请求',405);
-      send(200,value);
-      if(req.method === 'POST') void sync.run();
-    } catch(e) { if(res.headersSent)res.destroy(e);else send(e.status || 500,{error:e.message}); }
-    finally { if (mutating) mutations--; }
+
+  // ---- Start and shutdown ----
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', resolve);
   });
-  async function tick() {
-    if(busy || closed || checkingStop || executorCheckPromise || !activeAgent) return;
-    busy = true; let task, claimed = false, cancellation;
+  if (managed) {
     try {
-      task = (await store.listTasks()).filter(t=>t.status === 'pending').at(-1);
-      if(!task) {await materialWorker.tick();return;}
-      await store.setTaskStatus(task.id,'running');
-      claimed = true;
-      activeTaskId = task.id;
-      activeController = new AbortController();
-      if (closed) { await store.setTaskStatus(task.id,'failed','本地服务已停止，当前内容保留；可重新发起任务。'); return; }
-      lastError = null;
-      const controller = activeController;
-      // A CLI or another local panel may cancel this task too.
-      cancellation = setInterval(async () => {
-        try { if ((await store.getTask(task.id)).status !== 'running') controller.abort('cancelled'); }
-        catch { controller.abort('cancelled'); }
-      }, 250);
-      const prompt = await store.taskPrompt(task.id);
-      if(runner?.snapshot().status === 'unavailable') await runner.check();
-      const runs = [];
-      const run = async request => {
-        if (controller.signal.aborted) throw store.fail('任务已取消，当前内容保留。',409);
-        const current = await store.taskPrompt(task.id); // Re-check edits and connection before each model call.
-        if (current.status !== 'running') throw store.fail('任务已取消，当前内容保留。',409);
-        const result = execute ? await execute(request) : await runner.run(request, { directory: path.join(store.homeDir(),'runs',task.id), signal: controller.signal });
-        if (result?.execution) {
-          runs.push(result.execution);
-          await saveExecution(task.id, runs.length === 1 ? result.execution : {...result.execution,calls:runs.length,runs:[...runs],elapsedMs:runs.reduce((sum,item)=>sum+(item.elapsedMs||0),0),toolCallCount:runs.reduce((sum,item)=>sum+(item.toolCallCount||0),0)});
-        }
-        return result;
-      };
-      let summary = '';
-      for (const chunk of prompt.historyChunks || []) {
-        const request = prepareImport(await store.getTopic(task.topicId),chunk,summary);
-        const part = await run({...prompt,...request,historyChunks:undefined});
-        summary = parseImportSummary(typeof part === 'string' ? part : part.output);
-      }
-      const result = await run({...prompt,...(prompt.historyChunks ? {user:redrawSummaryInput(summary)} : {}),historyChunks:undefined});
-      const output = typeof result === 'string' ? result : result.output;
-      if(!closed) await store.completeTask(task.id,output);
-    } catch(e) {
-      lastError = { message: e.message, code: e.code || null, at: new Date().toISOString() };
-      if(claimed) {
-        if(e.execution) await saveExecution(task.id,e.execution).catch(()=>{});
-        await store.setTaskStatus(task.id,'failed',e.message).catch(()=>{});
+      recordStop = await recordServiceStart({
+        url: `http://127.0.0.1:${server.address().port}`,
+        runtime: runtime(),
+      });
+    } catch (error) {
+      await new Promise(resolve => server.close(resolve));
+      throw error;
+    }
+  }
+  timer = setInterval(() => {
+    if (closed || tickPromise) return;
+    tickPromise = tick()
+      .catch(backgroundFailure)
+      .finally(() => {
+        tickPromise = null;
+      });
+  }, TICK_INTERVAL_MS);
+  sync.start();
+
+  function stopExecution() {
+    executionClosePromise ||= drainExecution();
+    return executionClosePromise;
+  }
+
+  async function drainExecution() {
+    closed = true;
+    clearInterval(timer);
+    activeController?.abort('shutdown');
+    const interrupted = [activeTaskId, ...nodeJobs.keys()].filter(Boolean);
+    const nodePromises = [...nodeJobs.values()].map(job => {
+      job.controller.abort('shutdown');
+      return job.promise;
+    });
+    // Start material cancellation before waiting: tick may be awaiting its
+    // independent controller. Drain the whole tick, including atomic writes.
+    const materialClose = materialWorker.close();
+    const outcomes = await Promise.allSettled([
+      tickPromise,
+      materialClose,
+      executorCheckPromise,
+      discoveryPromise,
+      ...nodePromises,
+      Promise.resolve()
+        .then(() => account.close())
+        .finally(() => sync.close()),
+    ]);
+    if (runner) await runner.waitForIdle();
+    for (const taskId of interrupted) {
+      if ((await store.getTask(taskId)).status === 'running')
+        await store.setTaskStatus(taskId, 'failed', STOPPED_TASK_MESSAGE);
+    }
+    const rejected = outcomes.find(outcome => outcome.status === 'rejected');
+    if (rejected) throw rejected.reason;
+  }
+
+  async function shutdown(reason) {
+    closed = true;
+    const steps = [
+      () => stopExecution(),
+      () => recordStop?.(reason),
+      () =>
+        new Promise((resolve, reject) =>
+          server.close(error => (error ? reject(error) : resolve())),
+        ),
+      () => releaseLease?.(),
+    ];
+    const errors = [];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch (error) {
+        errors.push(error);
       }
     }
-    finally { clearInterval(cancellation); activeTaskId = null; activeController = null; busy = false; }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length)
+      throw new AggregateError(errors, errors.map(error => error.message).join('; '));
   }
-  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
-  let recordStop;
-  if (managed) {
-    try { recordStop = await recordServiceStart({url:`http://127.0.0.1:${server.address().port}`,runtime:runtime()}); }
-    catch (error) { await new Promise(resolve=>server.close(resolve)); throw error; }
-  }
-  const timer = setInterval(()=>{
-    if(closed || tickPromise)return;
-    tickPromise=tick().catch(backgroundFailure).finally(()=>{tickPromise=null;});
-  },800);
-  sync.start();
-  function stopExecution() {
-    return executionClosePromise ||= (async()=>{
-      closed=true;clearInterval(timer);activeController?.abort('shutdown');
-      const interruptedTask=activeTaskId;
-      // Start material cancellation before waiting: tick may be awaiting its
-      // independent controller. Drain the whole tick, including atomic writes.
-      const materialClose=materialWorker.close();
-      const outcomes=await Promise.allSettled([tickPromise,materialClose,
-        Promise.resolve().then(()=>account.close()).finally(()=>sync.close())]);
-      if (runner) await runner.waitForIdle();
-      if (interruptedTask && (await store.getTask(interruptedTask)).status==='running') {
-        await store.setTaskStatus(interruptedTask,'failed','本地服务已停止，当前内容保留；可重新发起任务。');
-      }
-      const rejected=outcomes.find(result=>result.status==='rejected');
-      if(rejected)throw rejected.reason;
-    })();
-  }
+
   server.runtime = runtime;
   server.sync = sync;
-  server.shutdown = (reason = 'shutdown') => shutdownPromise ||= (async () => {
-    closed = true;
-    const errors=[];
-    for(const cleanup of [()=>stopExecution(),()=>recordStop?.(reason),
-      ()=>new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve())),()=>releaseLease?.()]) {
-      try {await cleanup();} catch(error){errors.push(error);}
-    }
-    if(errors.length)throw errors.length===1?errors[0]:new AggregateError(errors,errors.map(error=>error.message).join('; '));
-  })();
-  server.on('close',()=>{void stopExecution().catch(backgroundFailure);});
+  server.shutdown = (reason = 'shutdown') => {
+    shutdownPromise ||= shutdown(reason);
+    return shutdownPromise;
+  };
+  server.on('close', () => {
+    void stopExecution().catch(backgroundFailure);
+  });
   initialized = true;
+  if (activeAgent && !execute) {
+    preparingInitial = true;
+    executorCheckAgent = activeAgent;
+    executorCheckPromise = prepareInitialExecutor().finally(() => {
+      preparingInitial = false;
+      executorCheckPromise = null;
+      executorCheckAgent = null;
+    });
+    if (!managed) await executorCheckPromise;
+  }
   return server;
-  } catch (error) { await releaseLease?.(); throw error; }
 }

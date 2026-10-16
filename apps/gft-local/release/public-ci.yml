@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
@@ -75,4 +75,4 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
-          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "GFT Map $RELEASE_TAG" --notes "本地主题记忆 Skill。下载并解压完整 gft-map 目录；需要 Node.js 20 或更高版本。安装和使用说明见 README。"
+          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "GFT Map $RELEASE_TAG" --notes "本地主题记忆 Skill。下载并解压完整 gft-map 目录；需要 Node.js 22 或更高版本。安装和使用说明见 README。"

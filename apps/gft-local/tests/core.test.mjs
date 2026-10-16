@@ -1,8 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLedger, viewTopic, editDocument, editGraph, prepareTask, applyTask } from '../dist/core.mjs';
+import {
+  createLedger,
+  viewTopic,
+  editDocument,
+  editGraph,
+  prepareTask,
+  applyTask,
+} from '../dist/core.mjs';
 
-const blank = () => ({ id: 'test-topic', name: '离线合成案例', scope: '仅记录产品取舍', revision: 1, updatedAt: '2026-01-01T00:00:00Z', ledger: createLedger('仅记录产品取舍'), raw: '' });
+const blank = () => ({
+  id: 'test-topic',
+  name: '离线合成案例',
+  scope: '仅记录产品取舍',
+  revision: 1,
+  updatedAt: '2026-01-01T00:00:00Z',
+  ledger: createLedger('仅记录产品取舍'),
+  raw: '',
+});
 const advance = (topic, result) => ({ ...topic, ...result, revision: topic.revision + 1 });
 const output = `<doc>
 ## 方向
@@ -24,24 +39,38 @@ const output = `<doc>
 const seeded = () => {
   const topic = blank();
   const ledger = `${topic.ledger}\n[场次 2026-01-01T00:00:00Z · local-agent]\n◆ j2 [方向] 保留本地编辑\n材料归用户持有，修改应立即在本地可见。\n◇ j3 [方向] 文件可能更简单\n文件无需额外账户，但仍需验证并发保存。\n？ j4 [方向] 如何避免覆盖\n不同窗口同时编辑时的取舍尚未确定。\n✗ j5 [方向] 不再等待网络\n等待网络往返造成编辑迟滞，所以取消该方案。\n⏸ j6 [方向] 暂缓跨端同步\n先完成单机编辑，后续再评估同步。\n← j3 j2\n← j4 j3`;
-  return advance(topic, {ledger, raw: ledger});
+  return advance(topic, { ledger, raw: ledger });
 };
 
-test('首次图文同时命名：默认名称才请求，手改不覆盖，无内容和坏名称不命名',()=>{
-  const topic={...blank(),name:'新脉络'};
-  assert.match(prepareTask(topic,'update','合成材料').system,/<map-name>/);
-  const result=applyTask(topic,'update',output+'\n<map-name>本地协作</map-name>');
-  assert.equal(result.name,'本地协作');assert.doesNotMatch(result.ledger,/map-name/);
-  assert.doesNotMatch(prepareTask(blank(),'update','合成材料').system,/<map-name>/);
-  assert.equal(applyTask(blank(),'update',output+'\n<map-name>别名</map-name>').name,undefined);
-  assert.equal(applyTask(topic,'update','<noop/>\n<map-name>没有内容</map-name>').name,undefined);
-  assert.equal(applyTask(topic,'update',output+'\n<map-name>'+ '过长'.repeat(12)+'</map-name>').name,undefined);
-  assert.throws(()=>applyTask(topic,'update','<map-name>只有名称</map-name>'));
+test('首次图文同时命名：默认名称才请求，手改不覆盖，无内容和坏名称不命名', () => {
+  const topic = { ...blank(), name: '新脉络' };
+  assert.match(prepareTask(topic, 'update', '合成材料').system, /<map-name>/);
+  const result = applyTask(topic, 'update', output + '\n<map-name>本地协作</map-name>');
+  assert.equal(result.name, '本地协作');
+  assert.doesNotMatch(result.ledger, /map-name/);
+  assert.doesNotMatch(prepareTask(blank(), 'update', '合成材料').system, /<map-name>/);
+  assert.equal(
+    applyTask(blank(), 'update', output + '\n<map-name>别名</map-name>').name,
+    undefined,
+  );
+  assert.equal(
+    applyTask(topic, 'update', '<noop/>\n<map-name>没有内容</map-name>').name,
+    undefined,
+  );
+  assert.equal(
+    applyTask(topic, 'update', output + '\n<map-name>' + '过长'.repeat(12) + '</map-name>').name,
+    undefined,
+  );
+  assert.throws(() => applyTask(topic, 'update', '<map-name>只有名称</map-name>'));
 });
 
 test('五档状态、正文与真实承接从同一本账派生，正常视图不暴露原始账', () => {
-  const topic = seeded(), view = viewTopic(topic);
-  assert.deepEqual(view.graph.nodes.map(node => node.mark), ['◆', '◇', '？', '✗', '⏸']);
+  const topic = seeded(),
+    view = viewTopic(topic);
+  assert.deepEqual(
+    view.graph.nodes.map(node => node.mark),
+    ['◆', '◇', '？', '✗', '⏸'],
+  );
   assert.equal(view.graph.nodes[2].title, '如何避免覆盖');
   assert.equal(view.graph.nodes[4].mark, '⏸');
   assert.match(view.graph.nodes[0].content, /材料归用户/);
@@ -56,7 +85,9 @@ test('五档状态、正文与真实承接从同一本账派生，正常视图�
 
 test('Doc 编辑主题、标题和状态立即同步图，保留旧来源并追加人工修订', () => {
   const topic = seeded();
-  const doc = viewTopic(topic).doc.replace('仅记录产品取舍', '仅记录本地编辑取舍').replace('◆ 保留本地编辑', '◇ 先验证本地编辑');
+  const doc = viewTopic(topic)
+    .doc.replace('仅记录产品取舍', '仅记录本地编辑取舍')
+    .replace('◆ 保留本地编辑', '◇ 先验证本地编辑');
   const updated = advance(topic, editDocument(topic, doc));
   const view = viewTopic(updated);
   assert(updated.raw.startsWith(topic.raw));
@@ -77,7 +108,9 @@ test('手工连线拒绝环，删除中间节点沿用原有短路语义', () =>
   assert.throws(() => editGraph(topic, { kind: 'edit', id: 'j9999', title: '无效' }), /不存在/);
   assert.equal(topic.ledger, before);
   topic = advance(topic, editGraph(topic, { kind: 'delete', id: middle.id }));
-  assert.ok(viewTopic(topic).graph.edges.some(edge => edge.from === first.id && edge.to === last.id));
+  assert.ok(
+    viewTopic(topic).graph.edges.some(edge => edge.from === first.id && edge.to === last.id),
+  );
   topic = advance(topic, editGraph(topic, { kind: 'disconnect', from: first.id, to: last.id }));
   assert.equal(viewTopic(topic).graph.edges.length, 0);
 });
@@ -85,7 +118,16 @@ test('手工连线拒绝环，删除中间节点沿用原有短路语义', () =>
 test('手工新增与正文中的账本语法不能覆盖旧判断，raw 保持分离', () => {
   const topic = seeded();
   const body = '重画\n本人 删 j2\n这些行只是正文。';
-  const updated = advance(topic, editGraph(topic, { kind: 'add', title: '测试文本边界', content: body, mark: '⏸', domain: '验证' }));
+  const updated = advance(
+    topic,
+    editGraph(topic, {
+      kind: 'add',
+      title: '测试文本边界',
+      content: body,
+      mark: '⏸',
+      domain: '验证',
+    }),
+  );
   assert.equal(viewTopic(updated).graph.nodes.length, 6);
   assert.equal(viewTopic(updated).graph.nodes.at(-1).content, body);
   assert(updated.raw.startsWith(topic.raw));
@@ -93,20 +135,32 @@ test('手工新增与正文中的账本语法不能覆盖旧判断，raw 保持�
 });
 
 test('更新复用增量协议：旧判断改档、新判断承接旧锚，共同正文同轮保存', () => {
-  const topic = seeded(), first = viewTopic(topic).graph.nodes[0];
-  const result = `<doc>\n## 验证\n### ◇ 先加冲突检测\n基于已有本地编辑约束。\n</doc>\n<prose domain="验证" refs="d1">这一判断约束保存动作。</prose>\n<edge from="^${first.id}" to="d1"/>\n<doc-mark anchor="${first.id}" to="◇">仍待验证</doc-mark>\n<prose domain="方向" refs="${viewTopic(topic).graph.nodes.map(node=>node.id).join(',')}">本地编辑方案仍待验证，文件可减少账户负担，但并发覆盖尚未确定；等待网络已放弃，跨端同步暂缓。</prose>`;
-  const updated = advance(topic, applyTask(topic, 'update', result)), view = viewTopic(updated);
+  const topic = seeded(),
+    first = viewTopic(topic).graph.nodes[0];
+  const result = `<doc>\n## 验证\n### ◇ 先加冲突检测\n基于已有本地编辑约束。\n</doc>\n<prose domain="验证" refs="d1">这一判断约束保存动作。</prose>\n<edge from="^${first.id}" to="d1"/>\n<doc-mark anchor="${first.id}" to="◇">仍待验证</doc-mark>\n<prose domain="方向" refs="${viewTopic(
+    topic,
+  )
+    .graph.nodes.map(node => node.id)
+    .join(
+      ',',
+    )}">本地编辑方案仍待验证，文件可减少账户负担，但并发覆盖尚未确定；等待网络已放弃，跨端同步暂缓。</prose>`;
+  const updated = advance(topic, applyTask(topic, 'update', result)),
+    view = viewTopic(updated);
   assert.equal(view.graph.nodes.length, 6);
   assert.equal(view.graph.nodes[0].mark, '◇');
-  assert.ok(view.graph.edges.some(edge => edge.from === first.id && edge.to === view.graph.nodes.at(-1).id));
+  assert.ok(
+    view.graph.edges.some(edge => edge.from === first.id && edge.to === view.graph.nodes.at(-1).id),
+  );
   assert.match(view.doc, /这一判断约束保存动作/);
   assert.ok(updated.raw.startsWith(topic.raw));
 });
 
 test('整理回放执行真实 merge/revise/prose 协议并保留外部承接与暂缓状态', () => {
   const topic = seeded();
-  const reply = '<prose domain="主题">记录产品取舍和制作过程</prose>\n<merge members="n1,n2" title="先验证本地文件" body="本地保存先行，仍需验证文件方案。"/>\n<revise id="n5" title="跨端同步暂缓"/>\n<prose domain="方向" refs="n1,n2,n3,n4,n5">先完成本地闭环，再解决并发覆盖问题；跨端仍暂缓。</prose>';
-  const updated = advance(topic, applyTask(topic, 'tidy', reply)), view = viewTopic(updated);
+  const reply =
+    '<prose domain="主题">记录产品取舍和制作过程</prose>\n<merge members="n1,n2" title="先验证本地文件" body="本地保存先行，仍需验证文件方案。"/>\n<revise id="n5" title="跨端同步暂缓"/>\n<prose domain="方向" refs="n1,n2,n3,n4,n5">先完成本地闭环，再解决并发覆盖问题；跨端仍暂缓。</prose>';
+  const updated = advance(topic, applyTask(topic, 'tidy', reply)),
+    view = viewTopic(updated);
   assert.equal(view.scope, '仅记录产品取舍');
   assert.equal(view.graph.nodes.length, 4);
   const merged = view.graph.nodes.find(node => node.title === '先验证本地文件');
@@ -121,9 +175,13 @@ test('整理回放执行真实 merge/revise/prose 协议并保留外部承接与
 test('重画回放使用 Log 来源锚并继承原承接，旧工作内容退休、raw 不变', () => {
   let topic = seeded();
   const originals = viewTopic(topic).graph.nodes;
-  topic = advance(topic, editGraph(topic, { kind: 'edit', id: originals[0].id, title: '临时手改标题' }));
+  topic = advance(
+    topic,
+    editGraph(topic, { kind: 'edit', id: originals[0].id, title: '临时手改标题' }),
+  );
   const reply = `<doc>\n## 主线\n先完成本地闭环，再验证存储和覆盖。\n## 本地闭环\n${originals.map(node => `### ${node.mark} ${node.title} ^${node.id}\n${node.content}`).join('\n')}\n</doc>\n<prose domain="本地闭环" refs="d1,d2,d3,d4,d5">材料归用户持有，本地修改要立即可见。文件方案可减少账户负担，但并发覆盖仍未解决；等待网络已放弃，跨端同步暂缓，先完成单机编辑验证。</prose>`;
-  const updated = advance(topic, applyTask(topic, 'redraw', reply)), view = viewTopic(updated);
+  const updated = advance(topic, applyTask(topic, 'redraw', reply)),
+    view = viewTopic(updated);
   assert.equal(updated.raw, topic.raw);
   assert.equal(view.graph.nodes.length, 5);
   assert.equal(view.graph.edges.length, 2);
@@ -135,19 +193,26 @@ test('重画回放使用 Log 来源锚并继承原承接，旧工作内容退休
 });
 
 test('整理仅返回已有主题改写时无损完成，不掩盖混合响应中的无效操作', () => {
-  const topic = seeded(), before = JSON.stringify(topic);
+  const topic = seeded(),
+    before = JSON.stringify(topic);
   const proposal = '<prose domain="主题">记录产品取舍和制作过程</prose>';
   assert.deepEqual(applyTask(topic, 'tidy', proposal), { ledger: topic.ledger, raw: topic.raw });
   for (const invalid of [
     '<revise id="n999" title="不存在"/>',
     '<prose domain="方向" refs="n1">未完成',
     '<doc>未完成',
-  ]) assert.throws(() => applyTask(topic, 'tidy', `${proposal}\n${invalid}`));
+  ])
+    assert.throws(() => applyTask(topic, 'tidy', `${proposal}\n${invalid}`));
   assert.equal(JSON.stringify(topic), before);
 });
 
 test('无主题脉络可通过整理初始化收录范围，不改变已有判断或来源', () => {
-  const topic = { ...blank(), scope: '', ledger: '◆ j1 [验证] 先验证小样\n只有一周，先用小样验证。', raw: '' };
+  const topic = {
+    ...blank(),
+    scope: '',
+    ledger: '◆ j1 [验证] 先验证小样\n只有一周，先用小样验证。',
+    raw: '',
+  };
   const before = viewTopic(topic);
   const theme = '只记录验证路径，不收录写稿流程。';
   const updated = advance(topic, applyTask(topic, 'tidy', `<prose domain="主题">${theme}</prose>`));
@@ -159,8 +224,14 @@ test('无主题脉络可通过整理初始化收录范围，不改变已有判�
 
 test('整理迁出历史主题章中的判断，仍逐字保留收录范围', () => {
   const theme = '只记录验证路径，不收录写稿流程。';
-  const topic = { ...blank(), scope: theme, ledger: `走向 p1 [主题]\n${theme}\n◆ j2 [主题] 先验证小样\n只有一周，先用小样验证。`, raw: '' };
-  const reply = '<revise id="n1" domain="验证"/>\n<prose domain="验证" refs="n1">只有一周，因此先用小样验证。</prose>';
+  const topic = {
+    ...blank(),
+    scope: theme,
+    ledger: `走向 p1 [主题]\n${theme}\n◆ j2 [主题] 先验证小样\n只有一周，先用小样验证。`,
+    raw: '',
+  };
+  const reply =
+    '<revise id="n1" domain="验证"/>\n<prose domain="验证" refs="n1">只有一周，因此先用小样验证。</prose>';
   const updated = advance(topic, applyTask(topic, 'tidy', reply));
   const view = viewTopic(updated);
   assert.equal(view.scope, theme);
@@ -175,7 +246,10 @@ test('整理迁出历史主题章中的判断，仍逐字保留收录范围', ()
 test('准备任务复用完整规则，整理和重画读取原始资料，主题过滤不保留无关散文', () => {
   let topic = seeded();
   const first = viewTopic(topic).graph.nodes[0];
-  topic = advance(topic, editGraph(topic, { kind: 'edit', id: first.id, content: '手改后的短正文' }));
+  topic = advance(
+    topic,
+    editGraph(topic, { kind: 'edit', id: first.id, content: '手改后的短正文' }),
+  );
   const update = prepareTask(topic, 'update', '新增笔记');
   const tidy = prepareTask(topic, 'tidy');
   const redraw = prepareTask(topic, 'redraw');
@@ -184,12 +258,20 @@ test('准备任务复用完整规则，整理和重画读取原始资料，主�
   assert.match(tidy.user, /材料归用户持有/);
   assert.match(redraw.user, /材料归用户持有/);
   assert.match(redraw.user, /手改后的短正文/);
-  for (const request of [update, tidy, redraw]) assert.match(request.system, /不把闲聊保留成无关散文/);
+  for (const request of [update, tidy, redraw])
+    assert.match(request.system, /不把闲聊保留成无关散文/);
 });
 
 test('空、无效或未完成响应失败且原对象保持不变，明确 noop 可无损完成', () => {
-  const topic = seeded(), before = JSON.stringify(topic);
-  for (const [action, reply] of [['update', ''], ['update', '<node title="旧格式"/>'], ['redraw', '<doc>\n## 主题\n只有主题没有结果\n</doc>'], ['redraw', '<doc>\n## 方向\n### ◆ 未完成'], ['tidy', '<revise id="n999" title="不存在"/>']]) {
+  const topic = seeded(),
+    before = JSON.stringify(topic);
+  for (const [action, reply] of [
+    ['update', ''],
+    ['update', '<node title="旧格式"/>'],
+    ['redraw', '<doc>\n## 主题\n只有主题没有结果\n</doc>'],
+    ['redraw', '<doc>\n## 方向\n### ◆ 未完成'],
+    ['tidy', '<revise id="n999" title="不存在"/>'],
+  ]) {
     assert.throws(() => applyTask(topic, action, reply));
     assert.equal(JSON.stringify(topic), before);
   }
@@ -199,11 +281,22 @@ test('空、无效或未完成响应失败且原对象保持不变，明确 noop
 });
 
 test('同一判断原位补充：身份和连线保留，章节一起保存，来源不变', () => {
-  const topic = seeded(), before = viewTopic(topic);
-  const updated = advance(topic, applyTask(topic, 'update', `<doc-revise anchor="j2" title="本地修改立即可见">材料仍归用户持有；离线编辑立即可见，联网后再同步。</doc-revise>
-<prose domain="方向" refs="j2,j3,j4,j5,j6">本地修改立即可见，离线保存后再同步。文件更简单但并发覆盖尚待验证，因此停止等待网络，暂缓跨端同步。</prose>`));
+  const topic = seeded(),
+    before = viewTopic(topic);
+  const updated = advance(
+    topic,
+    applyTask(
+      topic,
+      'update',
+      `<doc-revise anchor="j2" title="本地修改立即可见">材料仍归用户持有；离线编辑立即可见，联网后再同步。</doc-revise>
+<prose domain="方向" refs="j2,j3,j4,j5,j6">本地修改立即可见，离线保存后再同步。文件更简单但并发覆盖尚待验证，因此停止等待网络，暂缓跨端同步。</prose>`,
+    ),
+  );
   const after = viewTopic(updated);
-  assert.deepEqual(after.graph.nodes.map(n => n.id), before.graph.nodes.map(n => n.id));
+  assert.deepEqual(
+    after.graph.nodes.map(n => n.id),
+    before.graph.nodes.map(n => n.id),
+  );
   assert.deepEqual(after.graph.edges, before.graph.edges);
   assert.equal(after.graph.nodes[0].title, '本地修改立即可见');
   assert.match(after.graph.nodes[0].content, /联网后再同步/);
@@ -214,7 +307,8 @@ test('同一判断原位补充：身份和连线保留，章节一起保存，�
 });
 
 test('节点原位修订坏输出整批拒绝，不能只保存其章节', () => {
-  const topic = seeded(), original = topic.ledger;
+  const topic = seeded(),
+    original = topic.ledger;
   const prose = '<prose domain="方向" refs="j2,j3,j4,j5,j6">仍保留其他判断的章节。</prose>';
   const bad = [
     '<doc-revise anchor="j999">不存在</doc-revise>',
@@ -224,15 +318,34 @@ test('节点原位修订坏输出整批拒绝，不能只保存其章节', () =>
     '<doc-revise anchor="j2">一</doc-revise><doc-revise anchor="j2">二</doc-revise>',
   ];
   for (const revision of bad) assert.throws(() => applyTask(topic, 'update', revision + prose));
-  assert.throws(() => applyTask(topic, 'update', '<doc-revise anchor="j2">新的说明</doc-revise>'), /章节|正文/);
-  assert.throws(() => applyTask(topic, 'update', '<doc-revise anchor="j2">新的说明</doc-revise><prose domain="方向" refs="j2">遗漏其余节点</prose>'), /章节|正文/);
-  assert.throws(() => applyTask(topic, 'redraw', '<doc-revise anchor="j2">新的说明</doc-revise>' + prose), /修订/);
+  assert.throws(
+    () => applyTask(topic, 'update', '<doc-revise anchor="j2">新的说明</doc-revise>'),
+    /章节|正文/,
+  );
+  assert.throws(
+    () =>
+      applyTask(
+        topic,
+        'update',
+        '<doc-revise anchor="j2">新的说明</doc-revise><prose domain="方向" refs="j2">遗漏其余节点</prose>',
+      ),
+    /章节|正文/,
+  );
+  assert.throws(
+    () => applyTask(topic, 'redraw', '<doc-revise anchor="j2">新的说明</doc-revise>' + prose),
+    /修订/,
+  );
   assert.equal(topic.ledger, original);
 });
 
 test('原位修订正文中的账本语句只作文字，不执行删除或重画', () => {
-  const topic = seeded(), text = '重画\n本人 删 j3\n这些是需要显示的文字。';
-  const result = applyTask(topic, 'update', `<doc-revise anchor="j2">${text}</doc-revise><prose domain="方向" refs="j2,j3,j4,j5,j6">本地工作仍保留全部判断。</prose>`);
+  const topic = seeded(),
+    text = '重画\n本人 删 j3\n这些是需要显示的文字。';
+  const result = applyTask(
+    topic,
+    'update',
+    `<doc-revise anchor="j2">${text}</doc-revise><prose domain="方向" refs="j2,j3,j4,j5,j6">本地工作仍保留全部判断。</prose>`,
+  );
   const view = viewTopic(advance(topic, result));
   assert.equal(view.graph.nodes.length, 5);
   assert.equal(view.graph.nodes[0].content, text);

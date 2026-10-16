@@ -1,16 +1,19 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { homeDir } from './store.mjs';
+import { fail, homeDir, writeJsonAtomic } from './store.mjs';
 
-const agents = new Set(['codex', 'codex-acp', 'claude-acp']);
+const agents = new Set(['codex', 'claude', 'codex-acp', 'claude-acp']);
 const file = () => path.join(homeDir(), 'executor.json');
 
 function options(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result = {};
   if (typeof value.binary === 'string' && value.binary) result.binary = value.binary;
-  if (Array.isArray(value.prefixArgs) && value.prefixArgs.every(item => typeof item === 'string' && !item.includes('\0'))) result.prefixArgs = [...value.prefixArgs];
+  if (
+    Array.isArray(value.prefixArgs) &&
+    value.prefixArgs.every(item => typeof item === 'string' && !item.includes('\0'))
+  )
+    result.prefixArgs = [...value.prefixArgs];
   if (typeof value.model === 'string' && value.model) result.model = value.model;
   if (Number.isFinite(value.timeoutMs) && value.timeoutMs > 0) result.timeoutMs = value.timeoutMs;
   return result;
@@ -18,30 +21,75 @@ function options(value) {
 
 function valid(value) {
   if (!value || typeof value !== 'object' || !agents.has(value.agent)) return null;
-  return { agent: value.agent, runnerOptions: options(value.runnerOptions), updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : undefined };
+  const profiles = Object.fromEntries(
+    [...agents]
+      .filter(agent => value.profiles?.[agent])
+      .map(agent => [agent, options(value.profiles[agent])]),
+  );
+  return {
+    agent: value.agent,
+    runnerOptions: options(value.runnerOptions),
+    profiles,
+    updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : undefined,
+  };
 }
 
 export async function loadExecutorConfig() {
-  try { return valid(JSON.parse(await readFile(file(), 'utf8'))); }
-  catch (error) { if (error.code === 'ENOENT') return null; return null; }
+  try {
+    return valid(JSON.parse(await readFile(file(), 'utf8')));
+  } catch {
+    return null;
+  }
 }
 
+/** Saves the chosen executor and remembers each executor's options for later switches. */
 export async function saveExecutorConfig({ agent, runnerOptions } = {}) {
   if (!agents.has(agent)) throw new Error('执行器配置无效');
-  const target = file();
-  await mkdir(path.dirname(target), { recursive: true });
-  const temporary = `${target}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, JSON.stringify({ agent, runnerOptions: options(runnerOptions), updatedAt: new Date().toISOString() }, null, 2), 'utf8');
-    for (let attempt = 0; ; attempt++) {
-      try { await rename(temporary, target); break; }
-      catch (error) {
-        if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 19) throw error;
-        await new Promise(resolve => setTimeout(resolve, 25));
-      }
-    }
-  } finally { await unlink(temporary).catch(() => {}); }
+  const previous = await loadExecutorConfig();
+  const profiles = {
+    ...previous?.profiles,
+    ...(previous ? { [previous.agent]: previous.runnerOptions } : {}),
+    [agent]: options(runnerOptions),
+  };
+  await writeJsonAtomic(file(), {
+    agent,
+    runnerOptions: options(runnerOptions),
+    profiles,
+    updatedAt: new Date().toISOString(),
+  });
   return loadExecutorConfig();
 }
 
+const acpPrefix = agent => (agent === 'claude-acp' ? 'GFT_CLAUDE_ACP' : 'GFT_CODEX_ACP');
+
+/** ACP adapter executable from GFT_CODEX_ACP_BIN / GFT_CLAUDE_ACP_BIN. */
+export const acpBinary = agent => process.env[`${acpPrefix(agent)}_BIN`];
+
+/** ACP adapter arguments from GFT_CODEX_ACP_ARGS / GFT_CLAUDE_ACP_ARGS (a JSON array). */
+export function acpArguments(agent) {
+  const name = `${acpPrefix(agent)}_ARGS`;
+  if (!process.env[name]) return undefined;
+  try {
+    return JSON.parse(process.env[name]);
+  } catch {
+    throw fail(`${name} 必须是 JSON 字符串数组`);
+  }
+}
+
 export { agents };
+
+/** Old selections keep their provider, discard model overrides, and never reuse a CLI binary as ACP. */
+export function defaultExecutor(saved) {
+  const agent = saved?.agent?.endsWith('-acp') ? saved.agent : `${saved?.agent || 'codex'}-acp`;
+  const { model: _oldModel, ...sameOptions } = saved?.runnerOptions || {};
+  if (saved?.agent === agent) return { agent, runnerOptions: sameOptions };
+  const { timeoutMs } = saved?.runnerOptions || {};
+  const { model: _oldProfileModel, ...profile } = saved?.profiles?.[agent] || {};
+  return {
+    agent,
+    runnerOptions: {
+      ...(timeoutMs ? { timeoutMs } : {}),
+      ...profile,
+    },
+  };
+}

@@ -229,6 +229,19 @@ export function validTidyRelation(op: Extract<TidyAiOp, { from: string }>, items
   return quote.length >= 8 && [sourceDoc, ...items.map(j => j.body)].some(text => oneLine(text).includes(quote));
 }
 
+/** One tidy model call: the prompt to send and the parser for its answer. */
+export function tidyCall(input: TidyInput) {
+  const request = buildTidyRequest(input);
+  const evidence = [input.sourceDoc ?? '', ...input.prose.map(prose => prose.text)].join('\n\n');
+  const scope = input.scopeIds === undefined ? undefined : new Set(input.scopeIds);
+  return {
+    system: request.systemPrompt,
+    user: request.text,
+    parse: (raw: string) =>
+      parseTidyOps(raw, request.alias, input.judgments, new Set(input.prose.map(prose => prose.domain)), evidence, scope, input.prose.map(prose => prose.text).join('\n'), { requireChapterDoc: true }),
+  };
+}
+
 /** 与实际模型入口共用，离线回放可以核验完整输入而无需外发。 */
 export function buildTidyRequest(input: TidyInput) {
   const serialized = serialize(input);

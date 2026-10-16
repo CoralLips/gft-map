@@ -1,0 +1,8 @@
+node_modules/
+dist/
+site-dist/
+.data/
+release/gft-local/
+release/gft-map/
+prototypes/
+showcase/assets/
