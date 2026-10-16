@@ -133,6 +133,9 @@ export interface GenerateLike {
   docRevisions?: Array<{ anchor: string; title?: string; body: string }>;
 }
 
+/** 可反馈给模型修正的章节结构错误；不包含执行器或存储错误。 */
+export class ChapterCoverageError extends Error {}
+
 /** 只用于新 AI 产出；历史账和人工编辑不受生成格式约束。 */
 function assertChapterCoverage(
   entries: Array<{ id: string; domain: string }>,
@@ -142,13 +145,13 @@ function assertChapterCoverage(
 ) {
   const chapters = new Map<string, Set<string>>();
   for (const block of prose) {
-    if (chapters.has(block.domain)) throw new Error(`「${block.domain}」出现重复章节正文，已保留原图文。`);
+    if (chapters.has(block.domain)) throw new ChapterCoverageError(`「${block.domain}」出现重复章节正文，已保留原图文。`);
     const refs = new Set<string>();
-    if (!block.text.trim()) throw new Error(`「${block.domain}」缺少章节正文，已保留原图文。`);
+    if (!block.text.trim()) throw new ChapterCoverageError(`「${block.domain}」缺少章节正文，已保留原图文。`);
     for (const ref of block.refs ?? []) {
       const id = resolve(ref);
       if (!id || !entries.some(j => j.id === id && j.domain === block.domain)) {
-        throw new Error(`「${block.domain}」正文或判断引用无效，已保留原图文。`);
+        throw new ChapterCoverageError(`「${block.domain}」正文或判断引用无效，已保留原图文。`);
       }
       refs.add(id);
     }
@@ -158,7 +161,7 @@ function assertChapterCoverage(
   for (const domain of changed) {
     const chapter = entries.filter(j => j.domain === domain);
     if (chapter.length && (!chapters.has(domain) || chapter.some(j => !chapters.get(domain)!.has(j.id)))) {
-      throw new Error(`「${domain}」缺少覆盖本章全部判断的连贯正文，已保留原图文。请按章节补齐正文及 refs 后重试。`);
+      throw new ChapterCoverageError(`「${domain}」缺少覆盖本章全部判断的连贯正文，已保留原图文。请按章节补齐正文及 refs 后重试。`);
     }
   }
 }

@@ -79,6 +79,49 @@ ${body}
 const validationProse = refs =>
   `<prose domain="验证" refs="${refs}">时间只有一周，先做小样暴露失败条件，再确认样本能否支持下一步判断。</prose>`;
 
+const invalidCrossChapterMerge = '<merge title="先验证再投入" body="先验证范围再决定投入。" members="n1,n3" domain="投入条件"/>' +
+  '<prose domain="投入条件" refs="n1,n3">先限制范围，确认验证结果后再投入。</prose>';
+const correctedChapterMove = '<revise id="n1" domain="投入条件"/><revise id="n3" domain="投入条件"/>' +
+  '<prose domain="投入条件" refs="n1,n3">先限制范围，确认验证结果后再投入。</prose>' + validationProse('n2');
+
+test('结构校验失败只纠错一次：保留跨段判断，修正章节后原子写入', async () => {
+  const original = topic(), before = structuredClone(original);
+  let calls = 0;
+  const result = await core.tidyOperation(original, {}, async request => {
+    assert.deepEqual(original, before, '纠错期间不写入半成品');
+    if (++calls === 1) return invalidCrossChapterMerge;
+    assert.match(request.system, /上一次.*校验/);
+    assert.match(request.system, /正文或判断引用无效/);
+    return correctedChapterMove;
+  });
+  const next = { ...original, ...core.appendOperation(original, result.lines) };
+  const view = core.viewTopic(next);
+  assert.equal(calls, 2);
+  assert.equal(view.graph.nodes.length, 4, '不能放宽合并限制');
+  assert.equal(view.scope, before.scope);
+  assert.match(view.doc, /## 投入条件/);
+  assert.match(view.doc, /先限制范围，确认验证结果后再投入/);
+  assert.equal(next.raw, original.raw);
+});
+
+test('结构纠错仍失败时不无限重试、不写入；执行器错误不触发纠错', async () => {
+  const original = topic(), before = structuredClone(original);
+  let calls = 0;
+  await assert.rejects(core.tidyOperation(original, {}, async () => {
+    calls++;
+    return invalidCrossChapterMerge;
+  }), /正文或判断引用无效/);
+  assert.equal(calls, 2);
+  assert.deepEqual(original, before);
+  calls = 0;
+  await assert.rejects(core.tidyOperation(original, {}, async () => {
+    calls++;
+    throw new Error('executor disconnected');
+  }), /executor disconnected/);
+  assert.equal(calls, 1);
+  assert.deepEqual(original, before);
+});
+
 test('首次生成和重画缺少章节正文时拒绝整次写入，有完整正文才接受', () => {
   const empty = topic(false);
   const doc = newJudgment('目前还没有确定样本数量。');

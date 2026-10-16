@@ -15,7 +15,7 @@ const ledger = `[场次 2026-01-01T00:00:00Z · local-agent · 创建脉络]
 团队扩大会增加排期冲突。
 本人 接 j3 j2`;
 
-async function isolated(execute, run) {
+async function isolated(execute, run, seedLedger = ledger) {
   const home = await mkdtemp(path.join(tmpdir(), 'gft-server-operations-'));
   const previous = process.env.GFT_LOCAL_HOME;
   process.env.GFT_LOCAL_HOME = home;
@@ -40,7 +40,7 @@ async function isolated(execute, run) {
     throw new Error('任务未结束');
   };
   try {
-    const topic = await store.createTopic('服务端操作', '', { ledger, raw: '' });
+    const topic = await store.createTopic('服务端操作', '', { ledger: seedLedger, raw: '' });
     await run({ topic, post, finished });
   } finally {
     await server.shutdown();
@@ -49,6 +49,35 @@ async function isolated(execute, run) {
     await rm(home, { recursive: true, force: true });
   }
 }
+
+test('整理结构纠错期间仍可明确停止，迟到结果不得写入', async () => {
+  let entered, release;
+  const correcting = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  let calls = 0;
+  await isolated(async () => {
+    if (++calls === 1) return '<revise id="n1" domain="新章"/>' +
+      '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>';
+    entered();
+    await gate;
+    return '<revise id="n1" domain="新章"/><revise id="n2" domain="新章"/>' +
+      '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>';
+  }, async ({topic, post, finished}) => {
+    const before = await store.getView(topic.id);
+    const task = await post(`/api/topics/${topic.id}/tasks`, {action: 'tidy', params: {}});
+    try {
+      await Promise.race([correcting, finished(task.id).then(() => {throw new Error('没有进入纠错');})]);
+      assert.deepEqual((await store.getView(topic.id)).graph, before.graph);
+      await post(`/api/tasks/${task.id}/cancel`, {});
+    } finally { release(); }
+    const done = await finished(task.id);
+    assert.equal(done.status, 'cancelled');
+    assert.equal(calls, 2);
+    const after = await store.getView(topic.id);
+    assert.equal(after.doc, before.doc);
+    assert.deepEqual(after.graph, before.graph);
+  });
+});
 
 test('节点整理只改该节点标题与说明，结果按节点核对后写入并留回执', () =>
   isolated(
@@ -210,3 +239,85 @@ test('关系说明只写这条线的说明', () =>
       assert.equal(edge.reason, '约定之外的协调成本');
     },
   ));
+
+// Model iteration policies belong here; panel tests retain visible results and undo coverage.
+test('多轮整理中间轮不落盘，最终结果只提交一次', async () => {
+  let calls = 0;
+  const seed =
+    '[场次 2026-01-01T00:00:00Z · 合成测试]\n走向 p1 [主题]\n仅保留合成判断。\n' +
+    Array.from(
+      { length: 7 },
+      (_, i) => `◇ j${i + 1} [验证] 合成判断${i + 1}\n独立依据${i + 1}`,
+    ).join('\n');
+  await isolated(
+    async task => {
+      calls++;
+      assert.equal(
+        (await store.getTopic(task.topicId)).revision,
+        task.baseRevision,
+        '中间轮不可改变落盘版本',
+      );
+      const refs = [...task.user.matchAll(/^(n\d+) \[/gm)].map(match => match[1]).join(',');
+      return `<merge title="相邻判断合并${calls}" body="保留两条依据。" members="n1,n2"/><prose domain="验证" refs="${refs}">先核对独立依据，本轮合并相邻判断，其余判断继续分别验证。</prose>`;
+    },
+    async ({ topic, post, finished }) => {
+      const before = await store.getTopic(topic.id);
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      const done = await finished(task.id);
+      assert.equal(done.status, 'completed', done.error);
+      assert.ok(calls > 1 && calls <= 3, '有实际合并才继续，且必须有轮次上限');
+      const saved = await store.getTopic(topic.id);
+      assert.equal(saved.revision, before.revision + 1);
+      assert.equal(saved.raw, before.raw);
+      assert.ok((await store.getView(topic.id)).graph.nodes.length < 7);
+    },
+    seed,
+  );
+});
+
+test('无需修改只调用一次，不为缩减节点继续调用或产生保存记录', async () => {
+  let calls = 0;
+  await isolated(
+    async () => {
+      calls++;
+      return '<noop/>';
+    },
+    async ({ topic, post, finished }) => {
+      const before = await store.getView(topic.id);
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      const done = await finished(task.id);
+      assert.equal(done.status, 'completed', done.error);
+      assert.equal(calls, 1);
+      const after = await store.getView(topic.id);
+      assert.deepEqual(after.graph, before.graph);
+      assert.equal(after.doc, before.doc);
+      assert.equal(after.revision, before.revision);
+    },
+  );
+});
+
+test('关系说明过长只补充重试一次，保存完整短句而不截断', async () => {
+  let calls = 0;
+  const expected = 'Compare internal vs market cost.';
+  await isolated(
+    async request => {
+      calls++;
+      const input = JSON.parse(request.user);
+      return `<edge from="${input.from.id}" to="${input.to.id}" reason="${calls === 1 ? 'x'.repeat(33) : expected}"/>`;
+    },
+    async ({ topic, post, finished }) => {
+      const task = await post(`/api/topics/${topic.id}/tasks`, {
+        action: 'relation',
+        params: { from: 'j2', to: 'j3' },
+      });
+      const done = await finished(task.id);
+      assert.equal(done.status, 'completed', done.error);
+      assert.equal(calls, 2);
+      assert.equal(
+        (await store.getView(topic.id)).graph.edges.find(e => e.from === 'j2' && e.to === 'j3')
+          .reason,
+        expected,
+      );
+    },
+  );
+});

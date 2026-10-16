@@ -5,6 +5,7 @@ import {
   parseRelationExplanation,
 } from '../../../src/service/relationExplanation';
 import { createThinkingMapStore } from '../../../src/store/thinkingMap/createStore';
+import { MAP_VIEW_DETACHED } from '../../../src/store/thinkingMap/runtime';
 import type {
   MapComputeContext,
   MapHostSnapshot,
@@ -679,7 +680,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       if (!disposed && receiptSnapshot.topicId === id) publishReceipt({ rollingBack: false });
     }
   }
-  function cancelChatUpdate() {
+  function cancelChatUpdate(detach = false) {
     if (!chatUpdate) return;
     if (connectionSnapshot.topicId === chatUpdate.topicId)
       publishConnections({
@@ -689,7 +690,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
           message: t('正在取消…'),
         },
       });
-    chatUpdate.controller.abort(); // Also cancels the batch task being followed.
+    chatUpdate.controller.abort(detach ? MAP_VIEW_DETACHED : undefined);
   }
   /** Asks for material to type in and runs it as a manual update. */
   async function updateFromTypedInput(id: string, signal?: AbortSignal) {
@@ -725,8 +726,18 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     const current = () =>
       !disposed && chatUpdate === operation && snapshot.currentProjectId === id && !signal.aborted;
     if (!current()) throw abortError();
+    const sourceTitle = connectionSnapshot.connections.find(item => item.id === connectionId)
+      ?.source.title;
     const sourceProgress = () =>
-      t('会话 {current}/{total}', { current: operation.sourceIndex, total: operation.sourceCount });
+      [
+        sourceTitle,
+        t('会话 {current}/{total}', {
+          current: operation.sourceIndex,
+          total: operation.sourceCount,
+        }),
+      ]
+        .filter(Boolean)
+        .join(' · ');
     store.getState().flushDocEdits();
     store.getState().flushDoc();
     await flushPending(id);
@@ -1009,7 +1020,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     },
     async switchProject(id) {
       if (snapshot.currentProjectId === id) return;
-      cancelChatUpdate();
+      cancelChatUpdate(true);
       chatUpdate = null;
       connectionEpoch++;
       receiptEpoch++;
@@ -1193,7 +1204,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   };
   type TaskState = { status: string; error?: string; report?: Record<string, number | boolean> };
   /**
-   * Polls a queued task until it ends; aborting `context` cancels it on the server.
+   * Polls a queued task; explicit abort stops it, view-detach abort only stops polling.
    * `onStatus` sees each unfinished status; `failure` is the message when the task gives none.
    */
   function followTask(
@@ -1201,11 +1212,13 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     context: Pick<MapComputeContext, 'signal'>,
     options: { onStatus?: (status: string) => void; failure?: string } = {},
   ): Promise<TaskState> {
+    if (context.signal.aborted && context.signal.reason === MAP_VIEW_DETACHED)
+      return Promise.reject(abortError());
     const current = taskFollowers.get(taskId);
     if (current) return current;
-    const following = pollTask(taskId, context, options).finally(() =>
-      taskFollowers.delete(taskId),
-    );
+    const following = pollTask(taskId, context, options).finally(() => {
+      if (taskFollowers.get(taskId) === following) taskFollowers.delete(taskId);
+    });
     taskFollowers.set(taskId, following);
     return following;
   }
@@ -1220,7 +1233,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     let cancellation: Promise<void> | undefined;
     let failures = 0;
     const cancel = () => {
-      if (disposed) return Promise.resolve();
+      if (disposed || context.signal.reason === MAP_VIEW_DETACHED) return Promise.resolve();
       rememberSettled(taskId);
       return (cancellation ||= request(
         `/api/tasks/${encodeURIComponent(taskId)}/cancel`,
@@ -1233,7 +1246,14 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       ));
     };
     activeTasks.set(taskId, cancel);
-    context.signal.addEventListener('abort', cancel, { once: true });
+    const onAbort = () => {
+      if (context.signal.reason === MAP_VIEW_DETACHED) {
+        // A rapid A→B→A may attach a new observer before this one unwinds.
+        taskFollowers.delete(taskId);
+        if (activeTasks.get(taskId) === cancel) activeTasks.delete(taskId);
+      } else void cancel();
+    };
+    context.signal.addEventListener('abort', onAbort, { once: true });
     try {
       for (;;) {
         if (context.signal.aborted || disposed) throw abortError();
@@ -1269,8 +1289,8 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       if (context.signal.aborted && !disposed) void cancel();
       throw error;
     } finally {
-      context.signal.removeEventListener('abort', cancel);
-      activeTasks.delete(taskId);
+      context.signal.removeEventListener('abort', onAbort);
+      if (activeTasks.get(taskId) === cancel) activeTasks.delete(taskId);
     }
   }
 
@@ -1502,6 +1522,84 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     },
   };
   const store = createThinkingMapStore(runtime);
+  // A page can reattach to the submitted batch, but must not silently enqueue
+  // the batches/sessions that the previous page had not submitted yet.
+  async function recoverChatUpdate(task: {
+    id: string;
+    topicId: string;
+    source: { title?: string; stage?: string; hasMore?: boolean };
+  }) {
+    if (chatUpdate) return;
+    const id = task.topicId;
+    const operation = {
+      topicId: id,
+      undoGroup: `chat-update-${++updateSequence}`,
+      controller: new AbortController(),
+      sourceIndex: 0,
+      sourceCount: 0,
+    };
+    chatUpdate = operation;
+    const current = () =>
+      !disposed &&
+      chatUpdate === operation &&
+      snapshot.currentProjectId === id &&
+      !operation.controller.signal.aborted;
+    const running = (status = 'running') => {
+      if (!current()) return;
+      publishConnections({
+        operation: {
+          phase: 'running',
+          taskId: task.id,
+          message:
+            [
+              task.source.title,
+              t(task.source.stage === 'distill' ? '正在分批整理历史材料' : '正在更新图文'),
+            ]
+              .filter(Boolean)
+              .join(' · ') + (['pending', 'queued'].includes(status) ? t('（等待 Agent）') : '…'),
+        },
+      });
+    };
+    storage.set(`gft-local:unfinished-update:${id}`, 'true');
+    running();
+    try {
+      await followTask(
+        task.id,
+        { signal: operation.controller.signal },
+        { onStatus: running, failure: '更新失败，原内容已保留。' },
+      );
+      if (!current()) return;
+      await store.getState().syncFromRemote({ undoGroup: operation.undoGroup, receiptId: task.id });
+      if (!current()) return;
+      await refreshConnections(id);
+      await refreshReceipt(id);
+      if (!current()) return;
+      publishConnections({
+        operation: {
+          phase: 'completed',
+          taskId: task.id,
+          undoGroup: operation.undoGroup,
+          hasMore: true,
+          message: t('本批已完成，点更新检查剩余会话和材料。'),
+        },
+      });
+    } catch (error) {
+      if (!disposed && chatUpdate === operation && snapshot.currentProjectId === id)
+        publishConnections({
+          operation: {
+            phase:
+              operation.controller.signal.aborted ||
+              (error instanceof DOMException && error.name === 'AbortError')
+                ? 'cancelled'
+                : 'failed',
+            message: messageOf(error),
+            undoGroup: operation.undoGroup,
+          },
+        });
+    } finally {
+      if (chatUpdate === operation) chatUpdate = null;
+    }
+  }
   async function recoverTasks() {
     const id = snapshot.currentProjectId;
     if (!id || disposed) return;
@@ -1511,6 +1609,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         topicId: string;
         status: string;
         action: string;
+        source?: { title?: string; stage?: string; hasMore?: boolean };
         mode?: string;
         params?: { nodeId?: string; from?: string; to?: string; scopeIds?: string[] };
       }>
@@ -1525,6 +1624,10 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         task.mode === 'compute'
       )
         continue;
+      if (task.source && ['update', 'compact'].includes(task.action)) {
+        void recoverChatUpdate({ ...task, source: task.source });
+        continue;
+      }
       const p = task.params;
       const op: MapOperationRequest | null =
         task.action === 'refine' && p?.nodeId
@@ -1582,7 +1685,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     if (disposed) return;
     disposed = true;
     monitor.dispose();
-    cancelChatUpdate();
+    cancelChatUpdate(true);
     connectionEpoch++;
     receiptEpoch++;
     store.getState().cancelGeneration();
@@ -1681,7 +1784,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         };
       },
       refresh: refreshConnections,
-      cancel: cancelChatUpdate,
+      cancel: () => cancelChatUpdate(),
       dismiss() {
         if (!chatUpdate) publishConnections({ operation: null });
       },

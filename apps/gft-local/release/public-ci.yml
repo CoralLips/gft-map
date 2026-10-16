@@ -30,6 +30,7 @@ jobs:
       - run: npm run build:site
       - run: npm run test:site
       - run: npm test
+      - run: npm run test:memory
       - run: npm run pack:skill
       - name: Check the GitHub-installable Skill
         run: npm run test:skill -- skills/gft-map

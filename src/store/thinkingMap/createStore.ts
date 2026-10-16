@@ -8,6 +8,7 @@ import { appendSourceLog, renderSourceLog, hasSourceLog, sourceRecordsFromEvents
  */
 
 import { create } from 'zustand';
+import { MAP_VIEW_DETACHED } from './runtime';
 import type { MapOperationOutcome, MapOperationRequest, ThinkingMapRuntime, ThinkingMapStore } from './runtime';
 import type { FocusCard } from '../../type/focusCard';
 import { THINKING_MAP_PROJECT_ID, DEFAULT_PROJECT_NAME } from '../../service/thinkingMapCore';
@@ -285,7 +286,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
 
 
   // ===== 统一撤销/重做栈（Ctrl+Z / Ctrl+Y / toast 撤销共用——多套撤销系统会打架）=====
-  // 会话级内存栈：撤销管"当场反悔"，数据安全由 防抖落库+本地镜像+事件存证 三层兜底（刷新即清=业界惯例）。
+  // 当前视图持有撤回栈；支持服务端操作的宿主从持久化操作历史恢复跨刷新撤回。
   // zustand 不可变更新 ⟹ 快照=存旧数组引用，零拷贝成本。
   // doc 同帧入栈（08-27）：重画/整理会重写文档，Ctrl+Z 必须连文档一起退——
   // 否则退回旧图却留着新文档 = 锚对不上。字符串零拷贝，成本同 nodes/edges。
@@ -462,6 +463,15 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     return changed;
   }
 
+  function detachComputations() {
+    // Mark navigation before the existing cleanup aborts/reset busy state.
+    // Browser-owned computations still stop; durable server tasks only detach.
+    generationAbort?.abort(MAP_VIEW_DETACHED);
+    tidyAbort?.abort(MAP_VIEW_DETACHED);
+    for (const controller of refineAborts.values()) controller.abort(MAP_VIEW_DETACHED);
+    for (const controller of relationAborts.values()) controller.abort(MAP_VIEW_DETACHED);
+  }
+
   /**
    * Runs a model operation on the host's server (runtime.operations). Pending local
    * edits are saved first; the result arrives by sync, and its undo step carries
@@ -630,6 +640,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
 
     hydrateForProject: async (projectId: string) => {
       if (!projectId || get().boundProjectId === projectId) return;
+      detachComputations();
       get().cancelTidy();
       get().cancelGeneration();
       cancelRefinements();
@@ -819,6 +830,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     },
 
     resetLocal: () => {
+      detachComputations();
       get().cancelTidy();
       get().cancelGeneration();
       cancelRefinements();

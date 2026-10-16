@@ -43,6 +43,8 @@ export interface ThinkingMapHost {
   importBundle?(bundle: unknown): Promise<void>;
   downloadBundle?(): Promise<void>;
 }
+/** Navigation abandons a view, not a durable server task. Other aborts mean stop. */
+export const MAP_VIEW_DETACHED = 'map-view-detached';
 export interface MapComputeContext {
   projectId: string | null;
   signal: AbortSignal;

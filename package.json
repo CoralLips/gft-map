@@ -1,6 +1,6 @@
 {
   "name": "gft-map",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,6 +10,7 @@
     "build": "node apps/gft-local/build.mjs",
     "start": "node apps/gft-local/cli.mjs serve",
     "test": "node apps/gft-local/release/run-tests.mjs",
+    "test:memory": "node apps/gft-local/release/run-tests.mjs --memory",
     "typecheck": "tsc -p apps/gft-local/tsconfig.json",
     "check:source": "node apps/gft-local/release/verify-source.mjs",
     "build:skill": "node apps/gft-local/release/package-skill.mjs --directory-only",

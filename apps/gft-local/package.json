@@ -1,6 +1,6 @@
 {
   "name": "gft-map",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,6 +10,7 @@
     "build": "node build.mjs",
     "start": "node cli.mjs serve",
     "test": "node release/run-tests.mjs",
+    "test:memory": "node release/run-tests.mjs --memory",
     "typecheck": "tsc -p tsconfig.json",
     "pack:skill": "node build.mjs --skill",
     "format": "prettier --write \"**/*.{mjs,js,ts,tsx,css}\"",

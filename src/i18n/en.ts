@@ -10,6 +10,7 @@ export const EN: Record<string, string> = {
   "会话 {current}/{total}": "Chat {current}/{total}",
   "正在读取新材料…": "Reading new material…",
   "正在分批整理历史材料": "Processing history in batches",
+  "本批已完成，点更新检查剩余会话和材料。": "This batch is complete. Click Update to check for remaining sessions and material.",
   "正在更新图文": "Updating the map and document",
   "新增 {count} 个节点": "{count} nodes added",
   "修改 {count} 个节点": "{count} nodes updated",

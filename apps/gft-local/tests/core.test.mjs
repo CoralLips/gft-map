@@ -243,7 +243,7 @@ test('整理迁出历史主题章中的判断，仍逐字保留收录范围', ()
   assert.equal(updated.raw, topic.raw);
 });
 
-test('准备任务复用完整规则，整理和重画读取原始资料，主题过滤不保留无关散文', () => {
+test('提示词接线：更新、整理和重画均包含主题过滤规则并读取对应材料（非语义质量验收）', () => {
   let topic = seeded();
   const first = viewTopic(topic).graph.nodes[0];
   topic = advance(

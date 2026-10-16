@@ -591,7 +591,7 @@ test('无增量不制造撤销步骤；有后续手工编辑时，通知撤销�
   );
 });
 
-test('切主题首帧清除旧连接及进度，旧任务迟到不会同步进新主题', async () => {
+test('切主题只脱离不取消，首帧清除旧进度，迟到结果不串脉络', async () => {
   const gate = deferred();
   let enqueued = false;
   await fixture(
@@ -617,7 +617,11 @@ test('切主题首帧清除旧连接及进度，旧任务迟到不会同步进�
       assert.equal(local.host.getSnapshot().currentProjectId, 'b');
       assert.match(local.store.getState().doc, /b 原判断/);
       assert.equal(local.connections.getSnapshot().operation, null);
-      assert.ok(state.calls.some(call => call.pathname.endsWith('/cancel')));
+      assert.equal(
+        state.calls.some(call => call.pathname.endsWith('/cancel')),
+        false,
+        '切图仅脱离，即使提交响应迟到也不取消后台更新',
+      );
     },
   );
 });
@@ -887,4 +891,115 @@ test('回执隐藏段末节点锚，不改变正文中的普通文字和源字�
     '> ◆ 使用市场也要付成本\n\n正文说明，^j15 在句中是原材料的一部分。\n> ◇ 新的条件\r\n',
   );
   assert.ok(source.includes('成本 ^j15'));
+});
+
+for (const stage of ['distill', 'publish']) {
+  test(`刷新接回聊天 ${stage} 阶段显示来源，可停止且不重复提交`, async () => {
+    let available = false;
+    await fixture(
+      {
+        connections: [connection('one')],
+        route: (call, state, json) => {
+          if (call.pathname === '/api/tasks' && available)
+            return json([
+              {
+                id: 'task-1',
+                topicId: 'a',
+                status: state.task,
+                action: stage === 'distill' ? 'compact' : 'update',
+                source: { title: '合成会话 one', stage, hasMore: true },
+              },
+            ]);
+        },
+      },
+      async ({ local, state }) => {
+        state.task = 'running';
+        available = true;
+        local.dispose();
+        const page = createLocalRuntime({
+          onRequestUpdate: async () => null,
+          onError: message => state.errors.push(message),
+        });
+        try {
+          await page.start();
+          const operation = page.connections.getSnapshot().operation;
+          assert.equal(operation.phase, 'running');
+          assert.match(operation.message, /合成会话 one/);
+          assert.match(operation.message, stage === 'distill' ? /分批整理历史材料/ : /更新图文/);
+          assert.equal(operation.taskId, 'task-1');
+          assert.equal(
+            state.calls.filter(call => call.pathname.endsWith('update-from-chat')).length,
+            0,
+          );
+          page.connections.cancel();
+          await waitFor(() => page.connections.getSnapshot().operation.phase === 'cancelled');
+          assert.equal(state.calls.filter(call => call.pathname.endsWith('/cancel')).length, 1);
+          assert.match(page.store.getState().doc, /a 原判断/);
+        } finally {
+          page.dispose();
+        }
+      },
+    );
+  });
+}
+
+test('分批更新切走后只完成已提交批次，返回接回并提示再次更新续读', async () => {
+  let submitted = 0;
+  await fixture(
+    {
+      connections: [connection('one')],
+      route: (call, state, json) => {
+        if (call.pathname.endsWith('update-from-chat')) {
+          submitted++;
+          if (submitted === 1) {
+            state.task = 'running';
+            return json({
+              task: { id: 'task-1' },
+              stage: 'distill',
+              hasMore: true,
+              until: 'fixed-end',
+            });
+          }
+          return json({ unchanged: true, hasMore: false });
+        }
+        if (call.pathname === '/api/tasks' && submitted)
+          return json([
+            {
+              id: 'task-1',
+              topicId: 'a',
+              status: state.task,
+              action: 'compact',
+              source: { title: '合成会话 one', stage: 'distill', hasMore: true },
+            },
+          ]);
+      },
+    },
+    async ({ local, state }) => {
+      const running = local.host.requestUpdate();
+      await waitFor(() => local.connections.getSnapshot().operation?.phase === 'running');
+      await local.host.switchProject('b');
+      await running;
+      assert.match(local.store.getState().doc, /b 原判断/);
+      assert.equal(
+        state.calls.some(call => call.pathname.endsWith('/cancel')),
+        false,
+      );
+      await local.host.switchProject('a');
+      assert.match(
+        local.connections.getSnapshot().operation.message,
+        /合成会话 one.*分批整理历史材料/,
+      );
+      state.task = 'completed';
+      await waitFor(() => local.connections.getSnapshot().operation?.phase === 'completed');
+      assert.match(local.connections.getSnapshot().operation.message, /点更新检查剩余/);
+      assert.equal(submitted, 1, '不自动提交旧页面尚未提交的批次');
+      await local.host.requestUpdate();
+      assert.equal(submitted, 2);
+      assert.equal(local.connections.getSnapshot().operation.hasMore, false);
+      assert.match(local.connections.getSnapshot().operation.message, /没有新增材料/);
+      await local.host.switchProject('b');
+      await local.host.switchProject('a');
+      assert.equal(local.connections.getSnapshot().operation, null, '续读完成后不再显示未完成提示');
+    },
+  );
 });

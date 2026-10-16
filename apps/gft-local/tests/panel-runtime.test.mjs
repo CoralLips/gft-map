@@ -1,4 +1,6 @@
 import test from 'node:test';
+// P1: tasks belong to topics; P2: edits/stop/undo are predictable; P3: views explain work.
+// Revision/CAS assertions protect concurrency; UI outcomes must also be verified.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -146,7 +148,10 @@ test('超长手动粘贴保留完整原文并进入可暂停的材料流程', as
         assert.equal(jobs[0].state, 'paused');
         assert.equal(await readFile(materials.sourceFile(jobs[0].id), 'utf8'), text);
         assert.ok(uploads.length > 1);
-        assert.ok(uploads.every(size => size <= 512 * 1024));
+        assert.ok(
+          uploads.every(size => size <= materials.UPLOAD_BYTES),
+          '上传必须遵守服务端分段限制',
+        );
         assert.equal((await backend.listTasks()).length, 0);
       },
       { manual: async () => text },
@@ -502,7 +507,7 @@ test('改主题后重画读取被旧范围过滤的源消息，不扫描其他�
   );
 });
 
-test('整篇编辑 Log 通过真实面板保存：图文和水位保留，旧快照不复活，重画只读取修订版及当前主题', async () => {
+test('编辑 Log 的保存、旧来源隔离与重画闭环', async t => {
   let calls = 0;
   const text = '第二段移到前面：试办需要三名志愿者。\n\n删掉旧规则后，只在三人到齐时开展。\n';
   await fixture(
@@ -544,54 +549,60 @@ test('整篇编辑 Log 通过真实面板保存：图文和水位保留，旧快
         nodes = structuredClone(before.nodes),
         edges = structuredClone(before.edges);
       const watermarks = [...before.sourceWatermarks];
-      local.store.getState().updateRaw(editSourceLog(before.raw, text));
-      assert.equal(local.store.getState().doc, doc);
-      assert.deepEqual(local.store.getState().nodes, nodes);
-      assert.deepEqual(local.store.getState().edges, edges);
-      assert.equal(calls, 0, '保存 Log 本身不得触发模型');
-      local.store.getState().flushDoc();
-      await waitFor(
-        () => backend.getTopic(a.id),
-        topic => renderSourceLog(topic.raw) === text,
-      );
-      await waitFor(
-        () => JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),
-        entry => entry.pending === false,
-      );
-      assert.deepEqual((await backend.getTopic(a.id)).sourceCursors, sourceCursors);
-      assert.deepEqual([...local.store.getState().sourceWatermarks], watermarks);
-      await backend.saveSourceEvent(a.id, {
-        id: 'late-old',
-        layer: 'L0->L1',
-        inputs: [{ id: 'late-message', role: 'user', content: '后来补存的过期快照' }],
-        outputs: ['j1'],
+      await t.test('保存 Log 保留图文和读取水位，不调用模型', async () => {
+        local.store.getState().updateRaw(editSourceLog(before.raw, text));
+        assert.equal(local.store.getState().doc, doc);
+        assert.deepEqual(local.store.getState().nodes, nodes);
+        assert.deepEqual(local.store.getState().edges, edges);
+        assert.equal(calls, 0, '保存 Log 本身不得触发模型');
+        local.store.getState().flushDoc();
+        await waitFor(
+          () => backend.getTopic(a.id),
+          topic => renderSourceLog(topic.raw) === text,
+        );
+        await waitFor(
+          () => JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),
+          entry => entry.pending === false,
+        );
+        assert.deepEqual((await backend.getTopic(a.id)).sourceCursors, sourceCursors);
+        assert.deepEqual([...local.store.getState().sourceWatermarks], watermarks);
       });
-      await local.store.getState().syncFromRemote();
-      assert.equal(renderSourceLog(local.store.getState().raw), text);
-      assert.equal((await backend.readSources(a.id)).text, text);
-      await local.host.switchProject(b.id);
-      await local.host.switchProject(a.id);
-      assert.equal(
-        renderSourceLog(local.store.getState().raw),
-        text,
-        '切换离开后重载仍使用全文编辑版',
-      );
-      assert.equal(local.store.getState().doc, doc);
-      await local.store.getState().redrawFromLedger();
-      assert.equal(calls, 1);
-      assert.equal(local.store.getState().error, null);
-      assert.equal(local.store.getState().nodes.length, 1);
-      assert.equal(local.store.getState().nodes[0].title, '三名志愿者到齐才试办');
-      local.store.getState().flushDoc();
-      await waitFor(
-        () => backend.getView(a.id),
-        saved =>
-          saved.graph.nodes.length === 1 && saved.graph.nodes[0].title === '三名志愿者到齐才试办',
-      );
-      assert.equal(renderSourceLog((await backend.getTopic(a.id)).raw), text);
-      assert.deepEqual((await backend.getTopic(a.id)).sourceCursors, sourceCursors);
-      assert.deepEqual([...local.store.getState().sourceWatermarks], watermarks);
-      assert.deepEqual(errors, []);
+      await t.test('旧来源快照不复活，切换重载仍使用修订版', async () => {
+        await backend.saveSourceEvent(a.id, {
+          id: 'late-old',
+          layer: 'L0->L1',
+          inputs: [{ id: 'late-message', role: 'user', content: '后来补存的过期快照' }],
+          outputs: ['j1'],
+        });
+        await local.store.getState().syncFromRemote();
+        assert.equal(renderSourceLog(local.store.getState().raw), text);
+        assert.equal((await backend.readSources(a.id)).text, text);
+        await local.host.switchProject(b.id);
+        await local.host.switchProject(a.id);
+        assert.equal(
+          renderSourceLog(local.store.getState().raw),
+          text,
+          '切换离开后重载仍使用全文编辑版',
+        );
+        assert.equal(local.store.getState().doc, doc);
+      });
+      await t.test('重画只读修订版及当前主题，结果和水位正确保存', async () => {
+        await local.store.getState().redrawFromLedger();
+        assert.equal(calls, 1);
+        assert.equal(local.store.getState().error, null);
+        assert.equal(local.store.getState().nodes.length, 1);
+        assert.equal(local.store.getState().nodes[0].title, '三名志愿者到齐才试办');
+        local.store.getState().flushDoc();
+        await waitFor(
+          () => backend.getView(a.id),
+          saved =>
+            saved.graph.nodes.length === 1 && saved.graph.nodes[0].title === '三名志愿者到齐才试办',
+        );
+        assert.equal(renderSourceLog((await backend.getTopic(a.id)).raw), text);
+        assert.deepEqual((await backend.getTopic(a.id)).sourceCursors, sourceCursors);
+        assert.deepEqual([...local.store.getState().sourceWatermarks], watermarks);
+        assert.deepEqual(errors, []);
+      });
     },
   );
 });
@@ -632,14 +643,14 @@ test('面板清空 Log 后同步与重载保留显式空来源，重画不回填
   );
 });
 
-test('最后一次轮询后后台追加来源：Log 保存遇到409仅合入新来源，保存成功并清除pending', async () => {
+test('Log 保存遇到409保留新增来源与手改，重载后仍可继续编辑', async () => {
   let calls = 0;
   await fixture(
     async () => {
       calls++;
       return output;
     },
-    async ({ local, a, errors, browserCache }) => {
+    async ({ local, a, b, errors }) => {
       const baseRaw = local.store.getState().raw;
       const doc = local.store.getState().doc;
       const topic = await backend.getTopic(a.id),
@@ -668,10 +679,6 @@ test('最后一次轮询后后台追加来源：Log 保存遇到409仅合入新�
         () => backend.getTopic(a.id),
         topic => topic.revision > remote.revision,
       );
-      await waitFor(
-        () => JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),
-        entry => entry.pending === false,
-      );
       const text = renderSourceLog(saved.raw);
       assert.match(text, /用户整篇修改后的来源/);
       assert.match(text, /后台在编辑期间新增的有效来源/);
@@ -682,6 +689,19 @@ test('最后一次轮询后后台追加来源：Log 保存遇到409仅合入新�
       await local.store.getState().syncFromRemote();
       assert.equal(renderSourceLog(local.store.getState().raw), text);
       assert.equal(calls, 0);
+      await local.host.switchProject(b.id);
+      await local.host.switchProject(a.id);
+      assert.equal(renderSourceLog(local.store.getState().raw), text);
+      local.store.getState().updateNode('j1', { title: '合并来源后继续编辑' });
+      local.store.getState().flushDoc();
+      await waitFor(
+        () => backend.getView(a.id),
+        view => view.graph.nodes.some(n => n.title === '合并来源后继续编辑'),
+      );
+      assert.match(
+        renderSourceLog((await backend.getTopic(a.id)).raw),
+        /后台在编辑期间新增的有效来源/,
+      );
       assert.deepEqual(errors, []);
     },
   );
@@ -810,8 +830,11 @@ test('新建期间切换主题不被迟到响应拉回；重命名立即显示�
   );
 });
 
-test('手改立即整理，超过原1.2秒防抖窗口仍完成；服务端写入一次，撤回按回执退回', async () => {
+test('手改立即整理先结清自动保存；整理期间旧定时器不重复写入，撤回保留手改', async () => {
   const observed = [];
+  const pendingTimers = new Map();
+  const realSetTimeout = globalThis.setTimeout,
+    realClearTimeout = globalThis.clearTimeout;
   await fixture(
     async task => {
       observed.push({
@@ -819,7 +842,12 @@ test('手改立即整理，超过原1.2秒防抖窗口仍完成；服务端写�
         revision: (await backend.getTopic(task.topicId)).revision,
         baseRevision: task.baseRevision,
       });
-      await new Promise(resolve => setTimeout(resolve, 1450));
+      // Advance only the captured edit-save timer; no wall-clock wait or server clock changes.
+      for (const [timer, callback] of pendingTimers) {
+        pendingTimers.delete(timer);
+        callback();
+      }
+      await new Promise(resolve => setImmediate(resolve));
       observed.push({
         phase: 'finish',
         revision: (await backend.getTopic(task.topicId)).revision,
@@ -828,17 +856,29 @@ test('手改立即整理，超过原1.2秒防抖窗口仍完成；服务端写�
       return output;
     },
     async ({ local, a }) => {
-      local.store.getState().updateNode('j1', { title: '刚刚手改的判断' });
-      const report = await local.store.getState().tidyWhitebox();
+      globalThis.setTimeout = (callback, delay, ...args) => {
+        const token = Symbol('save-timer');
+        pendingTimers.set(token, () => callback(...args));
+        return token;
+      };
+      globalThis.clearTimeout = timer => pendingTimers.delete(timer) || realClearTimeout(timer);
+      let report;
+      try {
+        local.store.getState().updateNode('j1', { title: '刚刚手改的判断' });
+        globalThis.setTimeout = realSetTimeout;
+        report = await local.store.getState().tidyWhitebox();
+      } finally {
+        globalThis.setTimeout = realSetTimeout;
+        globalThis.clearTimeout = realClearTimeout;
+      }
       assert.equal(report?.changed, true, local.store.getState().error ?? '整理未完成');
       assert.equal(local.store.getState().error, null);
-      assert.deepEqual(observed, [
-        { phase: 'start', revision: 2, baseRevision: 2 },
-        { phase: 'finish', revision: 2, baseRevision: 2 },
-      ]);
+      assert.equal(observed.length, 2);
+      assert.equal(observed[0].revision, observed[0].baseRevision, '任务以已保存手改为基准');
+      assert.equal(observed[1].revision, observed[0].revision, '整理中没有遗留自动保存覆盖基准');
       assert.equal(local.store.getState().nodes[0].title, '整理后的合成判断');
       const saved = await backend.getTopic(a.id);
-      assert.equal(saved.revision, 3, '手改先保存，整理结果由服务端写入一次');
+      assert.equal(saved.revision, observed[0].revision + 1, '整理结果只写入一次');
       assert.equal(saved.ledger.match(/整理后的合成判断/g)?.length, 1, '结果不能重复追加');
       assert(saved.raw.startsWith(baseLedger));
       assert.match(saved.raw, /刚刚手改的判断/);
@@ -852,7 +892,7 @@ test('手改立即整理，超过原1.2秒防抖窗口仍完成；服务端写�
       assert.notEqual(local.store.getState().nodes[0].title, '整理后的合成判断', '撤回立即生效');
       const restored = await waitFor(
         () => backend.getTopic(a.id),
-        topic => topic.revision === 4,
+        topic => /刚刚手改的判断/.test(topic.ledger) && !/整理后的合成判断/.test(topic.ledger),
       );
       assert.doesNotMatch(restored.ledger, /整理后的合成判断/);
       assert.match(restored.ledger, /刚刚手改的判断/, '撤回只退整理，不退之前的手改');
@@ -860,49 +900,14 @@ test('手改立即整理，超过原1.2秒防抖窗口仍完成；服务端写�
   );
 });
 
-test('多轮整理的中间轮只计算，服务端最后写入一次；选区仍由共享store维护', async () => {
-  let calls = 0;
-  await fixture(
-    async task => {
-      calls++;
-      assert.equal((await backend.getTopic(task.topicId)).revision, task.baseRevision);
-      const refs = [...task.user.matchAll(/^(n\d+) \[/gm)].map(match => match[1]).join(',');
-      const merge =
-        calls === 1
-          ? '<merge title="合并前两判断" body="保留两条合成依据。" members="n1,n2"/>'
-          : '<merge title="再合并相邻判断" body="保留原始三条依据。" members="n1,n2"/>';
-      return `${merge}\n<prose domain="验证" refs="${refs}">先保留原文和最小闭环的依据，再核对其余独立合成依据；本轮只合并相邻两条，后续判断仍按各自依据继续验证。</prose>`;
-    },
-    async ({ local, a }) => {
-      const extra = Array.from(
-        { length: 5 },
-        (_, i) => `◇ j${i + 4} [验证] 合成判断${i + 4}\n独立合成依据${i + 4}`,
-      ).join('\n');
-      local.store.getState().updateLedger(`${baseLedger.replace('⏸ j2', '◇ j2')}\n${extra}`);
-      const report = await local.store.getState().tidyWhitebox();
-      assert.equal(report?.changed, true, local.store.getState().error ?? '整理未完成');
-      assert.ok(calls > 1, '七条素材应触发多个安全收拢轮次');
-      const saved = await backend.getTopic(a.id);
-      assert.equal(saved.revision, 3, '中间轮不保存，最后只写入一次');
-      assert.equal(saved.raw, baseLedger);
-      assert.deepEqual(
-        (await backend.listTasks()).map(task => task.status),
-        ['completed'],
-      );
-    },
-  );
-});
-
-test('第一轮只改正文时追加一次明确收拢请求，归并补充说明并保留可撤销的一次提交', async () => {
+test('只改善正文也算整理完成，不为减少节点追加调用，仍可撤回', async () => {
   let calls = 0;
   await fixture(
     async task => {
       calls++;
       if (calls === 1)
         return '<prose domain="验证" refs="n1,n2,n3,n4,n5,n6">先验证需求，随后再评估开发。保留三位访谈对象与记录拒绝原因的要求。</prose>';
-      assert.match(task.user, /上一轮尚未完成收拢/);
-      assert.match(task.system, /补充理由、示例/);
-      return '<merge title="先访谈验证需求" body="先找三位访谈对象并记录拒绝原因。" members="n1,n2,n3"/>\n<prose domain="验证" refs="n1,n2,n3,n4,n5,n6">先找三位访谈对象并记录拒绝原因，验证需求后再评估开发；其余独立依据仍保留，不能当作需求已获验证。</prose>';
+      throw new Error('只改正文后不应再调用模型');
     },
     async ({ local }) => {
       local.store
@@ -915,9 +920,9 @@ test('第一轮只改正文时追加一次明确收拢请求，归并补充说�
             ).join('\n'),
         );
       const report = await local.store.getState().tidyWhitebox();
-      assert.equal(calls, 2);
+      assert.equal(calls, 1);
       assert.equal(report.before, 6);
-      assert.equal(report.after, 4);
+      assert.equal(report.after, 6);
       assert.match(local.store.getState().doc, /三位访谈对象/);
       local.store.getState().undo();
       assert.equal(local.store.getState().nodes.length, 6);
@@ -925,29 +930,7 @@ test('第一轮只改正文时追加一次明确收拢请求，归并补充说�
   );
 });
 
-test('两次都无可合并结果时停止，不无限调用，也不删除独立判断凑比例', async () => {
-  let calls = 0;
-  await fixture(
-    async () => {
-      calls++;
-      return '<noop/>';
-    },
-    async ({ local }) => {
-      local.store
-        .getState()
-        .updateLedger(
-          '[场次 2026-09-18T10:00:00Z · 合成验证]\n走向 p1 [主题]\n仅记录需求验证。\n' +
-            Array.from({ length: 6 }, (_, i) => `◇ j${i + 1} [验证] 独立判断${i + 1}`).join('\n'),
-        );
-      const report = await local.store.getState().tidyWhitebox();
-      assert.equal(calls, 2);
-      assert.equal(report.before, report.after);
-      assert.equal(report.changed, false);
-    },
-  );
-});
-
-test('计算中切换主题即取消旧任务，迟到输出不能写旧主题或新主题', async () => {
+test('switching topics detaches tidy, saves to its original topic, and restores undo on return', async () => {
   const started = deferred(),
     release = deferred();
   await fixture(
@@ -957,44 +940,29 @@ test('计算中切换主题即取消旧任务，迟到输出不能写旧主题�
       return output;
     },
     async ({ local, a, b }) => {
-      const originalA = await backend.getTopic(a.id),
+      const originalA = await backend.getView(a.id),
         originalB = await backend.getTopic(b.id);
-      const send = globalThis.fetch,
-        cancellationTrace = [];
-      globalThis.fetch = async (url, options) => {
-        const isCancel = String(url).endsWith('/cancel');
-        if (isCancel) cancellationTrace.push({ request: String(url) });
-        try {
-          const response = await send(url, options);
-          if (isCancel)
-            cancellationTrace.push({
-              status: response.status,
-              body: await response.clone().json(),
-            });
-          return response;
-        } catch (error) {
-          if (isCancel) cancellationTrace.push({ error: error.message });
-          throw error;
-        }
-      };
       const running = local.store.getState().tidyWhitebox();
       try {
         await started.promise;
         await local.host.switchProject(b.id);
-        const cancelled = await waitFor(
-          () => backend.listTasks(),
-          tasks => tasks.some(task => task.status === 'cancelled'),
-        ).catch(error => {
-          throw new Error(`${error.message}; cancel=${JSON.stringify(cancellationTrace)}`);
-        });
-        assert.equal(cancelled[0].topicId, a.id);
+        await running; // The old view detaches without waiting for the model.
+        const task = (await backend.listTasks())[0];
+        assert.equal(task.status, 'running');
         release.resolve();
-        await running;
-        assert.equal(local.store.getState().boundProjectId, b.id);
-        assert.equal(local.store.getState().nodes[0].title, '另一主题判断');
-        assert.equal(local.store.getState().isTidying, false);
-        assert.deepEqual(await backend.getTopic(a.id), originalA);
+        await waitFor(
+          () => backend.getTask(task.id),
+          t => t.status === 'completed',
+        );
         assert.deepEqual(await backend.getTopic(b.id), originalB);
+        assert.equal(local.store.getState().nodes[0].title, '另一主题判断');
+        await local.host.switchProject(a.id);
+        assert.match(local.store.getState().doc, /整理后的合成判断/);
+        local.store.getState().undo();
+        await waitFor(
+          () => backend.getView(a.id),
+          v => JSON.stringify(v.graph) === JSON.stringify(originalA.graph),
+        );
       } finally {
         release.resolve();
         await running;
@@ -1003,10 +971,132 @@ test('计算中切换主题即取消旧任务，迟到输出不能写旧主题�
   );
 });
 
+test('returning to a running tidy reattaches the same task and an explicit stop still cancels it', async () => {
+  const started = deferred(),
+    release = deferred();
+  let calls = 0;
+  await fixture(
+    async () => {
+      calls++;
+      started.resolve();
+      await release.promise;
+      return output;
+    },
+    async ({ local, a, b }) => {
+      const running = local.store.getState().tidyWhitebox();
+      try {
+        await started.promise;
+        await local.host.switchProject(b.id);
+        await local.host.switchProject(a.id);
+        assert.equal(local.store.getState().isTidying, true);
+        assert.equal((await backend.listTasks()).length, 1);
+        assert.equal(calls, 1);
+        local.store.getState().cancelTidy();
+        assert.equal(local.store.getState().isTidying, false);
+        await waitFor(
+          () => backend.listTasks(),
+          ts => ts[0].status === 'cancelled',
+        );
+        release.resolve();
+        await running;
+        assert.doesNotMatch((await backend.getTopic(a.id)).ledger, /整理后的合成判断/);
+      } finally {
+        release.resolve();
+        await running;
+      }
+    },
+  );
+});
+
+// These are durable server operations. Switching only drops their view observer.
+for (const action of ['refine', 'relation', 'update', 'redraw']) {
+  test(`${action}: repeated topic switches reattach one task, preserve isolation and undo`, async () => {
+    const started = deferred(),
+      release = deferred();
+    let calls = 0;
+    await fixture(
+      async request => {
+        calls++;
+        assert.equal(request.action, action);
+        started.resolve();
+        await release.promise;
+        if (action === 'refine') return '<node title="后台完成的判断" body="保留原有依据。"/>';
+        if (action === 'relation') return '<edge from="j1" to="j2" reason="保留原文后再决定扩展"/>';
+        const refs = action === 'redraw' ? 'd1' : 'j1,j2,d1';
+        return `<doc>\n## 验证\n### ◆ 后台完成的判断\n保留原有依据。\n</doc><prose domain="验证" refs="${refs}">保留原文，先验证最小闭环，再决定是否扩展。</prose>`;
+      },
+      async ({ local, a, b }) => {
+        const originalA = await backend.getView(a.id),
+          originalB = await backend.getTopic(b.id);
+        const state = local.store.getState();
+        const running =
+          action === 'refine'
+            ? state.refineNode('j1')
+            : action === 'relation'
+              ? state.explainEdge(state.edges[0].id)
+              : state.generate(
+                  '合成验证材料',
+                  action === 'redraw' ? { fresh: true, rewrite: true } : undefined,
+                );
+        try {
+          await started.promise;
+          const task = (await backend.listTasks())[0];
+          for (let i = 0; i < 3; i++) {
+            await local.host.switchProject(b.id);
+            assert.equal(local.store.getState().isGenerating, false);
+            assert.equal(local.store.getState().isRefining, false);
+            assert.equal(local.store.getState().explainingEdgeIds.size, 0);
+            await local.host.switchProject(a.id);
+            const current = local.store.getState();
+            assert.equal(
+              action === 'refine'
+                ? current.refiningNodeIds.has('j1')
+                : action === 'relation'
+                  ? current.explainingEdgeIds.size > 0
+                  : current.isGenerating,
+              true,
+            );
+            assert.equal((await backend.getTask(task.id)).status, 'running');
+          }
+          assert.equal(calls, 1);
+          assert.equal((await backend.listTasks()).length, 1);
+          release.resolve();
+          await running;
+          await waitFor(
+            () => local.store.getState(),
+            s => !s.isGenerating && !s.isRefining && !s.explainingEdgeIds.size,
+          );
+          assert.equal(
+            (await backend.getTask(task.id)).status,
+            'completed',
+            (await backend.getTask(task.id)).error,
+          );
+          assert.deepEqual(await backend.getTopic(b.id), originalB);
+          const changed = await backend.getView(a.id);
+          assert.notDeepEqual(changed.graph, originalA.graph);
+          const savedLedger = (await backend.getTopic(a.id)).ledger;
+          await waitFor(
+            () => local.store.getState().ledger,
+            text => text === savedLedger,
+          );
+          local.store.getState().undo();
+          await waitFor(
+            () => backend.getView(a.id),
+            v => JSON.stringify(v.graph) === JSON.stringify(originalA.graph),
+          );
+        } finally {
+          release.resolve();
+          await running;
+        }
+      },
+    );
+  });
+}
+
 test('材料批次先落盘，随后保存人的编辑：批次与手改都保留且页面继续刷新', async () => {
   await fixture(
     async () => output,
-    async ({ local, a, browserCache }) => {
+    async ({ local, a }) => {
       const before = await backend.getTopic(a.id);
       await backend.commitMaterialBatch(
         a.id,
@@ -1016,11 +1106,10 @@ test('材料批次先落盘，随后保存人的编辑：批次与手改都保�
       );
       local.store.getState().updateNode('j1', { title: '人的最新决定' });
       local.store.getState().flushDoc();
-      await waitFor(
-        () => JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)),
-        entry => entry.pending === false && entry.revision >= 3,
+      const view = await waitFor(
+        () => backend.getView(a.id),
+        saved => /人的最新决定/.test(saved.doc) && /后台新判断/.test(saved.doc),
       );
-      const view = await backend.getView(a.id);
       assert.match(view.doc, /人的最新决定/);
       assert.match(view.doc, /后台新判断/);
       assert.equal(local.store.getState().error, null);
@@ -1167,7 +1256,7 @@ test('旧保存响应晚于重新加载的新版本时，不倒退浏览器保�
     release = deferred();
   await fixture(
     async () => output,
-    async ({ local, a, b, browserCache, origin, fetch }) => {
+    async ({ local, a, b, origin, fetch }) => {
       let capture = true;
       globalThis.fetch = async (url, options) => {
         const response = await fetch(new URL(String(url), origin), options);
@@ -1183,30 +1272,20 @@ test('旧保存响应晚于重新加载的新版本时，不倒退浏览器保�
       try {
         await held.promise;
         const saved = await backend.getTopic(a.id);
-        assert.equal(saved.revision, 2);
-        await backend.saveGraph(a.id, 2, {
+        await backend.saveGraph(a.id, saved.revision, {
           kind: 'add',
           title: '外部后来的独立判断',
           content: '新增依据',
         });
         await local.host.switchProject(b.id);
         await local.host.switchProject(a.id);
-        assert.equal(
-          JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)).revision,
-          3,
-          '已接受外部新版本',
-        );
+        assert.ok(local.store.getState().nodes.some(n => n.title === '外部后来的独立判断'));
         release.resolve();
-        await new Promise(resolve => setTimeout(resolve, 30));
-        assert.equal(
-          JSON.parse(browserCache.get(`gft-local:panel:${a.id}`)).revision,
-          3,
-          '旧保存回执不能把基准退回2',
-        );
+        local.store.getState().updateNode('j1', { title: '迟到回执后仍能保存' });
         local.store.getState().flushDoc();
         await waitFor(
           () => backend.getTopic(a.id),
-          topic => topic.revision === 4,
+          topic => /迟到回执后仍能保存/.test(topic.ledger),
         );
         assert.equal(local.store.getState().error, null);
         assert.match((await backend.getTopic(a.id)).ledger, /外部后来的独立判断/);
@@ -1277,7 +1356,16 @@ test('原案例未直连两点可以连线，自动说明只处理该线；圈�
         initial.edges.some(e => e.from === 'j15' && e.to === 'j17'),
         false,
       );
-      assert.equal(initial.addEdgeManual('j17', 'j15'), true); // 反向发起仍沿既有思考顺序。
+      assert.equal(
+        initial.addEdgeManual('j17', 'j15'),
+        true,
+        JSON.stringify({
+          nodes: initial.nodes.map(n => ({ id: n.id, order: n.order })),
+          edges: initial.edges,
+          error: initial.error,
+          service: local.service.getSnapshot(),
+        }),
+      ); // 反向发起仍沿既有思考顺序。
       await entered.promise;
       const pending = local.store.getState(),
         edge = pending.edges.find(e => e.from === 'j15' && e.to === 'j17');
@@ -1365,41 +1453,6 @@ test('快速连两条线逐条分析，结果不互踩且只保存对应说明',
       );
       assert.equal(calls, 2);
       assert.deepEqual(errors, []);
-    },
-    { coase: true },
-  );
-});
-
-test('long standalone caption gets one focused retry and never saves a cut sentence', async () => {
-  let calls = 0;
-  await fixture(
-    async request => {
-      calls++;
-      const input = JSON.parse(request.user);
-      const reason = calls === 1 ? 'x'.repeat(33) : 'Compare internal vs market cost.';
-      return (
-        '<edge from="' + input.from.id + '" to="' + input.to.id + '" reason="' + reason + '"/>'
-      );
-    },
-    async ({ local, a, errors }) => {
-      local.store.getState().addEdgeManual('j15', 'j17');
-      await waitFor(
-        () => local.store.getState(),
-        s =>
-          s.explainingEdgeIds.size === 0 &&
-          s.edges.find(e => e.from === 'j15' && e.to === 'j17')?.reason,
-      );
-      const expected = 'Compare internal vs market cost.';
-      assert.equal(
-        local.store.getState().edges.find(e => e.from === 'j15' && e.to === 'j17').reason,
-        expected,
-      );
-      assert.equal(calls, 2);
-      assert.deepEqual(errors, []);
-      await waitFor(
-        () => backend.getView(a.id),
-        v => v.graph.edges.find(e => e.from === 'j15' && e.to === 'j17')?.reason === expected,
-      );
     },
     { coase: true },
   );
@@ -1563,7 +1616,8 @@ test('undo keeps its immediate result when the confirmation read disconnects', a
       const browserFetch = globalThis.fetch;
       let rolledBack = false;
       globalThis.fetch = async (url, options) => {
-        if (rolledBack && String(url).endsWith('/snapshot')) throw new TypeError('synthetic disconnect');
+        if (rolledBack && String(url).endsWith('/snapshot'))
+          throw new TypeError('synthetic disconnect');
         const response = await browserFetch(url, options);
         if (String(url).endsWith('/rollback-operation')) rolledBack = true;
         return response;
@@ -1571,9 +1625,15 @@ test('undo keeps its immediate result when the confirmation read disconnects', a
       try {
         local.store.getState().undo();
         assert.equal(local.store.getState().ledger, original);
-        await waitFor(() => local.store.getState().error, error => !!error);
+        await waitFor(
+          () => local.store.getState().error,
+          error => !!error,
+        );
         assert.equal(local.store.getState().ledger, original);
-        assert.equal((await backend.getView(a.id)).graph.nodes.find(n => n.id === 'j1').title, '原判断');
+        assert.equal(
+          (await backend.getView(a.id)).graph.nodes.find(n => n.id === 'j1').title,
+          '原判断',
+        );
         globalThis.fetch = browserFetch;
         await local.service.retry();
         assert.equal(local.store.getState().nodes.find(n => n.id === 'j1').title, '原判断');
@@ -1726,7 +1786,6 @@ test('node tidy rewrites only its own title and full explanation, leaves the Doc
   await fixture(
     async request => {
       calls++;
-      assert.match(request.system, /保留原说明的全部信息/);
       entered.resolve();
       await release.promise;
       return `<node title="内部安排省去重复订约" body="${note}"/>`;
@@ -1840,5 +1899,50 @@ test('unified node deletion retains undo metadata and cancels affected relation 
       assert.deepEqual(errors, []);
     },
     { coase: true },
+  );
+});
+
+test('手动输入更新主动停止立即结束忙碌，迟到结果不写入，之后可重新更新', async () => {
+  const entered = deferred(),
+    release = deferred();
+  let calls = 0;
+  await fixture(
+    async () => {
+      calls++;
+      if (calls === 1) {
+        entered.resolve();
+        await release.promise;
+      }
+      return '<doc>\n## 验证\n### ◆ 手动更新完成\n补充合成依据。\n</doc>\n<prose domain="验证" refs="j1,j2,d1">补充合成依据后继续验证原判断，完成最小闭环再决定是否扩展。</prose>';
+    },
+    async ({ local, a }) => {
+      const before = await backend.getView(a.id);
+      const pending = local.requestManualUpdate();
+      try {
+        await entered.promise;
+        assert.equal(local.store.getState().isGenerating, true);
+        local.store.getState().cancelGeneration();
+        assert.equal(local.store.getState().isGenerating, false, '停止反馈即时生效');
+        await waitFor(
+          () => backend.listTasks(),
+          tasks => tasks.some(task => task.status === 'cancelled'),
+        );
+        release.resolve();
+        await pending;
+        const stopped = await backend.getView(a.id);
+        assert.deepEqual(stopped.graph, before.graph);
+        assert.equal(stopped.doc, before.doc);
+        await local.requestManualUpdate();
+        assert.equal(calls, 2);
+        assert.ok(local.store.getState().nodes.some(n => n.title === '手动更新完成'));
+        assert.ok((await backend.getView(a.id)).graph.nodes.some(n => n.title === '手动更新完成'));
+        local.store.getState().undo();
+        assert.equal(local.store.getState().nodes.find(n => n.id === 'j1').title, '原判断');
+      } finally {
+        release.resolve();
+        await pending;
+      }
+    },
+    { manual: async () => '补充合成依据，更新原判断。' },
   );
 });

@@ -1,6 +1,6 @@
 /** 多轮整理：浏览器与本地服务共用的同一套循环；模型调用由调用方注入。 */
 import { parseLedger, appendLines, liveJudgments, themeOf, type LedgerState } from './ledger';
-import { tidyInput, tidyOpsToLines } from './ledger/bridge';
+import { tidyInput, tidyOpsToLines, ChapterCoverageError } from './ledger/bridge';
 import { renderSourceLog } from './sourceLog';
 import { tidyTarget, TIDY_MAX_ROUNDS, type TidyAiOp, type TidyInput } from './tidyCore';
 
@@ -34,7 +34,7 @@ export interface TidyRoundsResult {
 
 /**
  * Tidies toward tidyTarget: merges first, safe progress only, at most
- * TIDY_MAX_ROUNDS rounds, one consolidation retry when a round merged nothing.
+ * TIDY_MAX_ROUNDS rounds. No-op or non-reducing improvements finish immediately.
  * Returns null when stillCurrent() turned false.
  */
 export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRoundsResult | null> {
@@ -56,22 +56,30 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
   let cur = parseLedger(text);
   const newIds: string[] = [];
   let merged = 0, dropped = 0, applied = 0, rounds = 0;
-  let consolidationRetry = false;
-  let retriedConsolidation = false;
+  let correctionUsed = false;
   for (let round = 1; round <= TIDY_MAX_ROUNDS; round++) {
     const count = countInScope(cur);
     if (round > 1 && count <= target) break;
     options.onRound?.(round);
     rounds = round;
-    const ops = await options.tidy({
+    const input: TidyInput = {
       ...tidyInput(cur, options.unreadIds, source),
       sourceDoc: renderSourceLog(options.raw),
       target,
-      consolidationRetry,
       ...(scope ? { scopeIds: [...scope] } : {}),
-    });
+    };
+    let ops = await options.tidy(input);
     if (options.stillCurrent && !options.stillCurrent()) return null;
-    const r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+    let r;
+    try {
+      r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+    } catch (error) {
+      if (!(error instanceof ChapterCoverageError) || correctionUsed) throw error;
+      correctionUsed = true;
+      ops = await options.tidy({ ...input, validationFeedback: error.message });
+      if (options.stillCurrent && !options.stillCurrent()) return null;
+      r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+    }
     // A theme proposal is ignored by the shared writer: no retry, no empty session.
     if (!r.lines.length && themeOf(cur) && ops.length && ops.every(op => op.kind === 'prose' && op.domain === '主题')) break;
     lines.push(...r.lines);
@@ -86,11 +94,7 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
       keepAlive(cur);
     }
     if (ops.some(op => op.kind === 'add')) break;
-    if (countInScope(cur) >= count) {
-      if (count <= target || retriedConsolidation) break;
-      consolidationRetry = true;
-      retriedConsolidation = true;
-    } else consolidationRetry = false;
+    if (countInScope(cur) >= count) break;
   }
   return { lines, state: cur, newIds, merged, dropped, applied, rounds, before };
 }

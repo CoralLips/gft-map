@@ -40,8 +40,8 @@ export interface TidyInput {
   /** 完整原始 Log 文档，不能用已压缩正文代替。 */
   sourceDoc?: string;
   target: number;
-  /** One focused retry after a response changed prose but did not reduce the map. */
-  consolidationRetry?: boolean;
+  /** 本次操作最多一次结构纠错；仍使用未写入前的原始输入。 */
+  validationFeedback?: string;
 }
 
 export type TidyAiOp =
@@ -87,7 +87,7 @@ function serialize(input: TidyInput): { text: string; alias: Map<string, string>
 
 function buildPrompt(target: number, count: number): string {
   return `一次整理要同时交付两个结果，两者同样重要：
-1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；body 留下理解判断所必需的关键依据与边界，展开细节和共同背景放进章节正文，不必各占一个节点。只改标题、章节、连线或正文不等于完成收拢。只有剩余每条都是不能合并的独立判断时才允许高于目标，不能为凑数删除关键转折或条件。
+1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；body 留下理解判断所必需的关键依据与边界，展开细节和共同背景放进章节正文，不必各占一个节点。参考条数不是完成条件；只改善标题、章节、连线或正文也算整理完成。独立判断应保留，不能为凑数删除关键转折或条件。
 2. Doc：按读者要弄懂的具体问题重新组织章节，把相关判断连接成能独立读懂的当前理解说明。节点更少、文字更短，不能代替讲清楚；为补足解释，正文可以比整理前更长。即使 Map 无需再合并，Doc 仍可能需要重写。
 
 # Doc 怎样讲清楚
@@ -245,8 +245,8 @@ export function tidyCall(input: TidyInput) {
 /** 与实际模型入口共用，离线回放可以核验完整输入而无需外发。 */
 export function buildTidyRequest(input: TidyInput) {
   const serialized = serialize(input);
-  if (input.consolidationRetry) serialized.text = `# 上一轮尚未完成收拢\n上一轮未减少判断。请专门检查可归并的重复、补充理由和展开说明，以约 ${input.target} 条为目标先输出 merge，再输出保留依据的正文。不要只返回 prose/revise；确实每条都独立才保留。\n\n${serialized.text}`;
-  if (input.scopeIds === undefined) return { ...serialized, systemPrompt: buildPrompt(input.target, input.judgments.length) };
+  const correction = input.validationFeedback ? `\n\n# 上一次输出未通过结构校验\n${input.validationFeedback}\n上次输出没有写入。请基于本次提供的原始判断重新输出完整操作，不只补写正文。合并不能跨过中间判断或制造承接倒序；不能合法合并时保留独立判断，用 revise 的 domain 调整章节。逐一核对最终章节与 refs，只引用该章实际存活判断，并覆盖本章全部判断。已有主题及原始依据保持不变。` : '';
+  if (input.scopeIds === undefined) return { ...serialized, systemPrompt: buildPrompt(input.target, input.judgments.length) + correction };
   const scope = new Set(input.scopeIds);
   const selected = [...serialized.alias].filter(([, id]) => scope.has(id)).map(([alias]) => alias);
   return {
@@ -258,6 +258,6 @@ export function buildTidyRequest(input: TidyInput) {
 
 不允许 add 新判断。只有“可修改判断”中的编号可以 revise、drop 或作为 merge 成员；不得把选区外判断混入合并。link/unlink 的两个端点都必须在选区内；外部已有承接由系统在合并后续接。
 Doc 只可改选区原有章节和本轮成功迁入的章节；主题、主线及其他章节保持不变，不输出它们的 prose。改动判断或关系时，同轮更新受影响的原章和目标章正文；整章迁空时可省略旧章，由系统收掉旧正文。
-章节 prose 必须完整解释该章整理后的全部判断，refs 覆盖全部存活判断，包含同章未选中的判断；这些未选判断的表述和解释仍须保留。合并仍引用原成员编号。不能只写所选片段，不能让已迁出或已删除的判断留在旧章 refs。选区为空时输出 <noop/>。`,
+章节 prose 必须完整解释该章整理后的全部判断，refs 覆盖全部存活判断，包含同章未选中的判断；这些未选判断的表述和解释仍须保留。合并仍引用原成员编号。不能只写所选片段，不能让已迁出或已删除的判断留在旧章 refs。选区为空时输出 <noop/>。` + correction,
   };
 }
