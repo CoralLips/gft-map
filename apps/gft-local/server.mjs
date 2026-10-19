@@ -16,6 +16,7 @@ import { createCodexRunner } from './runner.mjs';
 import { createClaudeRunner } from './claudeRunner.mjs';
 import { ensureAdapter } from './acpAdapters.mjs';
 import { programVersion, installationId } from './version.mjs';
+import { progressOf } from './progress.mjs';
 import {
   prepareImport,
   parseImportSummary,
@@ -49,7 +50,7 @@ const MAX_NODE_JOBS = 2;
 const JSON_BODY_LIMIT = 4 * 1024 * 1024;
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
 /** POST actions that would start model work; refused while the executor is being switched. */
-const TASK_STARTING_ACTIONS = new Set(['compute', 'tasks', 'update-from-chat', 'resume']);
+const TASK_STARTING_ACTIONS = new Set(['tasks', 'update-from-chat', 'resume']);
 const STOPPED_TASK_MESSAGE = '本地服务已停止，当前内容保留；可重新发起任务。';
 const CANCELLED_TASK_MESSAGE = '任务已取消，当前内容保留。';
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -103,9 +104,9 @@ export async function createRunner(agent = 'codex', options) {
   if (!configured.binary) {
     Object.assign(configured, await ensureAdapter(agent));
   }
+  // The vendor's recommended model unless one was chosen in "AI 处理"; effort stays the default.
   return createAcpRunner({
     ...configured,
-    model: undefined,
     providerDefaults: true,
     adapter: agent === 'codex-acp' ? 'codex' : 'claude',
   });
@@ -199,7 +200,6 @@ const readTopic = (id, action) => (TOPIC_READS.get(action) ?? store.getView)(id)
 
 function readTask(id, action) {
   if (action === 'status') return store.getTaskStatus(id);
-  if (action === 'result') return store.computationResult(id);
   return store.taskPrompt(id);
 }
 
@@ -268,6 +268,8 @@ async function createService(
 ) {
   if (managed) await checkRecordedService();
   await store.recover();
+  // Housekeeping; a failure here must not keep the service from starting.
+  await store.tidyTaskRecords().catch(error => console.warn('任务记录整理未完成：', error.message));
 
   // Executor. A switch replaces `runner` only after the new one passes its check.
   let activeAgent = agent;
@@ -276,7 +278,8 @@ async function createService(
   let lastError = null;
   let executorCheckPromise = null;
   let executorCheckAgent = null;
-  let discoveryPromise = null;
+  /** Text each running model call has written so far, by task id; never persisted. */
+  const liveOutput = new Map();
   let preparingInitial = false;
   async function prepareInitialExecutor() {
     try {
@@ -420,15 +423,38 @@ async function createService(
     }
   }
 
-  function discoverExecutors() {
-    discoveryPromise ||= Promise.all(['codex-acp', 'claude-acp'].map(checkExecutor)).finally(() => {
-      discoveryPromise = null;
-    });
-    return discoveryPromise;
+  // The last check of each agent, so reopening the dialog shows results at once.
+  // A switch checks again before it takes effect, so an old result is never trusted.
+  const checkedExecutors = new Map();
+  const pendingChecks = new Map();
+  function candidateStatus(agentName, refresh) {
+    const live = agentName === activeAgent && runner?.snapshot();
+    if (!refresh && ['ready', 'running'].includes(live?.status))
+      return { agent: agentName, ...live };
+    if (!refresh && checkedExecutors.has(agentName)) return checkedExecutors.get(agentName);
+    if (!pendingChecks.has(agentName))
+      pendingChecks.set(
+        agentName,
+        checkExecutor(agentName)
+          .then(result => (checkedExecutors.set(agentName, result), result))
+          .finally(() => pendingChecks.delete(agentName)),
+      );
+    return pendingChecks.get(agentName);
   }
 
-  async function switchExecutor(requested) {
+  function discoverExecutors({ agent: only, refresh = false } = {}) {
+    if (only) {
+      if (!agents.includes(only)) throw store.fail(`执行器应为 ${agents.join('、')}`);
+      return candidateStatus(only, refresh);
+    }
+    return Promise.all(['codex-acp', 'claude-acp'].map(name => candidateStatus(name, refresh)));
+  }
+
+  /** `model`: undefined keeps the saved choice, null returns to the recommended one. */
+  async function switchExecutor(requested, model) {
     if (!agents.includes(requested)) throw store.fail(`执行器应为 ${agents.join('、')}`);
+    if (model !== undefined && model !== null && (typeof model !== 'string' || !model.trim()))
+      throw store.fail('模型名称无效');
     if (closed) throw store.fail('本地服务正在关闭，请重新打开页面后重试。', 409);
     if (
       hasActiveWork() ||
@@ -446,7 +472,7 @@ async function createService(
     }
     if (hasActiveWork()) throw store.fail('任务正在处理，请稍后检查执行器。', 409);
     executorCheckAgent = requested;
-    executorCheckPromise = activateExecutor(requested);
+    executorCheckPromise = activateExecutor(requested, model);
     try {
       return await executorCheckPromise;
     } finally {
@@ -455,8 +481,10 @@ async function createService(
     }
   }
 
-  async function activateExecutor(requested) {
-    const options = await optionsFor(requested);
+  async function activateExecutor(requested, model) {
+    const { model: savedModel, ...rest } = (await optionsFor(requested)) || {};
+    const chosen = model === undefined ? savedModel : model;
+    const options = { ...rest, ...(chosen ? { model: chosen } : {}) };
     const candidate = await createRunner(requested, options);
     try {
       await candidate.check();
@@ -520,7 +548,9 @@ async function createService(
         }
         return id ? readTopic(id, action) : store.listTopics();
       case 'runtime':
-        return id === 'executors' ? discoverExecutors() : runtime();
+        return id === 'executors'
+          ? discoverExecutors({ agent: query('agent'), refresh: query('refresh') === '1' })
+          : runtime();
       case 'material-evidence':
         return {
           text: await materials.evidence(query('topicId'), url.searchParams.getAll('node')),
@@ -545,6 +575,13 @@ async function createService(
       case 'sessions':
         return store.listSessions();
       case 'tasks':
+        if (id && action === 'status' && liveOutput.has(id)) {
+          const written = liveOutput.get(id);
+          return {
+            ...(await readTask(id, action)),
+            progress: [...written.earlier, ...progressOf(written.text, written.aliases)],
+          };
+        }
         return id ? readTask(id, action) : store.listTasks();
       default:
         throw store.fail('接口不存在', 404);
@@ -556,7 +593,7 @@ async function createService(
       throw store.fail('正在切换处理 Agent，请稍后再开始任务。', 409);
     switch (group) {
       case 'runtime':
-        if (id === 'executor') return switchExecutor(data?.agent);
+        if (id === 'executor') return switchExecutor(data?.agent, data?.model);
         break;
       case 'service':
         if (id === 'stop') {
@@ -679,12 +716,13 @@ async function createService(
       case 'clear-sources':
         await store.clearSourceEvents(id);
         return { saved: true };
-      case 'compute':
-        requireExecutor(
-          `本地执行器尚未启用，请选择 ${agents.join('、')}，并用 serve --agent 启动服务。`,
-        );
-        return store.createComputation(id, data.baseRevision, data.request);
       case 'tasks':
+        // Page operations (tidy, node tidy, relation captions) only run on the
+        // service's own executor; an Agent reading queued tasks cannot finish them.
+        if (data.params !== undefined)
+          requireExecutor(
+            `本地执行器尚未启用，请选择 ${agents.join('、')}，并用 serve --agent 启动服务。`,
+          );
         return store.createTask(id, data.action, data.input, {
           params: data.params,
           origin: data.origin,
@@ -744,8 +782,7 @@ async function createService(
 
   // ---- Task queue ----
 
-  const isNodeJob = task =>
-    !!task && ((task.mode === 'compute' && task.concurrent) || store.isConcurrentOperation(task));
+  const isNodeJob = task => !!task && store.isConcurrentOperation(task);
 
   async function tick() {
     if (busy || closed || checkingStop || executorCheckPromise || !activeAgent) return;
@@ -809,8 +846,12 @@ async function createService(
         const callModel = modelCaller(task, controller, taskRunner, () => store.getTask(task.id));
         const topic = await store.getTopic(task.topicId);
         // The executor reads only system/user; task fields identify the call for logs and tests.
-        const result = await OPERATIONS[task.action](topic, task.params, async request =>
-          outputOf(await callModel({ ...task, ...request })),
+        const result = await OPERATIONS[task.action](
+          topic,
+          task.params,
+          async request => outputOf(await callModel({ ...task, ...request })),
+          // Progress only: a missed write just leaves the previous round showing.
+          { onRound: round => store.setTaskRound(task.id, round).catch(() => {}) },
         );
         if (!closed) await store.completeOperation(task.id, result);
         return;
@@ -826,6 +867,7 @@ async function createService(
       }
     } finally {
       clearInterval(cancellation);
+      liveOutput.delete(task.id);
       if (independent && taskRunner) await taskRunner.waitForIdle();
     }
   }
@@ -848,11 +890,24 @@ async function createService(
       if (controller.signal.aborted) throw store.fail(CANCELLED_TASK_MESSAGE, 409);
       const current = await verify();
       if (current.status !== 'running') throw store.fail(CANCELLED_TASK_MESSAGE, 409);
+      // What this call has written so far; the status read shows it as edit actions,
+      // after those of the task's earlier calls so the step count keeps going.
+      const previous = liveOutput.get(task.id);
+      const written = {
+        text: '',
+        aliases: request.aliases || {},
+        earlier: previous
+          ? [...previous.earlier, ...progressOf(previous.text, previous.aliases)]
+          : [],
+      };
+      liveOutput.set(task.id, written);
+      const onText = text => (written.text += text);
       const result = execute
-        ? await execute(request, { signal: controller.signal })
+        ? await execute(request, { signal: controller.signal, onText })
         : await taskRunner.run(request, {
             directory: path.join(store.homeDir(), 'runs', task.id),
             signal: controller.signal,
+            onText,
           });
       if (result?.execution) {
         runs.push(result.execution);
@@ -924,7 +979,7 @@ async function createService(
       tickPromise,
       materialClose,
       executorCheckPromise,
-      discoveryPromise,
+      ...pendingChecks.values(),
       ...nodePromises,
       Promise.resolve()
         .then(() => account.close())

@@ -45,11 +45,23 @@ export interface ThinkingMapHost {
 }
 /** Navigation abandons a view, not a durable server task. Other aborts mean stop. */
 export const MAP_VIEW_DETACHED = 'map-view-detached';
+export const MAP_OPERATION_SUPERSEDED = 'map-operation-superseded';
+/** An edit the model has already written while its call is still running (not yet applied). */
+export interface OperationProgress {
+  kind: 'merge' | 'add' | 'drop' | 'revise' | 'link' | 'unlink' | 'prose' | 'node';
+  title?: string;
+  domain?: string;
+  ids?: string[];
+}
 export interface MapComputeContext {
   projectId: string | null;
   signal: AbortSignal;
   /** Reattach to an existing server task without submitting a second operation. */
   taskId?: string;
+  /** A server tidy reports each round it starts. */
+  onRound?: (round: number) => void;
+  /** The edits written so far by the running call, oldest first. */
+  onProgress?: (actions: OperationProgress[]) => void;
   /** Output-only calculation; the caller revalidates its input before committing. */
   revalidateResult?: boolean;
 }
@@ -90,7 +102,8 @@ export interface ThinkingMapRuntime {
     clearCondensations(projectId: string): Promise<void>;
     fetchSourceSnapshots(projectId: string, nodeIds: string[]): Promise<string>;
   };
-  ai: {
+  /** Model calls made in the browser. Required unless the host provides `operations`. */
+  ai?: {
     explainRelation?(from: FocusCard, to: FocusCard, reason: string, context: MapComputeContext): Promise<string>;
     generate(input: string, options: GenerateOptions | undefined, onPreview: (preview: { nodes: FocusCard[]; edges: ThinkingEdge[] }) => void, context: MapComputeContext): Promise<ThinkingMapResult>;
     tidy(input: TidyInput, options: { modelId?: string } | undefined, context: MapComputeContext): Promise<TidyAiOp[]>;

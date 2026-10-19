@@ -114,10 +114,15 @@ const browser = await build({
         build.onLoad(
           { filter: /[\\/]src[\\/]style[\\/]index\.css$/ },
           async ({ path: cssPath }) => {
+            // Scan only the shared page source for class names: notes and transcripts elsewhere
+            // in the repository once held a path Tailwind misread, and it emptied the styles.
             const result = await postcss([
-              tailwind({ base: path.resolve(root, '../..') }),
+              tailwind({ base: path.resolve(root, '../../src') }),
               autoprefixer(),
             ]).process(await readFile(cssPath, 'utf8'), { from: cssPath });
+            // Tailwind can log an error and still return; never ship a page without its base styles.
+            if (!result.css.includes('#root'))
+              throw new Error('Shared styles came out empty; the page would render without layout.');
             return { contents: result.css, loader: 'css', resolveDir: path.dirname(cssPath) };
           },
         );
@@ -167,6 +172,7 @@ if (process.argv.includes('--skill')) {
     'install-hooks.mjs',
     'version.mjs',
     'upgrade.mjs',
+    'progress.mjs',
   ])
     await copyFile(path.join(root, f), path.join(target, 'scripts', f));
   await cp(path.join(root, 'dist'), path.join(target, 'scripts/dist'), { recursive: true });
@@ -180,4 +186,4 @@ if (process.argv.includes('--skill')) {
     await rm(path.join(target, 'scripts/dist', file), { force: true });
   }
   console.log(target);
-} else console.log('GFT Map build ready');
+} else console.log('GFT-Map build ready');

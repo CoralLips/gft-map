@@ -378,6 +378,10 @@
   opacity: 0.6;
   cursor: default;
 }
+.gft-local-stop-status {
+  top: auto;
+  bottom: 18px;
+}
 .gft-local-tasks {
   list-style: none;
   padding: 0;

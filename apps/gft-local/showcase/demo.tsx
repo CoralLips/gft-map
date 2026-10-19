@@ -124,7 +124,7 @@ function App() {
     <>
       <header className="demo-header">
         <a className="demo-brand" href={home}>
-          <span aria-hidden="true">↳</span> GFT Map
+          <span aria-hidden="true">↳</span> GFT-Map
         </a>
         <nav aria-label={tx('选择样例')}>
           {examples.map(e => (
@@ -228,7 +228,7 @@ function App() {
             <a href="https://github.com/CoralLips/gft-map">{tx('查看源码')}</a>
           </div>
         </aside>
-        <section className="demo-product" aria-label={tx('GFT Map 可交互面板')}>
+        <section className="demo-product" aria-label={tx('GFT-Map 可交互面板')}>
           <div className="demo-window-bar">
             <div aria-hidden="true">
               <i />
@@ -236,7 +236,7 @@ function App() {
               <i />
             </div>
             <span>
-              GFT Map · {activeExample.category}
+              GFT-Map · {activeExample.category}
               {tx('示例')}
             </span>
             <span>{tx('浏览器内试用')}</span>
@@ -312,7 +312,7 @@ function App() {
                 {tx('下载当前脉络包 .json')}
               </button>
             </li>
-            <li>{tx('打开本地 GFT Map。在设置里选择「导入脉络」。')}</li>
+            <li>{tx('打开本地 GFT-Map。在设置里选择「导入脉络」。')}</li>
             <li>{tx('选中刚下载的文件。它会成为一份新脉络，原来的内容不会被覆盖。')}</li>
             <li>{tx('在新的聊天中连接这份脉络，让 Agent 按需读取。')}</li>
           </ol>

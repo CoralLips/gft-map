@@ -232,6 +232,9 @@ function ThinkingMapViewImpl(): JSX.Element {
   const focusNodeId = useThinkingMapStore(s => s.focusNodeId);
   const clearMapFocus = useThinkingMapStore(s => s.clearMapFocus);
   const refiningNodeIds = useThinkingMapStore(s => s.refiningNodeIds);
+  // 运行中模型正在写的这一步涉及哪些节点：只高亮，不改图
+  const progressIdsKey = useThinkingMapStore(s => s.progressActions?.at(-1)?.ids?.join(',') ?? '');
+  const progressIds = useMemo(() => new Set(progressIdsKey ? progressIdsKey.split(',') : []), [progressIdsKey]);
   const acceptProposal = useThinkingMapStore(s => s.acceptProposal);
   const dismissProposal = useThinkingMapStore(s => s.dismissProposal);
   const setSelectedNodes = useThinkingMapStore(s => s.setSelectedNodes);
@@ -766,7 +769,7 @@ function ThinkingMapViewImpl(): JSX.Element {
       const isOpen = openPanelId === id;
       const isSel = selectedNodeIds.has(id);
       const isDropT = dropTargetId === id;
-      const isRefining = refiningNodeIds.has(id) || (isTidying && tidyScopeIds !== null && tidyScopeIds.has(id));
+      const isRefining = refiningNodeIds.has(id) || progressIds.has(id) || (isTidying && tidyScopeIds !== null && tidyScopeIds.has(id));
       const isReadingFocus=readingHighlights.nodeId===id;
       const touched = isReadingFocus || isOpen || isSel || isDropT || isRefining
         || draggingNodeId === id || editingNodeId === id || (dragPos !== null && dragPos.id === id);
@@ -796,7 +799,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         },
       };
     });
-  }, [flowNodesBase, readingHighlights, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeIds, editingNodeId, isTidying,tidyScopeIds]);
+  }, [flowNodesBase, readingHighlights, openPanelId, dragPos, draggingNodeId, dropTargetId, dropZone, isValidDrop, selectedNodeIds, refiningNodeIds, progressIds, editingNodeId, isTidying,tidyScopeIds]);
 
   // ===== 边几何共享值:节点盒一份共算(见 EdgeGeomContext 注释)=====
   // 幽灵节点(连线预览)不进盒:原实现就把它排除在障碍集外;预览边端点走 props 直传不受影响

@@ -1524,8 +1524,8 @@ function parseRefineTags(raw) {
 // src/service/tidyCore.ts
 var TIDY_CUT_RATIO = 0.3;
 var TIDY_MIN_CUT = 2;
-var TIDY_FLOOR = 3;
-var TIDY_MAX_ROUNDS = 3;
+var TIDY_FLOOR = 7;
+var TIDY_MAX_ROUNDS = 2;
 function tidyTarget(n) {
   if (n <= TIDY_FLOOR) return n;
   const cut = Math.max(TIDY_MIN_CUT, Math.ceil(n * TIDY_CUT_RATIO));
@@ -1574,7 +1574,7 @@ ${input.sourceDoc}` : ""), alias };
 }
 function buildPrompt(target, count) {
   return `\u4E00\u6B21\u6574\u7406\u8981\u540C\u65F6\u4EA4\u4ED8\u4E24\u4E2A\u7ED3\u679C\uFF0C\u4E24\u8005\u540C\u6837\u91CD\u8981\uFF1A
-1. Map\uFF1A\u628A\u96F6\u788E\u8868\u8FF0\u6536\u62E2\u4E3A\u5C11\u91CF\u53EF\u8FA8\u8BA4\u7684\u5224\u65AD\uFF0C\u6821\u6B63\u771F\u5B9E\u627F\u63A5\uFF0C\u4FDD\u7559\u72EC\u7ACB\u51B3\u5B9A\u3001\u8F6C\u6298\u548C\u672A\u51B3\u95EE\u9898\u3002\u5F53\u524D ${count} \u6761\uFF0C\u672C\u6B21\u6536\u62E2\u76EE\u6807\u7EA6 ${target} \u6761\u3002\u5148\u627E\u91CD\u590D\u5224\u65AD\u3001\u540C\u4E00\u51B3\u5B9A\u7684\u8865\u5145\u7406\u7531\u3001\u793A\u4F8B\u548C\u5C55\u5F00\u8BF4\u660E\uFF0C\u7528 merge \u5F52\u5E76\uFF1Bbody \u7559\u4E0B\u7406\u89E3\u5224\u65AD\u6240\u5FC5\u9700\u7684\u5173\u952E\u4F9D\u636E\u4E0E\u8FB9\u754C\uFF0C\u5C55\u5F00\u7EC6\u8282\u548C\u5171\u540C\u80CC\u666F\u653E\u8FDB\u7AE0\u8282\u6B63\u6587\uFF0C\u4E0D\u5FC5\u5404\u5360\u4E00\u4E2A\u8282\u70B9\u3002\u53C2\u8003\u6761\u6570\u4E0D\u662F\u5B8C\u6210\u6761\u4EF6\uFF1B\u53EA\u6539\u5584\u6807\u9898\u3001\u7AE0\u8282\u3001\u8FDE\u7EBF\u6216\u6B63\u6587\u4E5F\u7B97\u6574\u7406\u5B8C\u6210\u3002\u72EC\u7ACB\u5224\u65AD\u5E94\u4FDD\u7559\uFF0C\u4E0D\u80FD\u4E3A\u51D1\u6570\u5220\u9664\u5173\u952E\u8F6C\u6298\u6216\u6761\u4EF6\u3002
+1. Map\uFF1A\u628A\u96F6\u788E\u8868\u8FF0\u6536\u62E2\u4E3A\u5C11\u91CF\u53EF\u8FA8\u8BA4\u7684\u5224\u65AD\uFF0C\u6821\u6B63\u771F\u5B9E\u627F\u63A5\uFF0C\u4FDD\u7559\u72EC\u7ACB\u51B3\u5B9A\u3001\u8F6C\u6298\u548C\u672A\u51B3\u95EE\u9898\u3002\u5F53\u524D ${count} \u6761\uFF0C\u672C\u6B21\u6536\u62E2\u76EE\u6807\u7EA6 ${target} \u6761\u3002\u5148\u627E\u91CD\u590D\u5224\u65AD\u3001\u540C\u4E00\u51B3\u5B9A\u7684\u8865\u5145\u7406\u7531\u3001\u793A\u4F8B\u548C\u5C55\u5F00\u8BF4\u660E\uFF0C\u7528 merge \u5F52\u5E76\uFF1Bbody \u7559\u4E0B\u7406\u89E3\u5224\u65AD\u6240\u5FC5\u9700\u7684\u5173\u952E\u4F9D\u636E\u4E0E\u8FB9\u754C\uFF0C\u5C55\u5F00\u7EC6\u8282\u548C\u5171\u540C\u80CC\u666F\u653E\u8FDB\u7AE0\u8282\u6B63\u6587\uFF0C\u4E0D\u5FC5\u5404\u5360\u4E00\u4E2A\u8282\u70B9\u3002\u53EA\u6539\u6807\u9898\u3001\u7AE0\u8282\u3001\u8FDE\u7EBF\u6216\u6B63\u6587\u4E0D\u7B49\u4E8E\u5B8C\u6210\u6536\u62E2\u3002\u53EA\u6709\u5269\u4F59\u6BCF\u6761\u90FD\u662F\u4E0D\u80FD\u5408\u5E76\u7684\u72EC\u7ACB\u5224\u65AD\u65F6\u624D\u5141\u8BB8\u9AD8\u4E8E\u76EE\u6807\uFF0C\u4E0D\u80FD\u4E3A\u51D1\u6570\u5220\u9664\u5173\u952E\u8F6C\u6298\u6216\u6761\u4EF6\u3002
 2. Doc\uFF1A\u6309\u8BFB\u8005\u8981\u5F04\u61C2\u7684\u5177\u4F53\u95EE\u9898\u91CD\u65B0\u7EC4\u7EC7\u7AE0\u8282\uFF0C\u628A\u76F8\u5173\u5224\u65AD\u8FDE\u63A5\u6210\u80FD\u72EC\u7ACB\u8BFB\u61C2\u7684\u5F53\u524D\u7406\u89E3\u8BF4\u660E\u3002\u8282\u70B9\u66F4\u5C11\u3001\u6587\u5B57\u66F4\u77ED\uFF0C\u4E0D\u80FD\u4EE3\u66FF\u8BB2\u6E05\u695A\uFF1B\u4E3A\u8865\u8DB3\u89E3\u91CA\uFF0C\u6B63\u6587\u53EF\u4EE5\u6BD4\u6574\u7406\u524D\u66F4\u957F\u3002\u5373\u4F7F Map \u65E0\u9700\u518D\u5408\u5E76\uFF0CDoc \u4ECD\u53EF\u80FD\u9700\u8981\u91CD\u5199\u3002
 
 # Doc \u600E\u6837\u8BB2\u6E05\u695A
@@ -1611,6 +1611,7 @@ function buildPrompt(target, count) {
 <prose domain="\u4E3B\u7EBF">\u5F53\u524D\u5728\u89E3\u51B3\u4EC0\u4E48\u3001\u4E3A\u4F55\u8D70\u5230\u8FD9\u91CC\u3001\u73B0\u5728\u5B9A\u4E86\u4EC0\u4E48\u3001\u8FD8\u60AC\u7740\u4EC0\u4E48\u3002</prose>
 <prose domain="\u5B9E\u9645\u7AE0\u8282\u540D" refs="n1,n2,n3">\u5171\u540C\u89E3\u91CA\u672C\u7AE0\u5224\u65AD\u7684\u5B8C\u6574\u6B63\u6587\uFF0C\u53EF\u5206\u6BB5\uFF1B\u4E0D\u80FD\u53EA\u6709\u5F00\u573A\u94FA\u57AB\u6216\u6458\u8981\u3002</prose>
 \uFF08refs \u5217\u51FA\u672C\u7AE0\u89E3\u91CA\u5230\u7684\u5224\u65AD\uFF0C\u4E0E\u6574\u7406\u540E\u7684 domain \u4E00\u81F4\u3002\u6BCF\u4E2A\u4FDD\u7559\u5224\u65AD\u90FD\u5E94\u5728\u6240\u5C5E\u7AE0\u8282\u7684 refs \u4E2D\u51FA\u73B0\uFF1B\u5408\u5E76\u65F6\u4ECD\u5F15\u7528\u539F\u6210\u5458\u7F16\u53F7\uFF0C\u7CFB\u7EDF\u4F1A\u8F6C\u5230\u5408\u5E76\u7ED3\u679C\u3002\u7CFB\u7EDF\u663E\u793A\u8282\u70B9\u540D\u4E0E\u6863\u4F4D\u540E\u76F4\u63A5\u663E\u793A\u8FD9\u4EFD\u6B63\u6587\uFF0C\u4E0D\u518D\u9010\u6761\u5C55\u793A body\uFF0C\u6240\u4EE5\u6B63\u6587\u5FC5\u987B\u4FDD\u7559\u7406\u89E3\u672C\u7AE0\u6240\u9700\u7684\u8282\u70B9\u5185\u5BB9\u3002\u4E0D\u8981\u518D\u8F93\u51FA\u8282\u70B9\u6E05\u5355\u6216\u201C### \u8282\u70B9\u540D\u201D\u3002\uFF09
+\uFF08\u53EA\u4E3A\u9700\u8981\u6539\u7684\u7AE0\u8282\u8F93\u51FA prose\uFF1A\u672C\u6B21\u6709\u5408\u5E76\u3001\u589E\u5220\u3001\u8FC1\u5165\u8FC1\u51FA\u6216\u4FEE\u8BA2\u5224\u65AD\u7684\u7AE0\u8282\uFF0C\u4EE5\u53CA\u73B0\u6709\u6B63\u6587\u786E\u5B9E\u8BB2\u4E0D\u6E05\u3001\u9700\u8981\u91CD\u5199\u7684\u7AE0\u8282\u3002\u5224\u65AD\u672A\u53D8\u4E14\u6B63\u6587\u5DF2\u7ECF\u6E05\u695A\u7684\u7AE0\u8282\u4E0D\u8981\u8F93\u51FA\uFF0C\u7CFB\u7EDF\u539F\u6837\u4FDD\u7559\uFF1B\u4E3B\u7EBF\u53EA\u5728\u5F53\u524D\u7406\u89E3\u53D8\u5316\u65F6\u8F93\u51FA\u3002\u6539\u4E86\u54EA\u7AE0\u5C31\u5B8C\u6574\u91CD\u5199\u54EA\u7AE0\uFF0C\u4E0D\u8F93\u51FA\u534A\u7AE0\u3002\uFF09
 
 # \u7EAA\u5F8B
 
@@ -1715,11 +1716,17 @@ function tidyCall(input) {
   return {
     system: request.systemPrompt,
     user: request.text,
+    /** Short judgment names in this call (n1…) → judgment ids, for showing progress. */
+    aliases: Object.fromEntries(request.alias),
     parse: (raw) => parseTidyOps(raw, request.alias, input.judgments, new Set(input.prose.map((prose) => prose.domain)), evidence, scope, input.prose.map((prose) => prose.text).join("\n"), { requireChapterDoc: true })
   };
 }
 function buildTidyRequest(input) {
   const serialized = serialize(input);
+  if (input.consolidationRetry) serialized.text = `# \u4E0A\u4E00\u8F6E\u5C1A\u672A\u5B8C\u6210\u6536\u62E2
+\u4E0A\u4E00\u8F6E\u672A\u51CF\u5C11\u5224\u65AD\u3002\u8BF7\u4E13\u95E8\u68C0\u67E5\u53EF\u5F52\u5E76\u7684\u91CD\u590D\u3001\u8865\u5145\u7406\u7531\u548C\u5C55\u5F00\u8BF4\u660E\uFF0C\u4EE5\u7EA6 ${input.target} \u6761\u4E3A\u76EE\u6807\u5148\u8F93\u51FA merge\uFF0C\u518D\u8F93\u51FA\u4FDD\u7559\u4F9D\u636E\u7684\u6B63\u6587\u3002\u4E0D\u8981\u53EA\u8FD4\u56DE prose/revise\uFF1B\u786E\u5B9E\u6BCF\u6761\u90FD\u72EC\u7ACB\u624D\u4FDD\u7559\u3002
+
+${serialized.text}`;
   const correction = input.validationFeedback ? `
 
 # \u4E0A\u4E00\u6B21\u8F93\u51FA\u672A\u901A\u8FC7\u7ED3\u6784\u6821\u9A8C
@@ -2583,15 +2590,18 @@ async function runTidyRounds(options) {
   const newIds = [];
   let merged = 0, dropped = 0, applied = 0, rounds = 0;
   let correctionUsed = false;
+  let consolidationRetry = false;
+  let retriedConsolidation = false;
   for (let round = 1; round <= TIDY_MAX_ROUNDS; round++) {
     const count = countInScope(cur);
     if (round > 1 && count <= target) break;
-    options.onRound?.(round);
+    await options.onRound?.(round);
     rounds = round;
     const input = {
       ...tidyInput(cur, options.unreadIds, source),
       sourceDoc: renderSourceLog(options.raw),
       target,
+      consolidationRetry,
       ...scope ? { scopeIds: [...scope] } : {}
     };
     let ops = await options.tidy(input);
@@ -2619,7 +2629,11 @@ async function runTidyRounds(options) {
       keepAlive(cur);
     }
     if (ops.some((op) => op.kind === "add")) break;
-    if (countInScope(cur) >= count) break;
+    if (countInScope(cur) >= count) {
+      if (count <= target || retriedConsolidation) break;
+      consolidationRetry = true;
+      retriedConsolidation = true;
+    } else break;
   }
   return { lines, state: cur, newIds, merged, dropped, applied, rounds, before };
 }
@@ -2928,7 +2942,7 @@ function edgeIdentity(state, from, to) {
     edge ? [nodeIdentity(state, from), nodeIdentity(state, to), edge.reason || ""] : null
   );
 }
-async function tidyOperation(topic, { scopeIds, unreadIds = [] }, callModel) {
+async function tidyOperation(topic, { scopeIds, unreadIds = [] }, callModel, { onRound } = {}) {
   const state = stateOf(topic);
   const scope = scopeIds === void 0 ? void 0 : new Set(scopeIds);
   const live = liveJudgments(state).filter((j) => !scope || scope.has(j.id));
@@ -2940,11 +2954,16 @@ async function tidyOperation(topic, { scopeIds, unreadIds = [] }, callModel) {
     unreadIds: new Set(unreadIds),
     scopeIds: scope,
     header: sessionLine(Date.now(), SOURCE, scope ? "\u6574\u7406\u9009\u4E2D" : "\u6574\u7406"),
+    onRound,
     async tidy(input) {
       if (input.scopeIds?.length === 0) return [];
       const call = tidyCall(input);
       const ops = call.parse(
-        await callModel({ system: call.system + THEME_RULE, user: call.user })
+        await callModel({
+          system: call.system + THEME_RULE,
+          user: call.user,
+          aliases: call.aliases
+        })
       );
       for (const op of ops)
         if ((op.kind === "merge" || op.kind === "revise") && op.title) safeTitle(op.title);

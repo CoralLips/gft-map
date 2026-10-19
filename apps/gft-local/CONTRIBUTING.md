@@ -1,6 +1,6 @@
 # 开发与贡献
 
-这份说明面向希望修改 GFT Map、从源码运行或提交贡献的开发者。安装和使用 Skill 请看 [README](https://github.com/CoralLips/gft-map/blob/main/README_ZH.md#开始使用)。
+这份说明面向希望修改 GFT-Map、从源码运行或提交贡献的开发者。安装和使用 Skill 请看 [README](https://github.com/CoralLips/gft-map/blob/main/README_ZH.md#开始使用)。
 
 ## 从源码运行
 
@@ -33,6 +33,7 @@ npm start -- --agent codex
 ```sh
 npm run typecheck
 npm test
+npm run test:all
 npm run test:memory
 npm run pack:skill
 npm run test:skill -- apps/gft-local/release/gft-map
@@ -46,7 +47,7 @@ npm run test:skill -- apps/gft-local/release/gft-map
 
 测试应保护用户动作的含义，而不是固化当前实现。已提交的本地后台任务不随切换脉络、刷新或关页取消；只有主动停止才取消。验收需覆盖切走后完成、快速切回接回同一任务、结果只写原脉络、返回后可撤回。未启用服务端任务能力的浏览器计算仍需隔离旧响应，不可把这类测试套用到后台任务。
 
-`npm test` 为测试进程及其子进程建立临时 Agent 配置目录，移除继承的提供商凭证和自定义执行器配置；测试结束后清理。普通回归仅使用模拟执行器，不读取真实聊天，也不进行登录或退出登录。直接运行单个测试文件会绕过这个入口，因此涉及执行器的验证应通过此入口进行；真实模型验收须单独明确安排。
+`npm test` 只跑核心：已定的图文规则、不丢内容、撤回与重做、聊天来源、AI 处理选择，以及构建出的页面是否带全局布局；`npm run test:all` 另加服务启停、执行器协议、材料、同步与升级，发版前和公开 CI 都跑这一套。两者都为测试进程及其子进程建立临时 Agent 配置目录，移除继承的提供商凭证和自定义执行器配置；测试结束后清理。普通回归仅使用模拟执行器，不读取真实聊天，也不进行登录或退出登录。直接运行单个测试文件会绕过这个入口，因此涉及执行器的验证应通过此入口进行；真实模型验收须单独明确安排。
 
 `npm run test:memory` 单独启用垃圾回收检测反复打开、关闭页面的监听器和堆内存；公开发行 CI 同时运行。它能发现固定数据下的持续累积，不能代替长期使用或真实睡眠／唤醒验收。
 
@@ -74,4 +75,4 @@ npm run preview:site
 
 ## 许可证范围
 
-GFT Map 自有代码采用 MIT。安装包中的第三方组件分别遵循自身许可证，完整声明见 Skill 包的 `THIRD_PARTY_NOTICES.txt`。其中 Claude Agent SDK 遵循 Anthropic 的单独条款，不属于 MIT 授权范围；修改、再发行或商用集成时应另行核对其条款。
+GFT-Map 自有代码采用 MIT。安装包中的第三方组件分别遵循自身许可证，完整声明见 Skill 包的 `THIRD_PARTY_NOTICES.txt`。其中 Claude Agent SDK 遵循 Anthropic 的单独条款，不属于 MIT 授权范围；修改、再发行或商用集成时应另行核对其条款。

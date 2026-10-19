@@ -70,9 +70,11 @@ const config = () => [
             {
               group: 'Available',
               name: 'Available',
+              // Like Claude: "default" names the model it resolves to in its description.
               options: ['fixture-default', 'fixture-model', 'default'].map(value => ({
                 value,
                 name: value,
+                ...(value === 'default' ? { description: 'Fixture Opus' } : {}),
               })),
             },
           ],

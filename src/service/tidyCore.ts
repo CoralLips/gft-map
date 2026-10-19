@@ -5,9 +5,10 @@ import { MAP_DOC_RULES, readTagAttributes, validateMapDocOutput } from './mapDoc
 
 export const TIDY_CUT_RATIO = 0.3;
 export const TIDY_MIN_CUT = 2;
-export const TIDY_FLOOR = 3;
+/** 这么多条以内人看得过来：只合并真正重复的，不再为凑数压缩。 */
+export const TIDY_FLOOR = 7;
 export const TIDY_TEXT_CUT = 0.2;
-export const TIDY_MAX_ROUNDS = 3;
+export const TIDY_MAX_ROUNDS = 2;
 
 /** 这次整理的参考条数；不能安全合并时允许保留更多 */
 export function tidyTarget(n: number): number {
@@ -40,6 +41,8 @@ export interface TidyInput {
   /** 完整原始 Log 文档，不能用已压缩正文代替。 */
   sourceDoc?: string;
   target: number;
+  /** 上一轮只改正文、没有减少判断时，专门再要求一次收拢（每次整理最多一次）。 */
+  consolidationRetry?: boolean;
   /** 本次操作最多一次结构纠错；仍使用未写入前的原始输入。 */
   validationFeedback?: string;
 }
@@ -87,7 +90,7 @@ function serialize(input: TidyInput): { text: string; alias: Map<string, string>
 
 function buildPrompt(target: number, count: number): string {
   return `一次整理要同时交付两个结果，两者同样重要：
-1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；body 留下理解判断所必需的关键依据与边界，展开细节和共同背景放进章节正文，不必各占一个节点。参考条数不是完成条件；只改善标题、章节、连线或正文也算整理完成。独立判断应保留，不能为凑数删除关键转折或条件。
+1. Map：把零碎表述收拢为少量可辨认的判断，校正真实承接，保留独立决定、转折和未决问题。当前 ${count} 条，本次收拢目标约 ${target} 条。先找重复判断、同一决定的补充理由、示例和展开说明，用 merge 归并；body 留下理解判断所必需的关键依据与边界，展开细节和共同背景放进章节正文，不必各占一个节点。只改标题、章节、连线或正文不等于完成收拢。只有剩余每条都是不能合并的独立判断时才允许高于目标，不能为凑数删除关键转折或条件。
 2. Doc：按读者要弄懂的具体问题重新组织章节，把相关判断连接成能独立读懂的当前理解说明。节点更少、文字更短，不能代替讲清楚；为补足解释，正文可以比整理前更长。即使 Map 无需再合并，Doc 仍可能需要重写。
 
 # Doc 怎样讲清楚
@@ -124,6 +127,7 @@ function buildPrompt(target: number, count: number): string {
 <prose domain="主线">当前在解决什么、为何走到这里、现在定了什么、还悬着什么。</prose>
 <prose domain="实际章节名" refs="n1,n2,n3">共同解释本章判断的完整正文，可分段；不能只有开场铺垫或摘要。</prose>
 （refs 列出本章解释到的判断，与整理后的 domain 一致。每个保留判断都应在所属章节的 refs 中出现；合并时仍引用原成员编号，系统会转到合并结果。系统显示节点名与档位后直接显示这份正文，不再逐条展示 body，所以正文必须保留理解本章所需的节点内容。不要再输出节点清单或“### 节点名”。）
+（只为需要改的章节输出 prose：本次有合并、增删、迁入迁出或修订判断的章节，以及现有正文确实讲不清、需要重写的章节。判断未变且正文已经清楚的章节不要输出，系统原样保留；主线只在当前理解变化时输出。改了哪章就完整重写哪章，不输出半章。）
 
 # 纪律
 
@@ -237,6 +241,8 @@ export function tidyCall(input: TidyInput) {
   return {
     system: request.systemPrompt,
     user: request.text,
+    /** Short judgment names in this call (n1…) → judgment ids, for showing progress. */
+    aliases: Object.fromEntries(request.alias),
     parse: (raw: string) =>
       parseTidyOps(raw, request.alias, input.judgments, new Set(input.prose.map(prose => prose.domain)), evidence, scope, input.prose.map(prose => prose.text).join('\n'), { requireChapterDoc: true }),
   };
@@ -245,6 +251,7 @@ export function tidyCall(input: TidyInput) {
 /** 与实际模型入口共用，离线回放可以核验完整输入而无需外发。 */
 export function buildTidyRequest(input: TidyInput) {
   const serialized = serialize(input);
+  if (input.consolidationRetry) serialized.text = `# 上一轮尚未完成收拢\n上一轮未减少判断。请专门检查可归并的重复、补充理由和展开说明，以约 ${input.target} 条为目标先输出 merge，再输出保留依据的正文。不要只返回 prose/revise；确实每条都独立才保留。\n\n${serialized.text}`;
   const correction = input.validationFeedback ? `\n\n# 上一次输出未通过结构校验\n${input.validationFeedback}\n上次输出没有写入。请基于本次提供的原始判断重新输出完整操作，不只补写正文。合并不能跨过中间判断或制造承接倒序；不能合法合并时保留独立判断，用 revise 的 domain 调整章节。逐一核对最终章节与 refs，只引用该章实际存活判断，并覆盖本章全部判断。已有主题及原始依据保持不变。` : '';
   if (input.scopeIds === undefined) return { ...serialized, systemPrompt: buildPrompt(input.target, input.judgments.length) + correction };
   const scope = new Set(input.scopeIds);

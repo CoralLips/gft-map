@@ -2,7 +2,7 @@
 
 本文件的导出和同步命令在 GFT 维护仓运行，对应脚本不随公开仓提供。公开仓使用者直接在根目录运行 `npm ci`、`npm run build`、`npm test`、`npm run pack:skill`，即可修改和打包；不需要访问维护仓或通过来源校验。
 
-原 GFT 仓库维护源码，独立发行仓接收白名单快照；公开名称为 GFT Map，目标仓库为 CoralLips/gft-map。公开仓保留 `apps/gft-local` 与共享 `src` 的相对路径。导出器另外构建完整的 `skills/gft-map/`，供 GitHub 安装工具直接复制。源码与技能产物共用一个维护源，不手工维护两份。不要在发行阶段删除或改写云端逻辑，应先修正纯模块与宿主的依赖边界。
+原 GFT 仓库维护源码，独立发行仓接收白名单快照；公开名称为 GFT-Map，目标仓库为 CoralLips/gft-map。公开仓保留 `apps/gft-local` 与共享 `src` 的相对路径。导出器另外构建完整的 `skills/gft-map/`，供 GitHub 安装工具直接复制。源码与技能产物共用一个维护源，不手工维护两份。不要在发行阶段删除或改写云端逻辑，应先修正纯模块与宿主的依赖边界。
 
 ## 本地验收
 
@@ -37,7 +37,7 @@ npm run test:skill -- apps/gft-local/release/gft-map
 
 1. 名称已确定；发布前创建公开仓、建立 `main`。尚未正式发布时只做本地导出，不启用同步工作流。不要把原仓设为公开仓的 Git 远端。
 2. 在原仓配置 `GFT_LOCAL_RELEASE_TOKEN`，仅授予目标公开仓 Contents 与 Workflows 写入权限。密钥通过仓库设置保存，不写入源码。
-3. 原仓 `Export GFT Map` 工作流默认只验收并生成 Skill 附件。手动选择 `publish` 才同步公开 `main`。推送 `gft-map-v版本` 标签会在验收后同步，并给公开提交打 `v版本` 标签；版本必须与本地包配置一致。
+3. 原仓 `Export GFT-Map` 工作流默认只验收并生成 Skill 附件。手动选择 `publish` 才同步公开 `main`。推送 `gft-map-v版本` 标签会在验收后同步，并给公开提交打 `v版本` 标签；版本必须与本地包配置一致。
 4. 同步步骤单独检出公开仓，只复制清单文件并删除上次清单中已撤出的文件。提交基于公开仓历史，推送不使用 force；远端并发变化或标签已存在会失败，需要检查后重试。
 5. 公开仓在 Linux 与 Windows 上独立安装、检查、构建和测试。`v版本` 标签通过后，由公开 CI 创建 Release 并上传 Skill 与校验值。普通源码同步不创建 Release。
 

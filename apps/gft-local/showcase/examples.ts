@@ -272,7 +272,7 @@ export function getExamples(lang: ShowcaseLanguage): readonly Example[] {
 
 export function exampleBundle(example: Example, lang: ShowcaseLanguage = 'zh') {
   const ledger = appendLines('', [
-    `[场次 2026-09-18T08:00:00Z · ${lang === 'en' ? 'GFT Map authored example' : 'GFT Map 公开示例 · 人工编写'}]`,
+    `[场次 2026-09-18T08:00:00Z · ${lang === 'en' ? 'GFT-Map authored example' : 'GFT-Map 公开示例 · 人工编写'}]`,
     ...proseLines('p1', '主题', example.scope),
     ...proseLines('p2', lang === 'en' ? 'Main thread' : '主线', example.summary),
     ...example.sections.flatMap(([domain, text], i) => proseLines(`p${i + 3}`, domain, text)),

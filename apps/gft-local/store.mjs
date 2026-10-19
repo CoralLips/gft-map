@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, rename, readdir, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, unlink, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -1081,50 +1081,26 @@ const taskStatus = ({ input, output, request, source, ...task }) => ({
     : {}),
 });
 export const getTaskStatus = async id => taskStatus(await getTask(id));
-export async function createComputation(topicId, revision, request) {
-  if (
-    !request ||
-    !['update', 'redraw', 'tidy', 'refine', 'theme', 'relation'].includes(request.action) ||
-    typeof request.system !== 'string' ||
-    typeof request.user !== 'string' ||
-    request.system.length + request.user.length > 500000
-  )
-    throw fail('模型请求无效');
-  const topic = await getTopic(topicId);
-  if (topic.revision !== revision) throw fail('主题已有新版本，请重新读取后再处理', 409);
-  if (request.concurrent && !['tidy', 'refine'].includes(request.action))
-    throw fail('此操作不支持并行计算');
-  const task = {
-    id: randomUUID(),
-    topicId,
-    action: request.action,
-    mode: 'compute',
-    request,
-    concurrent: request.concurrent === true,
-    baseRevision: revision,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  };
-  await atomic(file('tasks', task.id), task);
-  return taskStatus(task);
-}
-export async function computationResult(id) {
-  const task = await getTask(id);
-  if (task.mode !== 'compute' || task.status !== 'completed') throw fail('结果尚未就绪', 409);
-  return { output: task.output, baseRevision: task.baseRevision, execution: task.execution };
-}
+/**
+ * Pages before 0.3.13 queued browser-built prompts ("compute" tasks) and applied
+ * the output themselves. Such a leftover record must never be run as a normal task.
+ */
+const refuseRetiredComputation = task => {
+  if (task.mode === 'compute') throw fail('旧版页面的计算任务已停用，请在页面重新发起。', 410);
+};
 export async function taskPrompt(id) {
   const task = await getTask(id),
     topic = await getTopic(task.topicId);
+  refuseRetiredComputation(task);
   if (task.source)
     await withSourceConnections(task.source.provider, task.source.id, group =>
       requireTaskConnection(group, task.source, task.topicId),
     );
-  if (topic.revision !== task.baseRevision && !(task.mode === 'compute' && task.concurrent))
+  if (topic.revision !== task.baseRevision)
     throw fail('主题已有新版本，请取消旧任务并重新发起', 409);
   if (task.action === 'redraw')
     return { ...task, ...prepareSourceRedraw(topic, await sourceEvents(topic.id)) };
-  return { ...task, ...(task.mode === 'compute' ? task.request : promptFor(topic, task)) };
+  return { ...task, ...promptFor(topic, task) };
 }
 function promptFor(topic, task) {
   return task.source?.stage
@@ -1142,6 +1118,13 @@ export async function saveTaskExecution(id, execution) {
     await atomic(file('tasks', id), { ...task, execution });
   });
 }
+/** The round a running multi-round operation is on, shown on the page meanwhile. */
+export async function setTaskRound(id, round) {
+  return locked('tasks', id, async () => {
+    const task = await getTask(id);
+    if (task.status === 'running') await atomic(file('tasks', id), { ...task, round });
+  });
+}
 export async function setTaskStatus(id, status, error) {
   return locked('tasks', id, async () => {
     const t = await getTask(id);
@@ -1152,7 +1135,8 @@ export async function setTaskStatus(id, status, error) {
     };
     if (!allowed[t.status]?.includes(status)) throw fail('任务状态已改变，请刷新后重试', 409);
     const next = {
-      ...t,
+      // A failed or cancelled task is never run again; only a completed chunk is gathered later.
+      ...(status === 'running' ? t : finishedRecord(t)),
       status,
       ...(status === 'running'
         ? { runnerPid: process.pid, startedAt: new Date().toISOString() }
@@ -1285,39 +1269,27 @@ function topicChange(topic, task, output) {
   return task.source ? sourceUpdate(topic, task, delta) : submittedUpdate(topic, task, delta);
 }
 
+/**
+ * A finished task keeps what shows and identifies it. Its material already lives
+ * in the topic (the Log and the receipt), so the prompt input, model output and
+ * chat messages are dropped. `keepMessages` keeps a distilled history chunk's
+ * messages, which the final publish step gathers again.
+ */
+function finishedRecord(task, { keepMessages = false } = {}) {
+  const { input: _input, output: _output, request: _request, ...record } = task;
+  if (record.source && !keepMessages) {
+    const { messages: _messages, ...source } = record.source;
+    record.source = source;
+  }
+  return record;
+}
 function completedRecord(task, resultRevision) {
-  const record = {
-    ...task,
-    input: '',
+  return {
+    ...finishedRecord(task, { keepMessages: task.action === 'compact' }),
     status: 'completed',
     completedAt: new Date().toISOString(),
     resultRevision,
   };
-  // Update messages now live in the topic's Log. Distilled history chunks keep
-  // theirs: the final publish step gathers them again.
-  if (task.source && task.action !== 'compact')
-    record.source = Object.fromEntries(
-      Object.entries(task.source).filter(([key]) => key !== 'messages'),
-    );
-  return record;
-}
-
-/** A computation only stores the model output; the panel applies and saves it. */
-async function completeComputation(task, output) {
-  if (!output.trim()) throw fail('模型返回空结果');
-  const topic = await getTopic(task.topicId);
-  // Concurrent computations are revalidated by their caller before saving.
-  if (topic.revision !== task.baseRevision && !task.concurrent)
-    throw fail('生成期间主题已修改，旧结果未覆盖当前内容。', 409);
-  const next = {
-    ...task,
-    request: undefined,
-    output,
-    status: 'completed',
-    completedAt: new Date().toISOString(),
-  };
-  await atomic(file('tasks', task.id), next);
-  return taskStatus(next);
 }
 
 export async function completeTask(id, output) {
@@ -1325,7 +1297,7 @@ export async function completeTask(id, output) {
   return locked('tasks', id, async () => {
     const task = await getTask(id);
     if (!['pending', 'running'].includes(task.status)) throw fail('任务已结束，不能重复应用', 409);
-    if (task.mode === 'compute') return completeComputation(task, output);
+    refuseRetiredComputation(task);
     const apply = () =>
       mutateTopic(
         task.topicId,
@@ -1396,6 +1368,43 @@ export async function completeOperation(id, { lines, guard, report }) {
     });
     return { view: saved.view, changed: lines.length > 0, report: report ?? null };
   });
+}
+
+const TASK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * Keeps the task folder small, since the page lists it every few seconds:
+ * finished records drop material that is no longer read, and records that ended
+ * more than 30 days ago are removed with their run logs. A distilled history
+ * chunk stays whole while its import has not been published yet.
+ */
+export async function tidyTaskRecords(now = Date.now()) {
+  const pinned = new Set(
+    (await list('topics')).flatMap(topic =>
+      Object.values(topic.sourceImports || {}).flatMap(checkpoint => checkpoint.taskIds || []),
+    ),
+  );
+  let removed = 0,
+    slimmed = 0;
+  for (const { id } of await list('tasks')) {
+    if (pinned.has(id)) continue;
+    await locked('tasks', id, async () => {
+      const task = await getTask(id);
+      if (!['completed', 'failed', 'cancelled'].includes(task.status)) return;
+      const ended = Date.parse(task.completedAt || task.finishedAt || task.createdAt);
+      if (now - ended > TASK_RETENTION_MS) {
+        await rm(path.join(homeDir(), 'runs', checkedId(id)), { recursive: true, force: true });
+        await unlink(file('tasks', id));
+        removed++;
+        return;
+      }
+      const slim = finishedRecord(task);
+      if (JSON.stringify(slim) !== JSON.stringify(task)) {
+        await atomic(file('tasks', id), slim);
+        slimmed++;
+      }
+    });
+  }
+  return { removed, slimmed };
 }
 
 // Explicit recovery after an interrupted local process. A live owner's files

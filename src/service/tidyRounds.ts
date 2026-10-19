@@ -16,7 +16,7 @@ export interface TidyRoundsOptions {
   tidy(input: TidyInput): Promise<TidyAiOp[]>;
   /** Checked after every model call; false discards the whole tidy. */
   stillCurrent?(): boolean;
-  onRound?(round: number): void;
+  onRound?(round: number): void | Promise<void>;
 }
 
 export interface TidyRoundsResult {
@@ -33,8 +33,9 @@ export interface TidyRoundsResult {
 }
 
 /**
- * Tidies toward tidyTarget: merges first, safe progress only, at most
- * TIDY_MAX_ROUNDS rounds. No-op or non-reducing improvements finish immediately.
+ * Tidies toward tidyTarget in one round. Only when that round merged nothing while
+ * the map is still above the target does it ask once more, for consolidation
+ * (9-6 rule: tidying includes merging). Otherwise the person tidies again if needed.
  * Returns null when stillCurrent() turned false.
  */
 export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRoundsResult | null> {
@@ -57,15 +58,18 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
   const newIds: string[] = [];
   let merged = 0, dropped = 0, applied = 0, rounds = 0;
   let correctionUsed = false;
+  let consolidationRetry = false;
+  let retriedConsolidation = false;
   for (let round = 1; round <= TIDY_MAX_ROUNDS; round++) {
     const count = countInScope(cur);
     if (round > 1 && count <= target) break;
-    options.onRound?.(round);
+    await options.onRound?.(round);
     rounds = round;
     const input: TidyInput = {
       ...tidyInput(cur, options.unreadIds, source),
       sourceDoc: renderSourceLog(options.raw),
       target,
+      consolidationRetry,
       ...(scope ? { scopeIds: [...scope] } : {}),
     };
     let ops = await options.tidy(input);
@@ -94,7 +98,11 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
       keepAlive(cur);
     }
     if (ops.some(op => op.kind === 'add')) break;
-    if (countInScope(cur) >= count) break;
+    if (countInScope(cur) >= count) {
+      if (count <= target || retriedConsolidation) break;
+      consolidationRetry = true;
+      retriedConsolidation = true;
+    } else break;
   }
   return { lines, state: cur, newIds, merged, dropped, applied, rounds, before };
 }

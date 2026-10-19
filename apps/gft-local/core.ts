@@ -443,7 +443,12 @@ export function applyTask(topic: Topic, action: TaskAction, output: string) {
 // whole topic unchanged; node and relation work only needs its own target
 // unchanged, so those can run side by side.
 
-export type ModelCall = (request: { system: string; user: string }) => Promise<string>;
+/** `aliases` lets the host show progress in the page's own node ids; executors ignore it. */
+export type ModelCall = (request: {
+  system: string;
+  user: string;
+  aliases?: Record<string, string>;
+}) => Promise<string>;
 export type OperationGuard =
   | { kind: 'revision' }
   | { kind: 'node'; id: string; identity: string }
@@ -476,6 +481,7 @@ export async function tidyOperation(
   topic: Topic,
   { scopeIds, unreadIds = [] }: { scopeIds?: string[]; unreadIds?: string[] },
   callModel: ModelCall,
+  { onRound }: { onRound?: (round: number) => void | Promise<void> } = {},
 ): Promise<OperationResult> {
   const state = stateOf(topic);
   const scope = scopeIds === undefined ? undefined : new Set(scopeIds);
@@ -488,11 +494,16 @@ export async function tidyOperation(
     unreadIds: new Set(unreadIds),
     scopeIds: scope,
     header: sessionLine(Date.now(), SOURCE, scope ? '整理选中' : '整理'),
+    onRound,
     async tidy(input) {
       if (input.scopeIds?.length === 0) return [];
       const call = tidyCall(input);
       const ops = call.parse(
-        await callModel({ system: call.system + THEME_RULE, user: call.user }),
+        await callModel({
+          system: call.system + THEME_RULE,
+          user: call.user,
+          aliases: call.aliases,
+        }),
       );
       for (const op of ops)
         if ((op.kind === 'merge' || op.kind === 'revise') && op.title) safeTitle(op.title);

@@ -97,8 +97,30 @@ export function useMapFeed() {
   return { settledHistory, freshSlice, freshCount, hasChat, noFresh, buildGenerateArgs, handleGenerate };
 }
 
+/** 运行中模型已写出的最新一步编辑（尚未应用），没写出任何一步时为 null */
+function useProgressLabel(): string | null {
+  const { store: useThinkingMapStore } = useThinkingMapRuntime();
+  const tr = useT();
+  const actions = useThinkingMapStore(s => s.progressActions);
+  const nodes = useThinkingMapStore(s => s.nodes);
+  if (!actions?.length) return null;
+  const last = actions[actions.length - 1];
+  const title = last.title || nodes.find(n => n.id === last.ids?.[0])?.title || '';
+  const text =
+    last.kind === 'merge' ? tr('合并为「{title}」', { title })
+    : last.kind === 'add' ? tr('新增「{title}」', { title })
+    : last.kind === 'drop' ? tr('去掉「{title}」', { title })
+    : last.kind === 'revise' ? tr('改写「{title}」', { title })
+    : last.kind === 'node' ? tr('写出「{title}」', { title })
+    : last.kind === 'prose' ? tr('改写「{domain}」一章', { domain: last.domain ?? '' })
+    : last.kind === 'link' ? tr('补一条连线')
+    : tr('断开一条连线');
+  return `${text} · ${tr('第 {count} 步', { count: actions.length })}`;
+}
+
 /** 「🧭 更新」——本体级：对话内容→白盒文档条目+图节点双写（生成中点击=中止） */
 export function UpdateMapButton(): JSX.Element {
+  const progressLabel = useProgressLabel();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const pendingTaskLabel = useThinkingMapHost(s => s.pendingTaskLabel);
   const isGenerating = useThinkingMapStore(s => s.isGenerating);
@@ -130,7 +152,7 @@ export function UpdateMapButton(): JSX.Element {
     >
       {running
         ? <>
-            <span className={styles.runLabel}>{pendingTaskLabel ?? (streamingCount ? `${tr('生成中…已长出')} ${streamingCount} ${tr('个节点')}` : tr('通读对话中…'))}</span>
+            <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? pendingTaskLabel ?? (streamingCount ? `${tr('生成中…已长出')} ${streamingCount} ${tr('个节点')}` : tr('通读对话中…'))}</span>
             <span className={styles.stopLabel}>■ {tr('中止')}</span>
           </>
         : host.requestUpdate
@@ -164,6 +186,7 @@ export function DeleteSelectionButton(): JSX.Element | null {
  * 不发明、不丢判断；手改的内容在账里，自然带过去；条目记「改写自」。破坏面大 → 弹窗确认；可 Ctrl+Z 退回。
  */
 export function RedrawButton(): JSX.Element | null {
+  const progressLabel = useProgressLabel();
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const pendingTaskLabel = useThinkingMapHost(s => s.pendingTaskLabel);
   const hasSourceMaterial = useThinkingMapHost(s => s.hasSourceMaterial);
@@ -206,7 +229,7 @@ export function RedrawButton(): JSX.Element | null {
         onClick={cancelGeneration}
         title={tr('点击中止重画——图和文档回到重画前的样子')}
       >
-        <span className={styles.runLabel}>{pendingTaskLabel ? tr(pendingTaskLabel) : (streamingCount ? tr('↺ 重写中…已长出 {count} 条', {count:streamingCount}) : tr('↺ 通读账中…'))}</span>
+        <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? (pendingTaskLabel ? tr(pendingTaskLabel) : (streamingCount ? tr('重写中…已长出 {count} 条', {count:streamingCount}) : tr('通读账中…')))}</span>
         <span className={styles.stopLabel}>■ {tr('中止')}</span>
       </button>
     );
@@ -227,6 +250,7 @@ export function RedrawButton(): JSX.Element | null {
  * 只动组织不新增判断；做完出回执；Ctrl+Z 整体退回。
  */
 export function TidyButton(): JSX.Element | null {
+  const progressLabel = useProgressLabel();
   const { store: useThinkingMapStore } = useThinkingMapRuntime();
   const pendingTaskLabel = useThinkingMapHost(s => s.pendingTaskLabel);
   const hasDoc = useThinkingMapStore(s => s.doc.trim().length > 0);
@@ -279,7 +303,7 @@ export function TidyButton(): JSX.Element | null {
         onClick={cancelTidy}
         title={tr('点击中止整理：这次整理全部作废，不保存任何改动')}
       >
-        <span className={styles.runLabel}>{pendingTaskLabel ? tr(pendingTaskLabel) : <>🧹 {tr('整理中…')}{tidyRound ? tr('第 {round} 轮', {round:tidyRound}) : ''}</>}</span>
+        <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? (pendingTaskLabel ? tr(pendingTaskLabel) : tr(tidyRound && tidyRound > 1 ? '整理中…再核对一遍收拢' : '整理中…'))}</span>
         <span className={styles.stopLabel}>■ {tr('中止')}</span>
       </button>
     );
@@ -292,7 +316,7 @@ export function TidyButton(): JSX.Element | null {
         onClick={() => { if (singleNode) { setNote(null); void refineNode(singleNode); } else void handleTidy(); }}
         disabled={isGenerating || (isRefining && !singleNode)}
         aria-label={singleRunning ? tr('停止整理') : selectedNodeIds.size > 0 ? `${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}` : undefined}
-        title={tr(selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
+        title={tr(singleNode ? '只整理这个 Map 节点的标题和说明，不改 Doc 正文；再次点击可停止' : selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
       >{singleRunning ? `■ ${tr('停止整理')}` : selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} · ${selectedNodeIds.size}` : `🧹 ${tr('整理')}`}</button>
       {note && noteProject.current === projectId && noticeRoot.current && createPortal(<div className={ownStyles.statusNote} role="status" data-gft-tidy-feedback>
         <span>{note}</span><button aria-label={tr('关闭整理提示')} onClick={() => setNote(null)}>×</button>

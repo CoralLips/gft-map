@@ -2,9 +2,9 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "09ddbffdb94f99237ccb168a5656d85fb549e568",
+  "sourceRevision": "349678fc3588c9952da1e59d36f92443e5dd2d40",
   "sourceDirty": true,
-  "version": "0.3.12",
+  "version": "0.3.13",
   "files": [
     {
       "path": ".gitattributes",
@@ -14,7 +14,7 @@
     {
       "path": ".github/workflows/ci.yml",
       "source": "apps/gft-local/release/public-ci.yml",
-      "sha256": "623ea5367077cfe66d5ac4ce20a5b4ab8609ae79b675027e8e0a166d64a1088d"
+      "sha256": "55ecfbae9739abe91925cef1359e25295c1e497d8b49dd9115d0d7bc017127c0"
     },
     {
       "path": ".github/workflows/pages.yml",
@@ -44,52 +44,52 @@
     {
       "path": "apps/gft-local/account.mjs",
       "source": "apps/gft-local/account.mjs",
-      "sha256": "ca9c6ad02f94827898187816dff1e6ec10fd61db123fdd9204cfd1d9ab8ebc91"
+      "sha256": "791ace190699fe38ce90b50837e399a72370cc2324c062bd6767272c8eaa905b"
     },
     {
       "path": "apps/gft-local/acpAdapters.mjs",
       "source": "apps/gft-local/acpAdapters.mjs",
-      "sha256": "b2a3a1dc04409c5e25dd158a6419944fbd26ab903c77cd929b0c82acd19614bc"
+      "sha256": "6d2b39335c94c826e3fdf6b0b4fc49a7e536d9943692452614b098397a29b9c8"
     },
     {
       "path": "apps/gft-local/acpRunner.mjs",
       "source": "apps/gft-local/acpRunner.mjs",
-      "sha256": "72a2382c51debbea0d8596c316abd13c29be2d7afda943fa86b3303f4a4fc07d"
+      "sha256": "0203b2c533898e1217682ac05ab532d8e5840c204ea2e3a094dc8f87c7e72ae6"
     },
     {
       "path": "apps/gft-local/adapter-locks/claude-acp/package-lock.json",
       "source": "apps/gft-local/adapter-locks/claude-acp/package-lock.json",
-      "sha256": "9d1a60b7864fcd475a1c924a59ed488ec6c6172565fbfd507c3b3e47aae6e836"
+      "sha256": "51eb9af0a59fb8ef05e955d7a375adfffc7cc5b57bb14d5838d67919a2aa4170"
     },
     {
       "path": "apps/gft-local/adapter-locks/claude-acp/package.json",
       "source": "apps/gft-local/adapter-locks/claude-acp/package.json",
-      "sha256": "de91aa0972af20386ed1cd85d13df90aaea4c1ef20573cec0cc5230f745ca8ac"
+      "sha256": "9265eabb0b634ac280768076ee7ee4e9da6cd8570ab9c8d30f7a9e2cb8d8f12f"
     },
     {
       "path": "apps/gft-local/adapter-locks/codex-acp/package-lock.json",
       "source": "apps/gft-local/adapter-locks/codex-acp/package-lock.json",
-      "sha256": "c417715d5246ca3be5b3285d5918b9b56a5100c4f3e24f44605a2d6b50c6012a"
+      "sha256": "2063b0f44b9c57bdf6bc5ce3d87265f15118992a4b609244d5fa2e4eee641010"
     },
     {
       "path": "apps/gft-local/adapter-locks/codex-acp/package.json",
       "source": "apps/gft-local/adapter-locks/codex-acp/package.json",
-      "sha256": "b206bf27bafa22eb16e71fad069e41cd5dd9d7a09a5939af51a5b991f5dc50d3"
+      "sha256": "de84a87c26251631d37369443f078a0c446bd7a832e3341b656eafc086cbf66f"
     },
     {
       "path": "apps/gft-local/ADVANCED.md",
       "source": "apps/gft-local/ADVANCED.md",
-      "sha256": "5010315bbee06d8abde5affaae53fef46fbc3e0323b13b99808b82a9289ccb89"
+      "sha256": "68c98fca563df6260ba001db1b155883cc704edd7d923d91e6cf3cc531046af4"
     },
     {
       "path": "apps/gft-local/build.mjs",
       "source": "apps/gft-local/build.mjs",
-      "sha256": "ecae47a80539e3149d04452b2c3bfc40f876f49fcc2af7a16632e5029ef30ae5"
+      "sha256": "d557fc5ac85151c970c896d70be028e77eb0d2a6db6692a310317352b6f6b5c9"
     },
     {
       "path": "apps/gft-local/change-hook.mjs",
       "source": "apps/gft-local/change-hook.mjs",
-      "sha256": "f849539296e70118cdf434c88031fa347fea4052aea0ebd2780f002a1feff8f3"
+      "sha256": "f859aa9e4b1178e6438403a1adf56bbf4e1a09e715eba0ab943ad60a8c4737e9"
     },
     {
       "path": "apps/gft-local/childProcess.mjs",
@@ -104,7 +104,7 @@
     {
       "path": "apps/gft-local/cli.mjs",
       "source": "apps/gft-local/cli.mjs",
-      "sha256": "05b9540bfcc01ec7abfd9a0599c377add49e3d05c7b83eb38b001cd8131b499b"
+      "sha256": "8b5dc660a636d473e853408360612e471bb2efcdf84f7fc1a027cc371ac08aec"
     },
     {
       "path": "apps/gft-local/connections.mjs",
@@ -114,17 +114,17 @@
     {
       "path": "apps/gft-local/CONTRIBUTING.md",
       "source": "apps/gft-local/CONTRIBUTING.md",
-      "sha256": "a2366e05c78eadb08294e3c87b8149c7462cf6a5dc91a34a930075d9b3026514"
+      "sha256": "1489c5f991dad6ee82d939d6fa27be682990efe119bf7706de8614907632bdbb"
     },
     {
       "path": "apps/gft-local/core.ts",
       "source": "apps/gft-local/core.ts",
-      "sha256": "e2eedc0b279d01ef66e1ab82c28914d650a19250ee1f6729a624ad9d0a369f3f"
+      "sha256": "56b40342299debab917e47d6d6893e969f665d123788e91791c34d126cddab2f"
     },
     {
       "path": "apps/gft-local/executor-config.mjs",
       "source": "apps/gft-local/executor-config.mjs",
-      "sha256": "b64c3200febf43a485003af594fbc9dbb5597dc3325b7bc7dd1a52ab1efe1eb5"
+      "sha256": "8d3d9422e33ee87492f8832cefa35656c2f4a696b819b90928d7e46265336fc6"
     },
     {
       "path": "apps/gft-local/install-hooks.mjs",
@@ -154,7 +154,7 @@
     {
       "path": "apps/gft-local/mcp.mjs",
       "source": "apps/gft-local/mcp.mjs",
-      "sha256": "b7304ea9077d7725f7272daa50f2be2eba42e774e66f46e1561d7b922da26263"
+      "sha256": "66c6fbe7c1e3f5b1f7fd23b28a160d77504de4a66b919ce3260f80d0974c6598"
     },
     {
       "path": "apps/gft-local/memory.mjs",
@@ -169,22 +169,27 @@
     {
       "path": "apps/gft-local/package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "eb34ee5af7c30c79b249b6583eefe871b03a1fe07cee484e2f890596c955c20b"
+      "sha256": "11b4c6653c5b2e1c5ce87fb403d3e6854bc55e651bcc62d0db09a3aad1fbbd67"
     },
     {
       "path": "apps/gft-local/package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "4e3867a55b6db2d84bd33be5feae4abcd260ddb68f6447aa09c107bc0b216042"
+      "sha256": "a4d8a79677f49cde28355696a77e4d7c378c7e632955578e9d5c687c6df9a3a2"
+    },
+    {
+      "path": "apps/gft-local/progress.mjs",
+      "source": "apps/gft-local/progress.mjs",
+      "sha256": "da5bef921d40ea1375fc5df61f09022fd359e9c88445c0965c23bd6701e219d0"
     },
     {
       "path": "apps/gft-local/README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "80318d3b405fcdbd6a6dd90b37e9ce7f517af8cae9953b42677b5395e38523a9"
+      "sha256": "ee0f0a6fa73fa79cf2c622cebbb0a6e4dbb6d0435665a90a690b4718072165e4"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "25f5298abf24fc94c1c38467dcc0e0a00e61c0ae7639619adc2490c62317123b"
+      "sha256": "36943758f7b97a83c0d049a148affcfad9d040da1659f3ff20236a9607aaa09a"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -194,7 +199,7 @@
     {
       "path": "apps/gft-local/release/notices.mjs",
       "source": "apps/gft-local/release/notices.mjs",
-      "sha256": "5c337b0bae71563fccfaf0128c3da70d7362368144ac6a7664a39ba53172c943"
+      "sha256": "c2cd1406cdd964db48ebca8b83e3263ad1513f1af92cebbebb1fa9509e006ebc"
     },
     {
       "path": "apps/gft-local/release/package-skill.mjs",
@@ -204,7 +209,7 @@
     {
       "path": "apps/gft-local/release/public-ci.yml",
       "source": "apps/gft-local/release/public-ci.yml",
-      "sha256": "623ea5367077cfe66d5ac4ce20a5b4ab8609ae79b675027e8e0a166d64a1088d"
+      "sha256": "55ecfbae9739abe91925cef1359e25295c1e497d8b49dd9115d0d7bc017127c0"
     },
     {
       "path": "apps/gft-local/release/public-pages.yml",
@@ -224,12 +229,12 @@
     {
       "path": "apps/gft-local/release/README.md",
       "source": "apps/gft-local/release/README.md",
-      "sha256": "b79720dc052f68bd4f42e2ea78e70d3d935aa75776cede19f8cfc0eb5abd0a43"
+      "sha256": "e103bb5f48bb68fbf7b397709dfce8fe1dcb461a4b177a99009080ea48b3896e"
     },
     {
       "path": "apps/gft-local/release/run-tests.mjs",
       "source": "apps/gft-local/release/run-tests.mjs",
-      "sha256": "29918cfce7935bd58f0c07140d4708c649db15dc2cd8fdad7796e734d2c952bb"
+      "sha256": "1efdbfbc85dadebc0c00c8b66ccb9f19844aa44fb42e8cb28fba86726bfccf58"
     },
     {
       "path": "apps/gft-local/release/smoke-skill.mjs",
@@ -239,7 +244,7 @@
     {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "c59f6eb357e8b40049b979491f1e793835a0f30e452245f5084c5a4f497a2077"
+      "sha256": "098b4f115414e49a9e79ca8134e4848336e2545981a366d4078e6a82cf4e0ba6"
     },
     {
       "path": "apps/gft-local/release/test-environment.mjs",
@@ -259,7 +264,7 @@
     {
       "path": "apps/gft-local/server.mjs",
       "source": "apps/gft-local/server.mjs",
-      "sha256": "9e1ee122463d9a1f8d2c9bf3dc2d0adfe78a08e1c54af9e3a87a25662347e667"
+      "sha256": "08d6b501eaf6fe1b5f243614eece9951031aadb2e24a5be7ee3d59278196c6d5"
     },
     {
       "path": "apps/gft-local/serviceLaunch.mjs",
@@ -319,7 +324,7 @@
     {
       "path": "apps/gft-local/showcase/build.mjs",
       "source": "apps/gft-local/showcase/build.mjs",
-      "sha256": "f025144fe276bb295ac79fbc6d63cd8862cf58f3c6fb67025d12cc5cad130c87"
+      "sha256": "3c2035831c632a8b12549579e6939700bb9e9a4d7bdb1b73f4388cf2587154d3"
     },
     {
       "path": "apps/gft-local/showcase/check.mjs",
@@ -334,12 +339,12 @@
     {
       "path": "apps/gft-local/showcase/demo.html",
       "source": "apps/gft-local/showcase/demo.html",
-      "sha256": "24a91e0fb5a263d948e50ec782ca0379d8f3703ebf7281d000b1fbfcca554096"
+      "sha256": "358f23f5c0cef50758da0078cc4404632f78558915504e059aee6548bcb15339"
     },
     {
       "path": "apps/gft-local/showcase/demo.tsx",
       "source": "apps/gft-local/showcase/demo.tsx",
-      "sha256": "7bf3255fa98c1fc5668809b8e4d8dc04a359f28e128997c5f5a0c16887b42eac"
+      "sha256": "e6021e0dc768905d6e230b6c4d593722ee80097d1645fe71fe58ab2efbe85aa1"
     },
     {
       "path": "apps/gft-local/showcase/examples-en.ts",
@@ -349,22 +354,22 @@
     {
       "path": "apps/gft-local/showcase/examples.ts",
       "source": "apps/gft-local/showcase/examples.ts",
-      "sha256": "ec967ec7eee0f9110fc536d2765a3c6aba1c090e3691cefe8511081923a6af23"
+      "sha256": "f86d35448cc5c1ce58a719ad3a57845915cfd86c626b90be46f0f3c6e01acc18"
     },
     {
       "path": "apps/gft-local/showcase/index.en.html",
       "source": "apps/gft-local/showcase/index.en.html",
-      "sha256": "87762c7b0c56189b67dbb7aa63a071fd2096e58cd7d44e617598c1ce268889aa"
+      "sha256": "9975e3ad187e1c264cc67428067a9597a5dfa38df27b38fb1f55408bd1d9d35a"
     },
     {
       "path": "apps/gft-local/showcase/index.html",
       "source": "apps/gft-local/showcase/index.html",
-      "sha256": "5b3ba761e06e441f24fd80cc8c5e0716bddfd28279a4453d91494d9737ba8066"
+      "sha256": "8ae5ccb18a05e24954714613ce51582e716ffd84900323a28529f87170b9d749"
     },
     {
       "path": "apps/gft-local/showcase/locale.ts",
       "source": "apps/gft-local/showcase/locale.ts",
-      "sha256": "91c7d94af6fa618603429d7cad7efcd78fbea02c884a666f56b95abbec81f9e3"
+      "sha256": "e847b51ebb96bc783a37b4f16a3e506f58f8510447efa9da5e5c67c5050bdb18"
     },
     {
       "path": "apps/gft-local/showcase/runtime.ts",
@@ -394,7 +399,7 @@
     {
       "path": "apps/gft-local/skill/references/notifications.md",
       "source": "apps/gft-local/skill/references/notifications.md",
-      "sha256": "040ac453a2c0123e750b96b7b6669839465fe6b411ec230c36c699244fbad17d"
+      "sha256": "630b3f6779e112a50aa13f5a59168ca29da8ffe8e46147dafb6d86de0ef66a93"
     },
     {
       "path": "apps/gft-local/skill/references/workflow.md",
@@ -404,7 +409,7 @@
     {
       "path": "apps/gft-local/skill/SKILL.md",
       "source": "apps/gft-local/skill/SKILL.md",
-      "sha256": "875875cde0e4a8fdc03baf50bc2d13e0112845a4b49364edfc7459f2daa20995"
+      "sha256": "5b646ea83e215e1186dccb8a27e60aaefdf1ff908b78bc4f35a31c3d61372236"
     },
     {
       "path": "apps/gft-local/sourceReaders.mjs",
@@ -414,7 +419,7 @@
     {
       "path": "apps/gft-local/store.mjs",
       "source": "apps/gft-local/store.mjs",
-      "sha256": "2c0b700f6d3e9cce16a880f69d5f05893b791894d0a86f8dcf9fd6c67c0816c0"
+      "sha256": "a465dd648ad76592bee4cdc0c4f545c6ed9c0be90310d35111ce8968fb70966a"
     },
     {
       "path": "apps/gft-local/sync.mjs",
@@ -434,17 +439,17 @@
     {
       "path": "apps/gft-local/tests/acp-defaults.test.mjs",
       "source": "apps/gft-local/tests/acp-defaults.test.mjs",
-      "sha256": "5b0de3ba56d087242d55e95ec69b8a97c76aeebf65f4cd9d6f6ac255e8cc474f"
+      "sha256": "aa50beaaf5e58e25523462c9984f9d8be59e5e5dc6e6ce4db10411c9227bcbf1"
     },
     {
       "path": "apps/gft-local/tests/acp-runner.test.mjs",
       "source": "apps/gft-local/tests/acp-runner.test.mjs",
-      "sha256": "b6fa698bcee5bc258be163dbe0bed1a44f202aa9a777fd97319c66024f166c5d"
+      "sha256": "eef7a185f5f0b6fabcca2f5278ade4da1516edb40fa6379ffca3efc677ba798b"
     },
     {
       "path": "apps/gft-local/tests/browser-reconnect.test.mjs",
       "source": "apps/gft-local/tests/browser-reconnect.test.mjs",
-      "sha256": "81292132ec8faca1d08a09fb5c8a89336f46fefa7ec6d9c92fe1c355d7226669"
+      "sha256": "ea7cb3090e9fa0a51b4fede268ae95c81158a23139d799c7489084bddec7a669"
     },
     {
       "path": "apps/gft-local/tests/claude-runner.test.mjs",
@@ -459,7 +464,7 @@
     {
       "path": "apps/gft-local/tests/connections-ui.test.mjs",
       "source": "apps/gft-local/tests/connections-ui.test.mjs",
-      "sha256": "434f212f840b22fb3d882fe05e4956f0afeeb5692f90a6f8a62eb8ccfc0d6e1c"
+      "sha256": "aa0092a8a278041360afd81396533b9cd4e329ce618afd0637173f6ff3a2aaae"
     },
     {
       "path": "apps/gft-local/tests/connections.test.mjs",
@@ -479,7 +484,7 @@
     {
       "path": "apps/gft-local/tests/executor-recovery.test.mjs",
       "source": "apps/gft-local/tests/executor-recovery.test.mjs",
-      "sha256": "546d881b94cf8781f062a85953b78a9ce74a4dd95b98cd61b6fe208fd289c8e0"
+      "sha256": "fad2ff280df5aac4db6d05cadf4888f6f6a563e8db36b4bf6194d63c59344c06"
     },
     {
       "path": "apps/gft-local/tests/fixtures/claude-source-reader-child.mjs",
@@ -494,7 +499,7 @@
     {
       "path": "apps/gft-local/tests/fixtures/fake-acp.mjs",
       "source": "apps/gft-local/tests/fixtures/fake-acp.mjs",
-      "sha256": "d57b50c45bd486bf1e8884b1950736a6008036a25005de103f23d7bbcd217324"
+      "sha256": "a051975c1c9ce044d2c280903d3ffe3f01e5d60ea274972a75c186b8371267e6"
     },
     {
       "path": "apps/gft-local/tests/fixtures/fake-claude.mjs",
@@ -569,7 +574,7 @@
     {
       "path": "apps/gft-local/tests/mcp.test.mjs",
       "source": "apps/gft-local/tests/mcp.test.mjs",
-      "sha256": "5e231e64f20ab05ce073c837fba2f7049c6424f769b1e122ce63cb360988af46"
+      "sha256": "61805fa25856c9f4e60fffbdaa85fc4f90b9930d469e2d896a0a5c9f52f90cfb"
     },
     {
       "path": "apps/gft-local/tests/memory-read.test.mjs",
@@ -582,9 +587,19 @@
       "sha256": "9e2f3fe8b2d68faa37bcaa0bebdffdad2dedb77405d2b64c4074d14f3a2a95a0"
     },
     {
+      "path": "apps/gft-local/tests/page-build.test.mjs",
+      "source": "apps/gft-local/tests/page-build.test.mjs",
+      "sha256": "9d38ebc57d988254ec271b538cdf5f8d00d1bb2550963f26d1f829a213606874"
+    },
+    {
       "path": "apps/gft-local/tests/panel-runtime.test.mjs",
       "source": "apps/gft-local/tests/panel-runtime.test.mjs",
-      "sha256": "5e41f362d4160a706dfe5c1d82a970224855e800fc429d75516e2a444fd6f420"
+      "sha256": "001d94b9f1518ab0bd78da89a69da9851de88cbb340bd3e141b8187925370105"
+    },
+    {
+      "path": "apps/gft-local/tests/progress.test.mjs",
+      "source": "apps/gft-local/tests/progress.test.mjs",
+      "sha256": "4b407b0ef78c932957a37901191f97db85a7e8613b3fc0974bd190901bf570be"
     },
     {
       "path": "apps/gft-local/tests/pure-boundary.test.mjs",
@@ -594,7 +609,7 @@
     {
       "path": "apps/gft-local/tests/recovery.test.mjs",
       "source": "apps/gft-local/tests/recovery.test.mjs",
-      "sha256": "0dffff67fc7f880b5d85d5d517aa07a229a4246b443d1871a4fa5450b008aae7"
+      "sha256": "474e97ab33f9cdba29730e04c7ad4179b17b6c3a236f34993ac928c54bbc2d7e"
     },
     {
       "path": "apps/gft-local/tests/relation-contract.test.mjs",
@@ -609,12 +624,12 @@
     {
       "path": "apps/gft-local/tests/runner.test.mjs",
       "source": "apps/gft-local/tests/runner.test.mjs",
-      "sha256": "afd47a4768ad80b1ab93d05e9f58ef31e0327b7ac0443539397ea6906e23ae07"
+      "sha256": "8598b8886732bb4dccb9bf4709bbbe3fe8d8cfbc8029c8a8214ecffdd1adc4df"
     },
     {
       "path": "apps/gft-local/tests/server-operations.test.mjs",
       "source": "apps/gft-local/tests/server-operations.test.mjs",
-      "sha256": "5bfc784d8b0e865732c52ce18e353ef4a9d93af6f502dcb211071b4b9a6c31b4"
+      "sha256": "554e9338151c4318adf239a0aebebec13ea17888ac04a289aa5687244d6be708"
     },
     {
       "path": "apps/gft-local/tests/server.test.mjs",
@@ -654,12 +669,17 @@
     {
       "path": "apps/gft-local/tests/store.test.mjs",
       "source": "apps/gft-local/tests/store.test.mjs",
-      "sha256": "612a14ee69d6ed8d3ef3ac11f01fc4c50eeea743b4e67d8e632e48a6662ea7c4"
+      "sha256": "95fe3e062d38c52b065680063c792b58647d6606613e28af0436a7be9d2a668f"
     },
     {
       "path": "apps/gft-local/tests/sync.test.mjs",
       "source": "apps/gft-local/tests/sync.test.mjs",
       "sha256": "6b5f2f7667957666325ba2fe4b04cbdbae2299cbfa577a7f51cfd3acec8ccb87"
+    },
+    {
+      "path": "apps/gft-local/tests/task-records.test.mjs",
+      "source": "apps/gft-local/tests/task-records.test.mjs",
+      "sha256": "808241802f251fd396f8de5aeaf2b0e2869b17af482a49c4fadaf4539915924e"
     },
     {
       "path": "apps/gft-local/tests/test-environment.test.mjs",
@@ -689,12 +709,12 @@
     {
       "path": "apps/gft-local/upgrade.mjs",
       "source": "apps/gft-local/upgrade.mjs",
-      "sha256": "415ea568f5614f14600889ce3f7e4d240aafb388d89d7be76e4dd63e271607cd"
+      "sha256": "2ae90249ccf807f58955818f0ecb348741f8d7093fbe44834fe8fac55d7fccd6"
     },
     {
       "path": "apps/gft-local/version.mjs",
       "source": "apps/gft-local/version.mjs",
-      "sha256": "28fee78c0f635db38149aa409f2c12225a2e802a833c1216337a9f0756cba62e"
+      "sha256": "ff7dd58e9dd541ab9a23282728d5d0bf2d1e68994143e857be1f50ccf37e8404"
     },
     {
       "path": "apps/gft-local/web/AccountDialog.tsx",
@@ -714,7 +734,7 @@
     {
       "path": "apps/gft-local/web/ExecutorDialog.tsx",
       "source": "apps/gft-local/web/ExecutorDialog.tsx",
-      "sha256": "530dea075f76f8191d34d9b94da2355e36ed12767428dbb521960107b4472155"
+      "sha256": "4608df9f5dce5018d044e6e563314834828df2431c188469167adb3b80930adf"
     },
     {
       "path": "apps/gft-local/web/ImportDialog.tsx",
@@ -724,7 +744,7 @@
     {
       "path": "apps/gft-local/web/index.html",
       "source": "apps/gft-local/web/index.html",
-      "sha256": "86ac6f34318094c6d42f93531b1ed7ab0353ce54ff3b90cd2211bd6620fec27b"
+      "sha256": "f272ae9babd495a82c240f6ee314ab58a16dde7a8e36aec2c0a85cd013e97fee"
     },
     {
       "path": "apps/gft-local/web/LocalFilesDialog.tsx",
@@ -734,12 +754,12 @@
     {
       "path": "apps/gft-local/web/localRuntime.ts",
       "source": "apps/gft-local/web/localRuntime.ts",
-      "sha256": "c4c73928255a899eb72e8e3326b7a3fcfd737f68572f7839753cc2e9368d15bd"
+      "sha256": "e305d8ea25a02e7e36685dee9befe83504b1fb3292ced6fdd24135f6f5017057"
     },
     {
       "path": "apps/gft-local/web/main.tsx",
       "source": "apps/gft-local/web/main.tsx",
-      "sha256": "a804e12530a081fbccaeb92297bada213379973f3e0354fa67f1b974a335795f"
+      "sha256": "88594759863cfd0c450a44a354371d0bf809b181805031948dda88fabcabc5cd"
     },
     {
       "path": "apps/gft-local/web/Materials.tsx",
@@ -754,12 +774,42 @@
     {
       "path": "apps/gft-local/web/reconnect.ts",
       "source": "apps/gft-local/web/reconnect.ts",
-      "sha256": "7cc19ae52ec90eaa5550aa889958e52b930581db606d74662d015b3c616c544a"
+      "sha256": "98584b908f65428dd8902b86149557ecca576c0ab2a15879be8f6a35e051fefb"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/api.ts",
+      "source": "apps/gft-local/web/runtime/api.ts",
+      "sha256": "76c968af7cf7c01dc4679780222b9fc6b28bfd2352343ec4e4020d163853210a"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/mapCache.ts",
+      "source": "apps/gft-local/web/runtime/mapCache.ts",
+      "sha256": "e117979b9b773c84479365c11a4c4d394157a330ffb9810ee92f80543f44b566"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/receipts.ts",
+      "source": "apps/gft-local/web/runtime/receipts.ts",
+      "sha256": "72d93b2ca4c6c79f3e52d4e8f79d3c5491e09618875a53e5fc641f6955ce1c67"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/tasks.ts",
+      "source": "apps/gft-local/web/runtime/tasks.ts",
+      "sha256": "095c688eb0721294301d73734801cd917374da267b1f6ebd7f3b303990772787"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/types.ts",
+      "source": "apps/gft-local/web/runtime/types.ts",
+      "sha256": "efbb1862b2361a5485e049377156527ec7167a206510481032a51d671d75bf9f"
+    },
+    {
+      "path": "apps/gft-local/web/runtime/updates.ts",
+      "source": "apps/gft-local/web/runtime/updates.ts",
+      "sha256": "f7e3a9d2fd88c76a7652480792c24279a4d51f5d993ffa8952fa4f199a8a7ba4"
     },
     {
       "path": "apps/gft-local/web/styles.css",
       "source": "apps/gft-local/web/styles.css",
-      "sha256": "471a6615f843e0ac39de6a7578387b72ccd0ca87deb4218cdc9e3cecff698b63"
+      "sha256": "5417e337e54b62d6a2c7bd00cc37658ab6dd5a7ab6f6bea683eb25b28e384142"
     },
     {
       "path": "LICENSE",
@@ -769,22 +819,22 @@
     {
       "path": "package-lock.json",
       "source": "apps/gft-local/package-lock.json",
-      "sha256": "7378c76e49afaf4453ed6019dae251e2b4cfd5b60e25f316d6658a32bb773d27"
+      "sha256": "e1dedc53e65a1e392bb21d28478b6f3ae2e45adedce490051e280cfbf440fede"
     },
     {
       "path": "package.json",
       "source": "apps/gft-local/package.json",
-      "sha256": "10eb7e55464804b5cca64e50a5604fe2d80369fc3d539ef5c286d6e3e923999c"
+      "sha256": "c6055fe54539572619573408a9f3ef0069b98d27c4be222b7d97810fbdb8baec"
     },
     {
       "path": "README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "80318d3b405fcdbd6a6dd90b37e9ce7f517af8cae9953b42677b5395e38523a9"
+      "sha256": "ee0f0a6fa73fa79cf2c622cebbb0a6e4dbb6d0435665a90a690b4718072165e4"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "25f5298abf24fc94c1c38467dcc0e0a00e61c0ae7639619adc2490c62317123b"
+      "sha256": "36943758f7b97a83c0d049a148affcfad9d040da1659f3ff20236a9607aaa09a"
     },
     {
       "path": "skills/gft-map/LICENSE",
@@ -809,7 +859,7 @@
     {
       "path": "skills/gft-map/references/notifications.md",
       "source": "generated:apps/gft-local",
-      "sha256": "040ac453a2c0123e750b96b7b6669839465fe6b411ec230c36c699244fbad17d"
+      "sha256": "630b3f6779e112a50aa13f5a59168ca29da8ffe8e46147dafb6d86de0ef66a93"
     },
     {
       "path": "skills/gft-map/references/workflow.md",
@@ -819,37 +869,37 @@
     {
       "path": "skills/gft-map/scripts/account.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "ca9c6ad02f94827898187816dff1e6ec10fd61db123fdd9204cfd1d9ab8ebc91"
+      "sha256": "791ace190699fe38ce90b50837e399a72370cc2324c062bd6767272c8eaa905b"
     },
     {
       "path": "skills/gft-map/scripts/acpAdapters.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "b2a3a1dc04409c5e25dd158a6419944fbd26ab903c77cd929b0c82acd19614bc"
+      "sha256": "6d2b39335c94c826e3fdf6b0b4fc49a7e536d9943692452614b098397a29b9c8"
     },
     {
       "path": "skills/gft-map/scripts/adapter-locks/claude-acp/package-lock.json",
       "source": "generated:apps/gft-local",
-      "sha256": "9d1a60b7864fcd475a1c924a59ed488ec6c6172565fbfd507c3b3e47aae6e836"
+      "sha256": "51eb9af0a59fb8ef05e955d7a375adfffc7cc5b57bb14d5838d67919a2aa4170"
     },
     {
       "path": "skills/gft-map/scripts/adapter-locks/claude-acp/package.json",
       "source": "generated:apps/gft-local",
-      "sha256": "de91aa0972af20386ed1cd85d13df90aaea4c1ef20573cec0cc5230f745ca8ac"
+      "sha256": "9265eabb0b634ac280768076ee7ee4e9da6cd8570ab9c8d30f7a9e2cb8d8f12f"
     },
     {
       "path": "skills/gft-map/scripts/adapter-locks/codex-acp/package-lock.json",
       "source": "generated:apps/gft-local",
-      "sha256": "c417715d5246ca3be5b3285d5918b9b56a5100c4f3e24f44605a2d6b50c6012a"
+      "sha256": "2063b0f44b9c57bdf6bc5ce3d87265f15118992a4b609244d5fa2e4eee641010"
     },
     {
       "path": "skills/gft-map/scripts/adapter-locks/codex-acp/package.json",
       "source": "generated:apps/gft-local",
-      "sha256": "b206bf27bafa22eb16e71fad069e41cd5dd9d7a09a5939af51a5b991f5dc50d3"
+      "sha256": "de84a87c26251631d37369443f078a0c446bd7a832e3341b656eafc086cbf66f"
     },
     {
       "path": "skills/gft-map/scripts/change-hook.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "f849539296e70118cdf434c88031fa347fea4052aea0ebd2780f002a1feff8f3"
+      "sha256": "f859aa9e4b1178e6438403a1adf56bbf4e1a09e715eba0ab943ad60a8c4737e9"
     },
     {
       "path": "skills/gft-map/scripts/childProcess.mjs",
@@ -864,7 +914,7 @@
     {
       "path": "skills/gft-map/scripts/cli.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "05b9540bfcc01ec7abfd9a0599c377add49e3d05c7b83eb38b001cd8131b499b"
+      "sha256": "8b5dc660a636d473e853408360612e471bb2efcdf84f7fc1a027cc371ac08aec"
     },
     {
       "path": "skills/gft-map/scripts/connections.mjs",
@@ -874,17 +924,17 @@
     {
       "path": "skills/gft-map/scripts/dist/acp.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "83907be6ffe3403ca2e6a69e294957b118599689ec65eb11c9c70a14e52af375"
+      "sha256": "5e7a759edbde17a3e2003420cff754318a9dca28c4f9ab72bbd3ecc880ef7af1"
     },
     {
       "path": "skills/gft-map/scripts/dist/core.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "8a8436a7239a12b5e3e37c15bfd35b4e66434593c5d70debd6fde26e5ddb466f"
+      "sha256": "f00cbd0efe06a5b2dab4f9f5ed3261f70b7d32113bbff0ada0208ff5db82b076"
     },
     {
       "path": "skills/gft-map/scripts/dist/mcp.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "592ef9fa4eed97b8f4a4494f38528c11b22505f6ec1acc6ce25d892fe7316323"
+      "sha256": "037c1f6cb650edcede7081da06c72a2f07d86255a3be63743c6490d08b8a391a"
     },
     {
       "path": "skills/gft-map/scripts/dist/sources.mjs",
@@ -894,17 +944,17 @@
     {
       "path": "skills/gft-map/scripts/dist/version.json",
       "source": "generated:apps/gft-local",
-      "sha256": "0f7556d37e6767ccbe9ecc10a224a052e857cbef281784aece9053d509b3b0e2"
+      "sha256": "f5735b5e3441c9932e97f20eccc8ad373917a1bda936daaa0b64e951a425af7d"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.css",
       "source": "generated:apps/gft-local",
-      "sha256": "60208c3dc9b45564a81922945cf8dc0a4719d6fde836218d5a5dfa2bbe70e5c3"
+      "sha256": "08728f60783cd39c5476b81216498b861423fd1f884757e919cc379781277623"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/app.js",
       "source": "generated:apps/gft-local",
-      "sha256": "dd976c60afedb20d80bbc3b5e3e58a5ece4c2244d0eb03cd7d831bb37117b108"
+      "sha256": "0338f2f7c27685645fd1846b82434f09ebee3c465c4b314b07ff3039ce28bcc5"
     },
     {
       "path": "skills/gft-map/scripts/dist/web/assets/KaTeX_AMS-Regular-CYEKBG2K.woff",
@@ -1209,12 +1259,12 @@
     {
       "path": "skills/gft-map/scripts/dist/web/index.html",
       "source": "generated:apps/gft-local",
-      "sha256": "86ac6f34318094c6d42f93531b1ed7ab0353ce54ff3b90cd2211bd6620fec27b"
+      "sha256": "f272ae9babd495a82c240f6ee314ab58a16dde7a8e36aec2c0a85cd013e97fee"
     },
     {
       "path": "skills/gft-map/scripts/executor-config.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "b64c3200febf43a485003af594fbc9dbb5597dc3325b7bc7dd1a52ab1efe1eb5"
+      "sha256": "8d3d9422e33ee87492f8832cefa35656c2f4a696b819b90928d7e46265336fc6"
     },
     {
       "path": "skills/gft-map/scripts/install-hooks.mjs",
@@ -1247,6 +1297,11 @@
       "sha256": "4674ec8fe031b47bcef982f3d12e69dd25700f4d13f5125f1648b360346b86ff"
     },
     {
+      "path": "skills/gft-map/scripts/progress.mjs",
+      "source": "generated:apps/gft-local",
+      "sha256": "da5bef921d40ea1375fc5df61f09022fd359e9c88445c0965c23bd6701e219d0"
+    },
+    {
       "path": "skills/gft-map/scripts/runner.mjs",
       "source": "generated:apps/gft-local",
       "sha256": "ab83a98668ead0c78bbb3b3139e6190adc389bbb74cc90d8d577e2f70fe825fb"
@@ -1254,7 +1309,7 @@
     {
       "path": "skills/gft-map/scripts/server.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "9e1ee122463d9a1f8d2c9bf3dc2d0adfe78a08e1c54af9e3a87a25662347e667"
+      "sha256": "08d6b501eaf6fe1b5f243614eece9951031aadb2e24a5be7ee3d59278196c6d5"
     },
     {
       "path": "skills/gft-map/scripts/serviceLaunch.mjs",
@@ -1274,7 +1329,7 @@
     {
       "path": "skills/gft-map/scripts/store.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "2c0b700f6d3e9cce16a880f69d5f05893b791894d0a86f8dcf9fd6c67c0816c0"
+      "sha256": "a465dd648ad76592bee4cdc0c4f545c6ed9c0be90310d35111ce8968fb70966a"
     },
     {
       "path": "skills/gft-map/scripts/sync.mjs",
@@ -1284,22 +1339,22 @@
     {
       "path": "skills/gft-map/scripts/upgrade.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "415ea568f5614f14600889ce3f7e4d240aafb388d89d7be76e4dd63e271607cd"
+      "sha256": "2ae90249ccf807f58955818f0ecb348741f8d7093fbe44834fe8fac55d7fccd6"
     },
     {
       "path": "skills/gft-map/scripts/version.mjs",
       "source": "generated:apps/gft-local",
-      "sha256": "28fee78c0f635db38149aa409f2c12225a2e802a833c1216337a9f0756cba62e"
+      "sha256": "ff7dd58e9dd541ab9a23282728d5d0bf2d1e68994143e857be1f50ccf37e8404"
     },
     {
       "path": "skills/gft-map/SKILL.md",
       "source": "generated:apps/gft-local",
-      "sha256": "875875cde0e4a8fdc03baf50bc2d13e0112845a4b49364edfc7459f2daa20995"
+      "sha256": "5b646ea83e215e1186dccb8a27e60aaefdf1ff908b78bc4f35a31c3d61372236"
     },
     {
       "path": "skills/gft-map/THIRD_PARTY_NOTICES.txt",
       "source": "generated:apps/gft-local",
-      "sha256": "2a4595156e85537dc669bf4438b36a18b568fc586454173696aa1b0e3f8b2687"
+      "sha256": "a469efe1e6672594734a33ef0140375e2eccefd78d857e3b5c1ad6b1d5858f22"
     },
     {
       "path": "src/component/common/ConfirmDialog.module.css",
@@ -1364,7 +1419,7 @@
     {
       "path": "src/component/focus/MapDocActions/index.tsx",
       "source": "src/component/focus/MapDocActions/index.tsx",
-      "sha256": "92aa9091ad3f5c0be09ea0c5b7013c4e62132a17227035038f1db93aceb646a2"
+      "sha256": "18c16789f6c4665e9591dd029637e5654dba5b6aefe240ff1043aa80e014ccbf"
     },
     {
       "path": "src/component/focus/MapDocActions/MapDocActions.module.css",
@@ -1389,7 +1444,7 @@
     {
       "path": "src/component/focus/ThinkingMapPanel/ThinkingMapPanel.module.css",
       "source": "src/component/focus/ThinkingMapPanel/ThinkingMapPanel.module.css",
-      "sha256": "895bb28789d3a70198254d397852ca9fd9f4bbf1d7169ee649079ea93940b349"
+      "sha256": "8f174e550b8d2e5a72cbce026f7368c27ce920700292ea1ec6377ad9b679b143"
     },
     {
       "path": "src/component/focus/ThinkingMapRuntime.tsx",
@@ -1404,7 +1459,7 @@
     {
       "path": "src/component/focus/ThinkingMapView/index.tsx",
       "source": "src/component/focus/ThinkingMapView/index.tsx",
-      "sha256": "d0ad1b0076a5eccace1add56693ff94d4bc435f7cdde7e0d1985e49f8ca6e75b"
+      "sha256": "2a803a1db7cd81e6807dd5038e408c6d606d039721da95e71d83ebe88cea5735"
     },
     {
       "path": "src/component/focus/ThinkingMapView/layout.ts",
@@ -1444,7 +1499,7 @@
     {
       "path": "src/i18n/en.ts",
       "source": "src/i18n/en.ts",
-      "sha256": "ef3b1a79f8df4a8f3bf1eaf84ed839ef07566422d2c26b7225ae6ae74a38e08b"
+      "sha256": "28bd6336195a88907515eb3daf69db745ca79161729ab930f668f13201485883"
     },
     {
       "path": "src/i18n/index.ts",
@@ -1559,12 +1614,12 @@
     {
       "path": "src/service/tidyCore.ts",
       "source": "src/service/tidyCore.ts",
-      "sha256": "6769e031dc52b66d2d14f3ae83ee73b846508acb613de95eae56900820c3fcf6"
+      "sha256": "4a514fc9a16aeee8361a5b3d90b169e828f1d7867d259f3c4d57d53b52e037f4"
     },
     {
       "path": "src/service/tidyRounds.ts",
       "source": "src/service/tidyRounds.ts",
-      "sha256": "4aaeca9388f30b4ae527526bd0a58d350f70a5ddeed6039981a2dddc535e83e5"
+      "sha256": "377fbe00180820bf90b5c6b297979a5ddc8fe2f2d1b824caff5237fb22bd13e8"
     },
     {
       "path": "src/service/topicBundle.ts",
@@ -1579,12 +1634,12 @@
     {
       "path": "src/store/thinkingMap/createStore.ts",
       "source": "src/store/thinkingMap/createStore.ts",
-      "sha256": "1e1198ec791b97787753d773ee102b8f321549482b2ca6f8c351c8c6ade70c0a"
+      "sha256": "84b2550fb3f2491157b8e25e3a61c0eaa1b31225a808b19421b16ae107f6bea5"
     },
     {
       "path": "src/store/thinkingMap/runtime.ts",
       "source": "src/store/thinkingMap/runtime.ts",
-      "sha256": "8784d86d78342ed45a05660597ee7d7815ac350a9d492318ece926fbcb3d6ea2"
+      "sha256": "cfafc64c3691f9defe57ad870028d72cfa6b778dedac1ed150ddda82a2a70b40"
     },
     {
       "path": "src/style/index.css",

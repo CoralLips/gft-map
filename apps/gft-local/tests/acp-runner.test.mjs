@@ -301,18 +301,19 @@ test('初始化/模型超时及服务关闭均清理进程，并保留明确终�
     assert.match(next.output, /ACP 合成结果/);
   }));
 
-test('provider defaults override saved model and high effort before sending a prompt', () =>
+test('a chosen model replaces only the recommended model; effort stays its default, not personal high effort', () =>
   isolated(async directory => {
     const result = await createAcpRunner(
       options('success', { providerDefaults: true, model: 'fixture-model' }),
     ).run(task, { directory });
-    assert.equal(result.execution.model, 'fixture-default');
+    assert.equal(result.execution.model, 'fixture-model');
+    assert.equal(result.execution.modelSource, 'chosen');
     assert.equal(result.execution.effort, 'medium');
     const requests = (await invocation(directory)).requests;
     const selections = requests.filter(item => item.method === 'session/set_config_option');
     assert.deepEqual(
       selections.map(item => item.params.value),
-      ['read-only', 'fixture-default', 'medium'],
+      ['read-only', 'fixture-model', 'medium'],
     );
     assert.ok(
       requests.findIndex(item => item.method === 'session/prompt') >

@@ -42,7 +42,7 @@ export const english: Record<string, string> = {
   恢复: 'Reset',
   '已恢复本例。': 'Example reset.',
   查看源码: 'View source',
-  'GFT Map 可交互面板': 'Interactive GFT Map panel',
+  'GFT-Map 可交互面板': 'Interactive GFT-Map panel',
   示例: ' example',
   浏览器内试用: 'Browser demo',
   'Log · 收到的来源材料': 'Log · Received sources',
@@ -66,8 +66,8 @@ export const english: Record<string, string> = {
   '导出的是当前版本，包含你刚才的修改，以及主题、Doc、Map 和已接收的 Log。':
     'The download includes the current topic, Doc, Map, and Log, including your edits.',
   '下载当前脉络包 .json': 'Download this map (.json)',
-  '打开本地 GFT Map。在设置里选择「导入脉络」。':
-    'Open your local GFT Map. Choose Import maps in Settings.',
+  '打开本地 GFT-Map。在设置里选择「导入脉络」。':
+    'Open your local GFT-Map. Choose Import maps in Settings.',
   '选中刚下载的文件。它会成为一份新脉络，原来的内容不会被覆盖。':
     'Select the downloaded file. It creates a new map without replacing existing content.',
   '在新的聊天中连接这份脉络，让 Agent 按需读取。':

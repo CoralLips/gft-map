@@ -91,7 +91,7 @@ const tools = [
   {
     name: 'gft_local_task',
     description:
-      'Check a local task. saved=true confirms application to the topic. A completed compute task only has a model result and does not confirm saving. Does not invoke a model.',
+      'Check a local task. saved=true confirms application to the topic. Does not invoke a model.',
     inputSchema: {
       type: 'object',
       properties: { taskId: { type: 'string' } },
@@ -214,11 +214,9 @@ export function createGftMcpServer({ request = createLocalClient() } = {}) {
     let message;
     if (completed && task.action === 'compact')
       message = '本批历史已提炼，图文尚未成稿；继续更新可从已保存的进度接着处理。';
-    else if (completed && task.mode === 'compute')
-      message = '模型结果已生成；是否落账请以面板保存结果为准。';
     return result({
       ...task,
-      saved: completed && task.mode !== 'compute' && task.action !== 'compact',
+      saved: completed && task.action !== 'compact',
       ...(message ? { message } : {}),
     });
   }

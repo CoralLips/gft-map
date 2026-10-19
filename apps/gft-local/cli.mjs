@@ -57,7 +57,7 @@ const USAGE = [
     ],
   ],
   [
-    'GFT Map',
+    'GFT-Map',
     [
       'list',
       'create --name NAME --scope TEXT',
@@ -158,7 +158,7 @@ function browserCommand(href) {
 async function openBrowser(address) {
   const url = new URL(address);
   if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname))
-    throw store.fail('只能打开本机 GFT Map 地址');
+    throw store.fail('只能打开本机 GFT-Map 地址');
   const [executable, parameters] = browserCommand(url.href);
   return new Promise(resolve => {
     const child = spawn(executable, parameters, {
@@ -217,7 +217,7 @@ async function serve() {
     await saveExecutorConfig({ agent, runnerOptions: options });
   console.log(
     [
-      `GFT Map: http://127.0.0.1:${server.address().port}`,
+      `GFT-Map: http://127.0.0.1:${server.address().port}`,
       `数据目录: ${store.homeDir()}`,
       `执行器: ${agent || '当前 Agent 经 Skill 处理待办'}`,
       '按 Ctrl+C 停止。',

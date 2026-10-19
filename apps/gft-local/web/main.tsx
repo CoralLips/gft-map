@@ -30,7 +30,6 @@ type Task = {
   topicId: string;
   action: string;
   status: string;
-  mode?: string;
   error?: string;
   createdAt?: string;
 };
@@ -152,10 +151,11 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const cancel = async (task: Task) => {
     setCancelling(task.id);
     try {
-      await runtime.request(`/api/tasks/${task.id}/cancel`, {});
-      setTasks(current =>
-        current.map(item => (item.id === task.id ? { ...item, status: 'cancelled' } : item)),
-      );
+      const result = await runtime.cancelTask(task.id, task.topicId);
+      if (result)
+        setTasks(current =>
+          current.map(item => (item.id === task.id ? { ...item, status: result.status } : item)),
+        );
     } catch (error) {
       setError(messageOf(error));
     } finally {
@@ -333,6 +333,7 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
         <ExecutorDialog
           runtime={runtime}
           current={status?.agent || null}
+          currentStatus={status?.executor}
           busy={active > 0}
           onChanged={async () => setStatus(await runtime.request<RuntimeStatus>('/api/runtime'))}
           onClose={() => setDialog(null)}
@@ -424,16 +425,14 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
                   </div>
                   <span>
                     {tr(
-                      cancelling === task.id
+                      cancelling === task.id || service.stoppingTaskIds.includes(task.id)
                         ? '正在取消…'
-                        : task.mode === 'compute' && task.status === 'completed'
-                          ? '模型已返回'
-                          : statusNames[task.status] || task.status,
+                        : statusNames[task.status] || task.status,
                     )}
                   </span>
                   {isActive(task) && (
                     <button
-                      disabled={cancelling === task.id}
+                      disabled={cancelling === task.id || service.stoppingTaskIds.includes(task.id)}
                       onClick={() => {
                         void cancel(task);
                       }}
@@ -453,10 +452,6 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
 
 function App() {
   const tr = useT();
-  const lang = useLangStore(s => s.lang);
-  useEffect(() => {
-    document.title = lang === 'en' ? 'GFT Map · Local' : 'GFT Map · 本地脉络';
-  }, [lang]);
   const [error, setError] = useState('');
   const [updateRequest, setUpdateRequest] = useState<UpdateRequest | null>(null);
   const [sourceRequest, setSourceRequest] = useState<SourceRequest | null>(null);
@@ -539,7 +534,20 @@ function App() {
           </div>
         )}
       </main>
-      {ready && service.phase !== 'connected' && (
+      {service.stoppingTaskIds.length > 0 && (
+        <div className="gft-local-service-status gft-local-stop-status" role="status">
+          <span>{tr(service.stopError || '正在确认停止…')}</span>
+          <button
+            disabled={service.checking}
+            onClick={() => {
+              void runtime.service.retry();
+            }}
+          >
+            {tr(service.checking ? '正在重连…' : '立即重试')}
+          </button>
+        </div>
+      )}
+      {ready && service.phase !== 'connected' && service.stoppingTaskIds.length === 0 && (
         <div className="gft-local-service-status" role="status">
           <span>{tr('连接已中断，当前内容和未保存修改已保留。正在自动重连…')}</span>
           <button
@@ -552,24 +560,28 @@ function App() {
           </button>
         </div>
       )}
-      {ready && service.phase === 'connected' && service.pending && service.saveFailed && (
-        <div className="gft-local-service-status" role="status">
-          <span>{tr('连接正常，尚有本地修改未保存。')}</span>
-          <button
-            disabled={saving}
-            onClick={() => {
-              setSaving(true);
-              void runtime.service
-                .savePending()
-                .catch(error => setError(messageOf(error)))
-                .finally(() => setSaving(false));
-            }}
-          >
-            {tr(saving ? '正在保存…' : '重试保存')}
-          </button>
-        </div>
-      )}
-      {ready && error && (
+      {ready &&
+        service.phase === 'connected' &&
+        service.pending &&
+        service.saveFailed &&
+        service.stoppingTaskIds.length === 0 && (
+          <div className="gft-local-service-status" role="status">
+            <span>{tr('连接正常，尚有本地修改未保存。')}</span>
+            <button
+              disabled={saving}
+              onClick={() => {
+                setSaving(true);
+                void runtime.service
+                  .savePending()
+                  .catch(error => setError(messageOf(error)))
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {tr(saving ? '正在保存…' : '重试保存')}
+            </button>
+          </div>
+        )}
+      {ready && error && service.stoppingTaskIds.length === 0 && (
         <div className="gft-local-banner" role="alert">
           {tr(error)}
           <button aria-label={tr('关闭提示')} onClick={() => setError('')}>

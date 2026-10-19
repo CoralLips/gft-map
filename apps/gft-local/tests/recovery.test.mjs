@@ -85,7 +85,7 @@ test('主题已保存而任务仍 pending：重试只补 completed，不重复�
     const done = await store.getTask(task.id);
     assert.equal(done.status, 'completed');
     assert.equal(done.resultRevision, view.revision);
-    assert.equal(done.input, '');
+    assert.equal(done.input, undefined);
   }));
 
 test('中断之后已有手工修正：重试旧任务保留修正，记录最初应用版本', () =>
@@ -124,7 +124,7 @@ test('recover 根据主题中的应用记录补全任务，不重放模型结果
     const done = await store.getTask(task.id);
     assert.equal(done.status, 'completed');
     assert.equal(done.resultRevision, view.revision);
-    assert.equal(done.input, '');
+    assert.equal(done.input, undefined);
   }));
 
 test('recover 回收确定已退出进程的锁并结束遗留 running 任务，恢复后可继续保存', () =>

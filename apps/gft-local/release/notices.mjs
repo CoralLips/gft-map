@@ -39,7 +39,7 @@ export async function writeNotices({ output = path.join(root, 'THIRD_PARTY_NOTIC
     );
   }
   const heading =
-    'GFT Map — bundled third-party notices\n\nThese packages are included in the browser or ACP runtime distribution. Their original license terms follow. Build-only dependencies are recorded with versions and license identifiers in package-lock.json and are not shipped in the Skill.\n';
+    'GFT-Map — bundled third-party notices\n\nThese packages are included in the browser or ACP runtime distribution. Their original license terms follow. Build-only dependencies are recorded with versions and license identifiers in package-lock.json and are not shipped in the Skill.\n';
   await writeFile(output, `${heading}\n${sections.join('\n\n' + '='.repeat(72) + '\n\n')}\n`);
   return { output, packages: directories.size };
 }

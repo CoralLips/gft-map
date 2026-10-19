@@ -23655,7 +23655,10 @@ async function runSession(request, live, { adapter, task, directory, model, safe
     for (const category of ["model", "thought_level"]) {
       const option = config2.find((item) => item.category === category && item.type === "select");
       if (!option && category === "thought_level") continue;
-      const value = adapter === "codex" ? option?._meta?.jetbrains?.air?.recommendedValue : "default";
+      const chosen = category === "model" ? model : void 0;
+      const value = chosen ?? (adapter === "codex" ? option?._meta?.jetbrains?.air?.recommendedValue : "default");
+      if (chosen && option && !optionsOf(option).some((item) => item.value === chosen))
+        throw errorOf("RUNNER_MODEL", `\u6240\u9009\u6A21\u578B ${chosen} \u5F53\u524D\u4E0D\u53EF\u7528\uFF0C\u8BF7\u5728\u201CAI \u5904\u7406\u201D\u4E2D\u91CD\u65B0\u9009\u62E9\u3002`);
       if (!option || typeof value !== "string" || !optionsOf(option).some((item) => item.value === value))
         throw errorOf(
           "RUNNER_DEFAULT",
@@ -23674,7 +23677,7 @@ async function runSession(request, live, { adapter, task, directory, model, safe
     }
     const effort = config2.find((item) => item.category === "thought_level");
     execution.effort = effort?.currentValue === "default" ? "auto" : effort?.currentValue || null;
-    execution.modelSource = "provider-default";
+    execution.modelSource = model ? "chosen" : "provider-default";
   }
   execution.mode = safeMode;
   const modelOption = config2.find(
@@ -23685,17 +23688,28 @@ async function runSession(request, live, { adapter, task, directory, model, safe
     await selectModel(request, session, model, { config: config2, modeOption, safeMode });
     execution.model = model;
   }
+  if (execution.model === "default")
+    execution.modelName = optionsOf(modelOption).find(
+      (item) => item.value === "default"
+    )?.description;
   if (live.interrupted) throw live.interrupted;
   if (probe)
     return {
       ...agentInfo,
       model: execution.model,
+      modelName: execution.modelName,
       effort: execution.effort,
-      modelSource: execution.modelSource
+      modelSource: execution.modelSource,
+      models: optionsOf(modelOption).map(({ value, name, description }) => ({
+        value,
+        name,
+        ...description ? { description } : {}
+      }))
     };
   const system = adapter === "claude" ? "" : `${task.system}
 
 `;
+  execution.promptSentMs = Date.now() - Date.parse(execution.startedAt);
   const response = await request("session/prompt", {
     sessionId: live.sessionId,
     prompt: [{ type: "text", text: `${TASK_PREAMBLE}
@@ -23781,8 +23795,8 @@ function createAcpRunner({
     status: "unchecked",
     engine: `${adapter}-acp`,
     protocol: "acp",
-    model: providerDefaults ? null : model || null,
-    modelSource: providerDefaults ? "provider-default" : model ? "explicit" : "adapter-default",
+    model: model || null,
+    modelSource: model ? providerDefaults ? "chosen" : "explicit" : providerDefaults ? "provider-default" : "adapter-default",
     authenticated: null,
     isolatedConfig: false,
     permissionPolicy: "deny",
@@ -23884,6 +23898,7 @@ function createAcpRunner({
     child.stdout.pipe(bounded);
     function receiveText(text) {
       if (live.interrupted) return;
+      if (!live.output) execution.firstTextMs = Date.now() - started;
       live.output += text;
       execution.streamedChars = live.output.length;
       if (Buffer.byteLength(live.output) > MAX_OUTPUT2) {

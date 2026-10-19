@@ -159,6 +159,10 @@
 .stopOnHover .stopLabel { display: none; }
 /* hover 换「■ 中止」但按钮尺寸纹丝不动：进度文案隐形保占位，中止字样绝对定位居中覆盖；颜色继承不另染 */
 .stopOnHover:hover .runLabel { visibility: hidden; }
+/* 运行中的小转圈：只表示"正在处理"，颜色随按钮文字 */
+.spinner { display: inline-block; width: 0.8em; height: 0.8em; margin-right: 0.4em; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -0.1em; opacity: 0.8; animation: runSpin 0.8s linear infinite; }
+@keyframes runSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .stopOnHover:hover .stopLabel { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; }
 
 /* 范围默认单行；原生展开只改变显示，不改动整理规则。 */

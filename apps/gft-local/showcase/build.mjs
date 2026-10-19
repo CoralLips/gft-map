@@ -59,10 +59,13 @@ await build({
         build.onLoad(
           { filter: /[\\/]src[\\/]style[\\/]index\.css$/ },
           async ({ path: cssPath }) => {
-            const result = await postcss([tailwind({ base: repo }), autoprefixer()]).process(
-              await readFile(cssPath, 'utf8'),
-              { from: cssPath },
-            );
+            // Scan only the page source; see apps/gft-local/build.mjs.
+            const result = await postcss([
+              tailwind({ base: path.join(repo, 'src') }),
+              autoprefixer(),
+            ]).process(await readFile(cssPath, 'utf8'), { from: cssPath });
+            if (!result.css.includes('#root'))
+              throw new Error('Shared styles came out empty; the page would render without layout.');
             return { contents: result.css, loader: 'css', resolveDir: path.dirname(cssPath) };
           },
         );
@@ -98,7 +101,7 @@ for (const example of getExamples('en'))
     path.join(output, 'examples', `${example.id}.en.gft.json`),
     JSON.stringify(exampleBundle(example, 'en'), null, 2) + '\n',
   );
-console.log(`GFT Map showcase: ${output}`);
+console.log(`GFT-Map showcase: ${output}`);
 if (process.argv.includes('--serve')) {
   const { createServer } = await import('node:http');
   const mime = {

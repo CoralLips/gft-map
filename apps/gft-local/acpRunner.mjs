@@ -257,11 +257,16 @@ async function runSession(
   let { config, modeOption } = await selectSafeMode(request, session, safeMode);
   if (providerDefaults) {
     // Select model first: its default effort may differ from the previous model.
+    // A model the person chose replaces only the model; its effort stays the default.
     for (const category of ['model', 'thought_level']) {
       const option = config.find(item => item.category === category && item.type === 'select');
       if (!option && category === 'thought_level') continue;
+      const chosen = category === 'model' ? model : undefined;
       const value =
-        adapter === 'codex' ? option?._meta?.jetbrains?.air?.recommendedValue : 'default';
+        chosen ??
+        (adapter === 'codex' ? option?._meta?.jetbrains?.air?.recommendedValue : 'default');
+      if (chosen && option && !optionsOf(option).some(item => item.value === chosen))
+        throw errorOf('RUNNER_MODEL', `所选模型 ${chosen} 当前不可用，请在“AI 处理”中重新选择。`);
       if (
         !option ||
         typeof value !== 'string' ||
@@ -284,7 +289,7 @@ async function runSession(
     }
     const effort = config.find(item => item.category === 'thought_level');
     execution.effort = effort?.currentValue === 'default' ? 'auto' : effort?.currentValue || null;
-    execution.modelSource = 'provider-default';
+    execution.modelSource = model ? 'chosen' : 'provider-default';
   }
   execution.mode = safeMode;
   const modelOption = config.find(
@@ -295,17 +300,30 @@ async function runSession(
     await selectModel(request, session, model, { config, modeOption, safeMode });
     execution.model = model;
   }
+  // Claude's "default" names the model it resolves to in the option's description.
+  if (execution.model === 'default')
+    execution.modelName = optionsOf(modelOption).find(
+      item => item.value === 'default',
+    )?.description;
   if (live.interrupted) throw live.interrupted;
   if (probe)
     return {
       ...agentInfo,
       model: execution.model,
+      modelName: execution.modelName,
       effort: execution.effort,
       modelSource: execution.modelSource,
+      models: optionsOf(modelOption).map(({ value, name, description }) => ({
+        value,
+        name,
+        ...(description ? { description } : {}),
+      })),
     };
 
   // Claude receives the system prompt through session/new; Codex in the prompt.
   const system = adapter === 'claude' ? '' : `${task.system}\n\n`;
+  // Where a call's time goes: start-up before this point, then waiting, then writing.
+  execution.promptSentMs = Date.now() - Date.parse(execution.startedAt);
   const response = await request('session/prompt', {
     sessionId: live.sessionId,
     prompt: [{ type: 'text', text: `${TASK_PREAMBLE}\n\n${system}${task.user}` }],
@@ -402,8 +420,14 @@ export function createAcpRunner({
     status: 'unchecked',
     engine: `${adapter}-acp`,
     protocol: 'acp',
-    model: providerDefaults ? null : model || null,
-    modelSource: providerDefaults ? 'provider-default' : model ? 'explicit' : 'adapter-default',
+    model: model || null,
+    modelSource: model
+      ? providerDefaults
+        ? 'chosen'
+        : 'explicit'
+      : providerDefaults
+        ? 'provider-default'
+        : 'adapter-default',
     authenticated: null,
     isolatedConfig: false,
     permissionPolicy: 'deny',
@@ -522,6 +546,7 @@ export function createAcpRunner({
 
     function receiveText(text) {
       if (live.interrupted) return;
+      if (!live.output) execution.firstTextMs = Date.now() - started;
       live.output += text;
       execution.streamedChars = live.output.length;
       if (Buffer.byteLength(live.output) > MAX_OUTPUT) {

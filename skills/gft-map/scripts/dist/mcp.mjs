@@ -17002,7 +17002,7 @@ var tools = [
   },
   {
     name: "gft_local_task",
-    description: "Check a local task. saved=true confirms application to the topic. A completed compute task only has a model result and does not confirm saving. Does not invoke a model.",
+    description: "Check a local task. saved=true confirms application to the topic. Does not invoke a model.",
     inputSchema: {
       type: "object",
       properties: { taskId: { type: "string" } },
@@ -17097,11 +17097,9 @@ function createGftMcpServer({ request = createLocalClient() } = {}) {
     let message;
     if (completed && task.action === "compact")
       message = "\u672C\u6279\u5386\u53F2\u5DF2\u63D0\u70BC\uFF0C\u56FE\u6587\u5C1A\u672A\u6210\u7A3F\uFF1B\u7EE7\u7EED\u66F4\u65B0\u53EF\u4ECE\u5DF2\u4FDD\u5B58\u7684\u8FDB\u5EA6\u63A5\u7740\u5904\u7406\u3002";
-    else if (completed && task.mode === "compute")
-      message = "\u6A21\u578B\u7ED3\u679C\u5DF2\u751F\u6210\uFF1B\u662F\u5426\u843D\u8D26\u8BF7\u4EE5\u9762\u677F\u4FDD\u5B58\u7ED3\u679C\u4E3A\u51C6\u3002";
     return result({
       ...task,
-      saved: completed && task.mode !== "compute" && task.action !== "compact",
+      saved: completed && task.action !== "compact",
       ...message ? { message } : {}
     });
   }

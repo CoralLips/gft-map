@@ -36,7 +36,7 @@ test('failed locked install preserves useful diagnostics without credentials and
   }
 });
 
-test('a damaged adapter cache is replaced only after a complete staging install', async () => {
+test('a damaged adapter cache is replaced only after a complete staging install, leaving no old copies', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'gft-adapter-repair-'));
   const previous = process.env.GFT_LOCAL_HOME,
     npm = process.env.npm_execpath;
@@ -45,17 +45,24 @@ test('a damaged adapter cache is replaced only after a complete staging install'
   try {
     await writeFile(
       process.env.npm_execpath,
-      `const fs=require('node:fs'),p=require('node:path');const d=p.join(process.argv[process.argv.indexOf('--prefix')+1],'node_modules/@agentclientprotocol/codex-acp');fs.mkdirSync(p.join(d,'dist'),{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({version:'1.12.0'}));fs.writeFileSync(p.join(d,'dist/index.js'),'// complete');`,
+      `const fs=require('node:fs'),p=require('node:path');const d=p.join(process.argv[process.argv.indexOf('--prefix')+1],'node_modules/@agentclientprotocol/codex-acp');fs.mkdirSync(p.join(d,'dist'),{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({version:'${adapterReleases['codex-acp'].version}'}));fs.writeFileSync(p.join(d,'dist/index.js'),'// complete');`,
     );
     const root = path.join(directory, 'adapters');
-    await mkdir(path.join(root, 'codex-acp-1.12.0'), { recursive: true });
-    await writeFile(path.join(root, 'codex-acp-1.12.0', 'broken'), 'old cache');
+    const active = `codex-acp-${adapterReleases['codex-acp'].version}`;
+    await mkdir(path.join(root, active), { recursive: true });
+    await writeFile(path.join(root, active, 'broken'), 'old cache');
+    for (const old of ['codex-acp-0.0.1', 'claude-acp-0.0.1'])
+      await mkdir(path.join(root, old, 'node_modules'), { recursive: true });
     const result = await ensureAdapter('codex-acp');
     assert.ok(
       result.prefixArgs[0].endsWith('dist/index.js') ||
         result.prefixArgs[0].endsWith('dist\\index.js'),
     );
-    assert.ok((await readdir(root)).some(name => name.includes('-damaged-')));
+    assert.deepEqual(
+      (await readdir(root)).sort(),
+      ['claude-acp-0.0.1', active],
+      '替换下来的旧副本和旧版本被清掉，另一家的安装不动',
+    );
     assert.deepEqual(await ensureAdapter('codex-acp'), result);
   } finally {
     if (previous === undefined) delete process.env.GFT_LOCAL_HOME;
@@ -67,7 +74,7 @@ test('a damaged adapter cache is replaced only after a complete staging install'
   }
 });
 
-test('default selection migrates the provider without pinning a model, never a native executable', () => {
+test('a CLI selection becomes ACP without its old model; an ACP agent keeps the model chosen for it', () => {
   assert.equal(defaultExecutor(null).agent, 'codex-acp');
   for (const provider of ['codex', 'claude']) {
     assert.deepEqual(
@@ -93,12 +100,12 @@ test('default selection migrates the provider without pinning a model, never a n
     assert.deepEqual(
       defaultExecutor({ agent: provider, profiles: { [`${provider}-acp`]: runnerOptions } })
         .runnerOptions,
-      { binary: 'node.exe', prefixArgs: ['adapter.js'] },
+      runnerOptions,
     );
-    assert.deepEqual(defaultExecutor({ agent: `${provider}-acp`, runnerOptions }).runnerOptions, {
-      binary: 'node.exe',
-      prefixArgs: ['adapter.js'],
-    });
+    assert.deepEqual(
+      defaultExecutor({ agent: `${provider}-acp`, runnerOptions }).runnerOptions,
+      runnerOptions,
+    );
   }
 });
 

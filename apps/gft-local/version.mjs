@@ -7,7 +7,7 @@ export const programDirectory = path.dirname(fileURLToPath(import.meta.url));
 try {
   const marker = await readFile(path.join(programDirectory, '../.gft-updating'), 'utf8');
   throw new Error(
-    `GFT Map 更新尚未完成，请让 Agent 恢复完整安装后启动。备份：${JSON.parse(marker).backup}`,
+    `GFT-Map 更新尚未完成，请让 Agent 恢复完整安装后启动。备份：${JSON.parse(marker).backup}`,
   );
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;

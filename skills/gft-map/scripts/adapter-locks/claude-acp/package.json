@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@agentclientprotocol/claude-agent-acp": "0.78.0"
+    "@agentclientprotocol/claude-agent-acp": "0.93.0"
   },
   "name": "gft-claude-acp-runtime",
   "version": "1.0.0",

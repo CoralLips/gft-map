@@ -334,17 +334,16 @@ test('取消正在等待的原生表单，会发送对应协议取消通知且�
   }
 });
 
-test('任务查询区分模型完成与落账完成，compute 不宣称已保存', async () => {
-  for (const mode of ['compute', 'apply', 'compact']) {
+test('任务查询区分落账完成与历史提炼，提炼批次不宣称已保存', async () => {
+  for (const mode of ['apply', 'compact']) {
     const f = await fixture({
       onRequest: async route =>
         route.endsWith('/status')
           ? {
               id: 'task-one',
               status: 'completed',
-              ...(mode === 'compute' ? { mode } : {}),
               ...(mode === 'compact' ? { action: 'compact' } : {}),
-              resultRevision: mode === 'compute' ? undefined : 3,
+              resultRevision: 3,
             }
           : undefined,
     });

@@ -217,7 +217,9 @@ test('首次无主题直接按已连接来源更新，不弹主题选项也不�
     assert.equal(state.calls.filter(call => call.pathname.endsWith('update-from-chat')).length, 1);
     assert.equal(
       state.calls.filter(
-        call => call.pathname.endsWith('compute') || call.pathname === '/api/chat-preview',
+        call =>
+          /^\/api\/topics\/[^/]+\/tasks$/.test(call.pathname) ||
+          call.pathname === '/api/chat-preview',
       ).length,
       0,
     );
@@ -245,8 +247,7 @@ test('更新同次返回的名称随图文同步，下拉框无需刷新且不�
         '同次生成的名称',
       );
       assert.equal(
-        state.calls.filter(c => c.pathname.endsWith('/compute') || c.pathname.endsWith('/rename'))
-          .length,
+        state.calls.filter(c => /^\/api\/topics\/[^/]+\/(tasks|rename)$/.test(c.pathname)).length,
         0,
       );
     },
@@ -395,10 +396,10 @@ test('多个已连接会话一次更新全部读取，不再选择来源，图�
       local.store.getState().undo();
       assert.equal(local.store.getState().ledger, before);
       assert.match(local.store.getState().raw, /已接收 one\n已接收 two/);
-      // Rolled back on the server by receipt; such a step is not redone.
+      // Rolled back on the server by receipt; Ctrl+Y still brings the update back.
       await waitFor(() => rollbacks(state).length > 0);
       local.store.getState().redo();
-      assert.equal(local.store.getState().ledger, before);
+      assert.equal(local.store.getState().ledger, after);
     },
   );
 });
@@ -430,10 +431,11 @@ test('聊天更新进入统一撤销栈，撤销图文保留材料且仍可撤�
       local.store.getState().undo();
       assert.equal(local.store.getState().ledger, original);
       await waitFor(() => rollbacks(state).length > 0);
-      // Only the hand edit comes back; the server rollback is not redone.
-      local.store.getState().redo();
+      // Redo replays both in order: the hand edit, then the undone update.
       local.store.getState().redo();
       assert.equal(local.store.getState().ledger, before);
+      local.store.getState().redo();
+      assert.equal(local.store.getState().ledger, after);
     },
   );
 });

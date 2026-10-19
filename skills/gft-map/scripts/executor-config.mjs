@@ -78,13 +78,15 @@ export function acpArguments(agent) {
 
 export { agents };
 
-/** Old selections keep their provider, discard model overrides, and never reuse a CLI binary as ACP. */
+/**
+ * An ACP executor keeps the model chosen for it in "AI 处理". A CLI selection keeps its
+ * provider but becomes ACP without its old model override, and never reuses a CLI binary.
+ */
 export function defaultExecutor(saved) {
   const agent = saved?.agent?.endsWith('-acp') ? saved.agent : `${saved?.agent || 'codex'}-acp`;
-  const { model: _oldModel, ...sameOptions } = saved?.runnerOptions || {};
-  if (saved?.agent === agent) return { agent, runnerOptions: sameOptions };
+  if (saved?.agent === agent) return { agent, runnerOptions: saved.runnerOptions || {} };
   const { timeoutMs } = saved?.runnerOptions || {};
-  const { model: _oldProfileModel, ...profile } = saved?.profiles?.[agent] || {};
+  const profile = saved?.profiles?.[agent] || {};
   return {
     agent,
     runnerOptions: {

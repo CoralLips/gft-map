@@ -1,16 +1,18 @@
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
-# GFT Map
+# GFT-Map
 
-## 把聊过的事，接着做下去。
+## 和 AI 想清楚的事，别再找不回
 
-换一场聊天，之前讨论过的决定和理由就容易接不上。AI 到底记住了什么，你也看不清。
+**把和 AI 聊出来的判断，变成你能看、能改、能带走的工作稿。**
 
-**GFT Map 把这些决定、理由和未解问题，整理成一份你能看懂、能纠正、能带走的上下文。** 下一场 Agent 对话可以按需读取，继续同一件事。
+讨论越长，越难找回当时定了什么、为什么这样定、还有什么没想清楚。GFT-Map 将这些内容放进一份可编辑的文稿和关系图：你可以查看理由、纠正判断，再接着想。
+
+工作稿保存在本机，可以导出交给别人，也可以让下一场 Agent 对话读取。
 
 [体验示例](https://corallips.github.io/gft-map/) · [开始使用](#开始使用) · [日常使用](#日常使用)
 
-[![GFT Map：查看地图、编辑文稿、预览上下文、导出带走](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/walkthrough.gif)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
+[![GFT-Map：查看地图、编辑文稿、预览上下文、导出带走](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/walkthrough.gif)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
 
 ### 看看它怎么用
 
@@ -42,29 +44,15 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-页面 AI 可选择 Codex 或 Claude Code。Claude Code 需先在终端运行一次 `claude auth login`。首次使用会自动准备对应的连接组件，需要联网；以后复用已安装版本。组件在后台准备，页面与已有内容可先打开。见[安装与配置](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)。
+Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要联网准备连接组件，页面与已有内容可先打开。
 
 安装后重新打开 Agent 对话，发送：
 
 > 打开 gft-map。
 
-以后直接让 Agent **打开、恢复、重启或关闭 GFT Map**。打开时会复用已有服务，或带着原有脉络、设置和执行器启动。后台守护会在服务意外退出后自动重启，连续快速失败 5 次后停止并保留原因；首次启动就失败会及时报错。主动关闭则保持关闭。关闭或刷新网页不会取消已提交的 AI 任务，重新打开会恢复进度和停止入口。正常睡眠时暂停，唤醒后应继续运行；电脑重启或守护进程也退出后，再说“打开 gft-map”恢复。
-
 面板通常在 `http://127.0.0.1:4317/`，以 Agent 返回的地址为准。
 
-长文本粘贴和大文件导入使用分批处理，已完成部分会保存，可暂停后继续。任务查询短暂断线只恢复连接，不会替你取消后台工作。
-
-之前选过的执行器会自动恢复，首次使用会检查 Codex；状态和登录提示可在设置的“任务”中查看。关闭或重启时若还有任务，会先让你决定等待还是取消。已经开始但中断的 AI 任务不会自动重做；先查看结果，需要时重新发起。排队任务继续按原流程处理。
-
-如果已登录但连接仍提示“Codex 本地状态库不可写”，说明服务是从受限的 Agent 沙箱启动的，Codex 状态目录只能读不能写。不要删除 GFT 数据；从有权限的本机终端重新启动同一安装和同一 `GFT_LOCAL_HOME`，再回到“任务”点击“重新检查”。
-
-<a id="更新到新版"></a>
-
-**已经安装？** 在 Agent 中说：
-
-> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
-
-更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。新版保留原来选用的 Agent，默认改用统一的 ACP 连接；在“设置 → 任务 → 选择处理 Agent”中切换 Codex 或 Claude Code，不需要填写连接路径。登录、额度或任务失败会直接提示，不会自动改用另一家。页面 AI 任务采用厂商推荐模型和默认强度，不沿用个人调高的配置，也不修改 Agent 全局设置；默认不保证最低费用。 [更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+在 **设置 → AI 处理** 选择 Codex 或 Claude Code。页面的 AI 操作使用所选 Agent 的账号额度，默认用厂商推荐的模型，也可以在这里换别的模型；思考强度始终用所选模型的默认值。收录的聊天来自哪家都可以，比如用 Claude Code 处理 Codex 的聊天。[Agent 与额度说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)
 
 ### 2. 连接讨论，生成脉络
 
@@ -72,11 +60,11 @@ npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 2. 选择要收录的 Codex 或 Claude Code 聊天，用 **包含已有内容** 导入该聊天的历史消息。
 3. 在 **Doc** 阅读和修改，在 **Map** 查看判断与关系。
 
-以后继续点击 **更新**，只收录新增消息。长聊天和超长单条消息会分批处理；可随时取消，再次更新时接着已完成的批次继续。
+以后直接点击 **更新**，会依次读取这份脉络已连接的全部会话，只收录新增消息。长聊天和超长单条消息会分批处理；可随时停止，再次更新时接着已完成的批次继续。
 
-**已有文件？** 点击脉络右上角并排的 **导入**，放入 UTF-8 文本、Markdown 或聊天记录。原文件保存后按主题分批整理，每批结果都会出现在 Doc／Map，并自动存档。可随时 **暂停／继续**；服务重启后接着存档处理，已暂停的任务保持暂停。上传中断时重新选择原文件即可续传。[大文件说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
+**已有文件？** 点击右上角 **导入**，放入 UTF-8 文本、Markdown 或聊天记录。材料会按主题分批整理，每批结果出现在 Doc／Map；可随时 **暂停／继续**。[大文件说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
 
-### 3. 让 Agent 接着用
+### 3. 接着想，也让 Agent 用上这份工作稿
 
 在当前或新的 Agent 对话中，告诉它要读取哪份脉络、接下来做什么。例如：
 
@@ -86,15 +74,7 @@ npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 
 ## 日常使用
 
-每份脉络包含 **Doc 文稿、Map 关系图和 Log 来源材料**。主题决定 Doc／Map 的收录范围，Log 保留收到的来源。
-
-主题、文稿和 Log 都可直接编辑，失焦或按 Ctrl+S 保存。
-
-在 Map 中点节点可编辑标题和说明；点连线进入承接节点，在正文前编辑这条关系的说明。节点说明与 Doc 章节正文分别保存，改变含义后应检查两处是否一致。节点表达要点，连线说明思路怎样承接；同一要点的补充可以修原位。详见随 Skill 提供的[表达约定](https://github.com/CoralLips/gft-map/blob/main/skills/gft-map/references/map-expression-contract.md)。
-
-按 Ctrl／Cmd 点选可加选，Shift 拖动可框选；用“重画”旁的 **删除** 或 Delete／Backspace 删除所选对象。删线保留两端节点，清空说明保留连线。选中节点后点 **整理**，只调整选中判断及相关正文；未选中时整理整份脉络。
-
-刷新或重新打开页面后，仍可用 **Ctrl+Z** 按顺序撤回已保存的内容操作，也可在设置的 **操作历史** 查看与撤回最近 30 次修改；原始材料保留，撤回聊天更新会退回读取进度。设置的 **本地文件** 提供当前主题的保存路径、复制与打开所在文件夹。
+每份脉络包含 **Doc 文稿、Map 关系图和 Log 来源材料**。主题决定 Doc／Map 收录什么，Log 保留收到的原始材料。
 
 | 想做什么 | 操作 |
 |---|---|
@@ -102,16 +82,40 @@ npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 | 理顺写下的想法、收拢重复内容 | **整理**：按主题整理文稿和节点，已有主题原文不变。 |
 | 调整关注方向，重新梳理已有材料 | 修改主题后点 **重画**：按当前主题从 Log 生成 Doc／Map。 |
 
+**整理的范围**：选中一个节点时，只改这个节点的标题和说明，不改 Doc；选中多个时，整理所选判断及相关正文；什么都不选，就整理整份脉络。再点一次可以停止。
+
+**直接修改**：主题、文稿和 Log 都能直接编辑，失焦或按 Ctrl+S 保存。在 Map 中点节点可以改标题和说明，点连线可以改这条关系的说明。[编辑与选择的细节](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
+
+**任务与撤回**：切换脉络、刷新或关闭网页，不会停掉已经开始的 AI 任务；回来后能看到进度，也能停止；处理中，按钮上会显示 AI 正在写的修改，比如合并了哪几条、正在改写哪一章。**Ctrl+Z** 按顺序撤回，**Ctrl+Y** 重做，刷新后依然有效；设置里的 **操作历史** 可以查看并撤回最近 30 次修改。撤回聊天更新时，原始材料保留，下次更新会重新读到那批消息。
+
 **带走内容**
 
 - **复制**：复制当前 Doc，交给别人或另一个 Agent。
-- **下载**：保存完整脉络文件，在另一份 GFT Map 中通过右上角「导入」继续使用。
+- **下载**：保存完整脉络文件，在另一份 GFT-Map 中通过右上角「导入」继续使用。含文件材料时，暂停整理后下载 `.gftpack`，原文、修改和处理进度一起带走。
 
-含文件材料时，暂停后下载 `.gftpack`，一起带走原文、修改和处理进度。文件原文与进度保存在本机；云端同步包含主题、Doc／Map 和 Log。
+本地使用无需 GFT 账号，跨电脑搬运用下载／导入即可。云同步暂不作为推荐用法；已登录账号的同步行为见[详细说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)。
 
-本地使用无需 GFT 账号。也可在设置中登录 [GFT 平台](https://gitforthought.com)，自动双向同步脉络。[同步说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
+**数据会去哪？** 脉络和收到的聊天原文保存在本机。点击 AI 更新、整理或重画时，任务所需材料会交给你选的 Agent 的模型服务，使用该服务的账号额度。登录 GFT 账号后，脉络（含 Log）会同步到 GFT 云端。GFT-Map 不会扫描或上传你的全部项目文件和全部聊天。
 
-**数据会去哪？** 未登录 GFT 时，脉络和收到的聊天原文保存在本机。点击 AI 更新、整理或重画时，任务所需材料会交给所选 Agent 的模型服务，使用该服务的账号额度；登录 GFT 后，脉络（含 Log）会同步到 GFT 云端。不会扫描、上传所有项目文件或所有聊天。
+## 打开、关闭与更新
+
+让 Agent **打开或关闭 GFT-Map** 即可。关闭网页不会关闭后台服务；电脑重启或页面打不开时，再让 Agent 打开 GFT-Map。[运行与排障说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#打开本地页面)
+
+<a id="更新到新版"></a>
+
+**更新到新版**，在 Agent 中说：
+
+> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
+
+更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+
+## 项目状态与反馈
+
+当前正式版为 [v0.3.13](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+
+同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
+
+欢迎带着自己的写作、决策或技术讨论试用，并在 [Issues](https://github.com/CoralLips/gft-map/issues) 分享使用场景、遇到的问题或做出的工作稿。对你有用的话，也欢迎点一个 Star。
 
 ---
 

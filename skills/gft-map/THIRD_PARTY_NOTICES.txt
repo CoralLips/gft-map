@@ -1,4 +1,4 @@
-GFT Map — bundled third-party notices
+GFT-Map — bundled third-party notices
 
 These packages are included in the browser or ACP runtime distribution. Their original license terms follow. Build-only dependencies are recorded with versions and license identifiers in package-lock.json and are not shipped in the Skill.
 

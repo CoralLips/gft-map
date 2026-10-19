@@ -29,7 +29,7 @@ jobs:
       - run: npm run build
       - run: npm run build:site
       - run: npm run test:site
-      - run: npm test
+      - run: npm run test:all
       - run: npm run test:memory
       - run: npm run pack:skill
       - name: Check the GitHub-installable Skill
@@ -76,4 +76,4 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
-          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "GFT Map $RELEASE_TAG" --notes "本地主题记忆 Skill。下载并解压完整 gft-map 目录；需要 Node.js 22 或更高版本。安装和使用说明见 README。"
+          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --title "GFT-Map $RELEASE_TAG" --notes "本地主题记忆 Skill。下载并解压完整 gft-map 目录；需要 Node.js 22 或更高版本。安装和使用说明见 README。"

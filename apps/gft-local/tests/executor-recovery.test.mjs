@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createServer as createTcpServer } from 'node:net';
 import { startServer } from '../server.mjs';
-import { loadExecutorConfig, saveExecutorConfig } from '../executor-config.mjs';
+import { defaultExecutor, loadExecutorConfig, saveExecutorConfig } from '../executor-config.mjs';
 import * as store from '../store.mjs';
 
 // Resolve from this file so the suite runs from the repository or the app directory.
@@ -62,7 +62,7 @@ async function runCli(directory, extra) {
     const timer = setTimeout(() => reject(new Error(`CLI 启动超时：${output}`)), 7000);
     const onData = chunk => {
       output += chunk.toString();
-      if (output.includes('GFT Map:')) {
+      if (output.includes('GFT-Map:')) {
         clearTimeout(timer);
         resolve();
       }
@@ -110,7 +110,10 @@ test('managed service serves content while the Agent initializes, then reports i
       assert.ok(Date.now() - began < 1500, 'HTTP startup must not wait for Agent preparation');
       assert.equal((await json(base, '/api/topics')).status, 200);
       assert.equal((await (await json(base, '/api/runtime')).json()).executor.status, 'checking');
-      const sharedCheck = json(base, '/api/runtime/executor', { method: 'POST', body: JSON.stringify({ agent: 'codex-acp' }) });
+      const sharedCheck = json(base, '/api/runtime/executor', {
+        method: 'POST',
+        body: JSON.stringify({ agent: 'codex-acp' }),
+      });
       let runtime;
       const deadline = Date.now() + 10000;
       do {
@@ -211,6 +214,83 @@ test('配置的执行器不会被 --manual 运行抹掉（配置文件仅成功�
       JSON.parse(await readFile(path.join(directory, 'executor.json'), 'utf8')).agent,
       'codex-acp',
     );
+  }));
+
+test('AI 处理可选模型：选中后生效并在重开后保留，选回推荐即恢复厂商推荐', () =>
+  isolated(async () => {
+    const fake = { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] };
+    await saveExecutorConfig({ agent: 'codex-acp', runnerOptions: fake });
+    let server = await startServer({ port: 0, agent: 'codex-acp', runnerOptions: fake });
+    const base = () => `http://127.0.0.1:${server.address().port}`;
+    const choose = body =>
+      json(base(), '/api/runtime/executor', { method: 'POST', body: JSON.stringify(body) });
+    try {
+      while (server.runtime().executor.status !== 'ready')
+        await new Promise(resolve => setTimeout(resolve, 20));
+      const offered = await (await json(base(), '/api/runtime/executors?agent=codex-acp')).json();
+      assert.deepEqual(
+        offered.models.map(item => item.value),
+        ['fixture-default', 'fixture-model', 'default'],
+      );
+      assert.equal(offered.model, 'fixture-default');
+      assert.equal((await choose({ agent: 'codex-acp', model: 'fixture-model' })).status, 200);
+      assert.equal(server.runtime().executor.model, 'fixture-model');
+      assert.equal(server.runtime().executor.modelSource, 'chosen');
+      assert.equal((await loadExecutorConfig()).runnerOptions.model, 'fixture-model');
+      await server.shutdown();
+      server = await startServer({ port: 0, ...defaultExecutor(await loadExecutorConfig()) });
+      while (server.runtime().executor.status !== 'ready')
+        await new Promise(resolve => setTimeout(resolve, 20));
+      assert.equal(server.runtime().executor.model, 'fixture-model', '重开后仍用所选模型');
+      assert.equal((await choose({ agent: 'codex-acp', model: 'missing' })).status, 503);
+      assert.equal(server.runtime().executor.model, 'fixture-model', '无效选择不改当前');
+      assert.equal((await choose({ agent: 'codex-acp', model: null })).status, 200);
+      assert.equal(server.runtime().executor.model, 'fixture-default');
+      assert.equal(server.runtime().executor.modelSource, 'provider-default');
+    } finally {
+      await server.shutdown();
+    }
+  }));
+
+test('AI 处理逐家返回：当前 Agent 用已通过的检查，另一家记住上次结果，重新检查才重跑', () =>
+  isolated(async () => {
+    await saveExecutorConfig({ agent: 'claude-acp', runnerOptions: fakeClaude });
+    const server = await startServer({
+      port: 0,
+      agent: 'codex-acp',
+      runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const candidate = async query => (await json(base, `/api/runtime/executors?${query}`)).json();
+    try {
+      while (server.runtime().executor.status !== 'ready')
+        await new Promise(resolve => setTimeout(resolve, 20));
+      const startup = server.runtime().executor;
+      const current = await candidate('agent=codex-acp');
+      assert.equal(current.status, 'ready');
+      assert.equal(current.checkedAt, startup.checkedAt, '当前 Agent 不另起检查');
+      const claude = await candidate('agent=claude-acp');
+      assert.equal(claude.status, 'ready');
+      assert.equal(claude.model, 'default');
+      assert.equal(claude.modelName, 'Fixture Opus', '显示 default 实际对应的模型');
+      await saveExecutorConfig({
+        agent: 'claude-acp',
+        runnerOptions: { binary: path.resolve('missing-acp-executable') },
+      });
+      await saveExecutorConfig({
+        agent: 'codex-acp',
+        runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
+      });
+      assert.equal(
+        (await candidate('agent=claude-acp')).checkedAt,
+        claude.checkedAt,
+        '再次打开直接显示上次结果',
+      );
+      assert.equal((await candidate('agent=claude-acp&refresh=1')).status, 'unavailable');
+      assert.equal(server.runtime().agent, 'codex-acp');
+    } finally {
+      await server.shutdown();
+    }
   }));
 
 test('设置检查不改当前Agent，空闲时可切换并保留每家配置，失败不丢原连接', () =>

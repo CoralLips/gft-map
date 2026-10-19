@@ -4,7 +4,7 @@ export interface ServiceConnectionSnapshot {
   hasConnected: boolean;
 }
 
-/** Only retries the read supplied by the caller. Mutations never enter this loop. */
+/** Schedules connection checks with backoff; does not itself replay failed requests. */
 export function createReconnectMonitor(check: () => Promise<void>) {
   const listeners = new Set<() => void>();
   let snapshot: ServiceConnectionSnapshot = {

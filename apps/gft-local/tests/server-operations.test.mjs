@@ -31,6 +31,7 @@ async function isolated(execute, run, seedLedger = ledger) {
     if (!response.ok) throw Object.assign(new Error(value.error), { status: response.status });
     return value;
   };
+  post.base = base;
   const finished = async id => {
     for (let i = 0; i < 400; i++) {
       const task = await store.getTaskStatus(id);
@@ -50,33 +51,127 @@ async function isolated(execute, run, seedLedger = ledger) {
   }
 }
 
+test('整理进行中，任务状态带出已写出的编辑动作（用真实节点编号），结束后不再带', async () => {
+  let release;
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  const written =
+    '<merge title="先约定职责再看代价" body="两条一起说明。" members="n1,n2"/>\n<prose domain="组织" refs="n1,n2">';
+  await isolated(
+    async (request, { onText }) => {
+      onText(written);
+      await gate;
+      return `${written}先约定职责，团队扩大后再看排期代价。</prose>`;
+    },
+    async ({ topic, post, finished }) => {
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      let status;
+      for (let i = 0; i < 200 && !status?.progress; i++) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+        status = await (await fetch(`${post.base}/api/tasks/${task.id}/status`)).json();
+      }
+      release();
+      assert.deepEqual(status.progress, [
+        { kind: 'merge', title: '先约定职责再看代价', ids: ['j2', 'j3'] },
+        { kind: 'prose', domain: '组织' },
+      ]);
+      assert.equal((await finished(task.id)).status, 'completed');
+      const after = await (await fetch(`${post.base}/api/tasks/${task.id}/status`)).json();
+      assert.equal(after.progress, undefined, '结束后不再带过程');
+    },
+  );
+});
+
+test('补一次收拢时，第二次调用的动作接在第一次之后计步', async () => {
+  let calls = 0,
+    release;
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  const seed =
+    '[场次 2026-01-01T00:00:00Z · 合成测试]\n走向 p1 [主题]\n仅保留合成判断。\n' +
+    Array.from(
+      { length: 9 },
+      (_, i) => `◇ j${i + 1} [验证] 合成判断${i + 1}\n独立依据${i + 1}`,
+    ).join('\n');
+  await isolated(
+    async (request, { onText }) => {
+      const refs = [...request.user.matchAll(/^(n\d+) \[/gm)].map(match => match[1]).join(',');
+      if (++calls === 1) {
+        const prose = `<prose domain="验证" refs="${refs}">逐条核对独立依据。</prose>`;
+        onText(prose);
+        return prose;
+      }
+      const merge = '<merge title="合并前两条" body="两条依据。" members="n1,n2"/>\n';
+      onText(merge);
+      await gate;
+      return `${merge}<prose domain="验证" refs="${refs}">合并后仍保留各自依据。</prose>`;
+    },
+    async ({ topic, post, finished }) => {
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      let status;
+      for (let i = 0; i < 200 && status?.progress?.length !== 2; i++) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+        status = await (await fetch(`${post.base}/api/tasks/${task.id}/status`)).json();
+      }
+      release();
+      assert.deepEqual(
+        status.progress.map(action => action.kind),
+        ['prose', 'merge'],
+      );
+      assert.equal((await finished(task.id)).status, 'completed');
+    },
+    seed,
+  );
+});
+
 test('整理结构纠错期间仍可明确停止，迟到结果不得写入', async () => {
   let entered, release;
-  const correcting = new Promise(resolve => { entered = resolve; });
-  const gate = new Promise(resolve => { release = resolve; });
-  let calls = 0;
-  await isolated(async () => {
-    if (++calls === 1) return '<revise id="n1" domain="新章"/>' +
-      '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>';
-    entered();
-    await gate;
-    return '<revise id="n1" domain="新章"/><revise id="n2" domain="新章"/>' +
-      '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>';
-  }, async ({topic, post, finished}) => {
-    const before = await store.getView(topic.id);
-    const task = await post(`/api/topics/${topic.id}/tasks`, {action: 'tidy', params: {}});
-    try {
-      await Promise.race([correcting, finished(task.id).then(() => {throw new Error('没有进入纠错');})]);
-      assert.deepEqual((await store.getView(topic.id)).graph, before.graph);
-      await post(`/api/tasks/${task.id}/cancel`, {});
-    } finally { release(); }
-    const done = await finished(task.id);
-    assert.equal(done.status, 'cancelled');
-    assert.equal(calls, 2);
-    const after = await store.getView(topic.id);
-    assert.equal(after.doc, before.doc);
-    assert.deepEqual(after.graph, before.graph);
+  const correcting = new Promise(resolve => {
+    entered = resolve;
   });
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  let calls = 0;
+  await isolated(
+    async () => {
+      if (++calls === 1)
+        return (
+          '<revise id="n1" domain="新章"/>' +
+          '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>'
+        );
+      entered();
+      await gate;
+      return (
+        '<revise id="n1" domain="新章"/><revise id="n2" domain="新章"/>' +
+        '<prose domain="新章" refs="n1,n2">职责和内部成本分别保留。</prose>'
+      );
+    },
+    async ({ topic, post, finished }) => {
+      const before = await store.getView(topic.id);
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      try {
+        await Promise.race([
+          correcting,
+          finished(task.id).then(() => {
+            throw new Error('没有进入纠错');
+          }),
+        ]);
+        assert.deepEqual((await store.getView(topic.id)).graph, before.graph);
+        await post(`/api/tasks/${task.id}/cancel`, {});
+      } finally {
+        release();
+      }
+      const done = await finished(task.id);
+      assert.equal(done.status, 'cancelled');
+      assert.equal(calls, 2);
+      const after = await store.getView(topic.id);
+      assert.equal(after.doc, before.doc);
+      assert.deepEqual(after.graph, before.graph);
+    },
+  );
 });
 
 test('节点整理只改该节点标题与说明，结果按节点核对后写入并留回执', () =>
@@ -241,12 +336,12 @@ test('关系说明只写这条线的说明', () =>
   ));
 
 // Model iteration policies belong here; panel tests retain visible results and undo coverage.
-test('多轮整理中间轮不落盘，最终结果只提交一次', async () => {
+test('补一次收拢时第一轮不落盘，最终结果只提交一次', async () => {
   let calls = 0;
   const seed =
     '[场次 2026-01-01T00:00:00Z · 合成测试]\n走向 p1 [主题]\n仅保留合成判断。\n' +
     Array.from(
-      { length: 7 },
+      { length: 12 },
       (_, i) => `◇ j${i + 1} [验证] 合成判断${i + 1}\n独立依据${i + 1}`,
     ).join('\n');
   await isolated(
@@ -258,6 +353,9 @@ test('多轮整理中间轮不落盘，最终结果只提交一次', async () =>
         '中间轮不可改变落盘版本',
       );
       const refs = [...task.user.matchAll(/^(n\d+) \[/gm)].map(match => match[1]).join(',');
+      // 第一轮只改正文、没合并：补一次收拢请求。
+      if (calls === 1)
+        return `<prose domain="验证" refs="${refs}">先核对独立依据，其余判断继续分别验证。</prose>`;
       return `<merge title="相邻判断合并${calls}" body="保留两条依据。" members="n1,n2"/><prose domain="验证" refs="${refs}">先核对独立依据，本轮合并相邻判断，其余判断继续分别验证。</prose>`;
     },
     async ({ topic, post, finished }) => {
@@ -265,17 +363,18 @@ test('多轮整理中间轮不落盘，最终结果只提交一次', async () =>
       const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
       const done = await finished(task.id);
       assert.equal(done.status, 'completed', done.error);
-      assert.ok(calls > 1 && calls <= 3, '有实际合并才继续，且必须有轮次上限');
+      assert.equal(calls, 2, '没合并才补一次，且只补一次');
+      assert.equal(done.round, calls, '页面能看到整理进行到第几轮');
       const saved = await store.getTopic(topic.id);
       assert.equal(saved.revision, before.revision + 1);
       assert.equal(saved.raw, before.raw);
-      assert.ok((await store.getView(topic.id)).graph.nodes.length < 7);
+      assert.ok((await store.getView(topic.id)).graph.nodes.length < 12);
     },
     seed,
   );
 });
 
-test('无需修改只调用一次，不为缩减节点继续调用或产生保存记录', async () => {
+test('条数已在目标内且无需修改时只调用一次，不产生保存记录', async () => {
   let calls = 0;
   await isolated(
     async () => {
@@ -293,6 +392,61 @@ test('无需修改只调用一次，不为缩减节点继续调用或产生保�
       assert.equal(after.doc, before.doc);
       assert.equal(after.revision, before.revision);
     },
+  );
+});
+
+test('高于目标却无可合并时，只追加一次收拢请求即停止，不删除独立判断凑数', async () => {
+  const requests = [];
+  const seed =
+    '[场次 2026-01-01T00:00:00Z · 合成测试]\n走向 p1 [主题]\n仅保留合成判断。\n' +
+    Array.from(
+      { length: 9 },
+      (_, i) => `◇ j${i + 1} [验证] 独立判断${i + 1}\n各自依据${i + 1}`,
+    ).join('\n');
+  await isolated(
+    async task => {
+      requests.push(task.user);
+      return '<noop/>';
+    },
+    async ({ topic, post, finished }) => {
+      const before = await store.getView(topic.id);
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      const done = await finished(task.id);
+      assert.equal(done.status, 'completed', done.error);
+      assert.equal(requests.length, 2, '收拢检查只追加一次，不能无限重试');
+      assert.match(requests[1], /上一轮尚未完成收拢/);
+      const after = await store.getView(topic.id);
+      assert.equal(after.graph.nodes.length, 9);
+      assert.equal(after.revision, before.revision);
+    },
+    seed,
+  );
+});
+
+test('七条以内人看得过来：独立判断不为压缩条数追加调用', async () => {
+  const requests = [];
+  const seed =
+    '[场次 2026-01-01T00:00:00Z · 合成测试]\n走向 p1 [主题]\n仅保留合成判断。\n' +
+    Array.from(
+      { length: 7 },
+      (_, i) => `◇ j${i + 1} [验证] 独立判断${i + 1}\n各自依据${i + 1}`,
+    ).join('\n');
+  await isolated(
+    async task => {
+      requests.push(task.user);
+      return '<noop/>';
+    },
+    async ({ topic, post, finished }) => {
+      const before = await store.getView(topic.id);
+      const task = await post(`/api/topics/${topic.id}/tasks`, { action: 'tidy', params: {} });
+      const done = await finished(task.id);
+      assert.equal(done.status, 'completed', done.error);
+      assert.equal(requests.length, 1);
+      const after = await store.getView(topic.id);
+      assert.equal(after.graph.nodes.length, 7);
+      assert.equal(after.revision, before.revision);
+    },
+    seed,
   );
 });
 

@@ -45,7 +45,7 @@ const waitFor = async (run, accept) => {
 };
 const task = { id: 'fixture-task', system: '合成系统规则', user: '合成用户材料' };
 
-test('two node computations own separate CLI processes; cancel and shutdown drain only their own trees', () =>
+test('two node tidies own separate CLI processes; cancel and shutdown drain only their own trees', () =>
   isolated(async dir => {
     const server = await startServer({
       port: 0,
@@ -63,15 +63,12 @@ test('two node computations own separate CLI processes; cancel and shutdown drai
       }
     };
     try {
-      const topic = await store.createTopic('并行进程验收', '合成材料');
+      const ledger =
+        '[场次 2026-10-18T00:00:00Z · 合成回放]\n走向 p1 [主题]\n合成材料。\n◆ j1 [验证] 第一个判断\n第一条依据。\n◆ j2 [验证] 第二个判断\n第二条依据。';
+      const topic = await store.createTopic('并行进程验收', '合成材料', { ledger, raw: '' });
       const tasks = await Promise.all(
-        [1, 2].map(() =>
-          store.createComputation(topic.id, topic.revision, {
-            action: 'tidy',
-            system: 'Only synthetic input.',
-            user: 'wait',
-            concurrent: true,
-          }),
+        ['j1', 'j2'].map(nodeId =>
+          store.createTask(topic.id, 'refine', '', { params: { nodeId } }),
         ),
       );
       for (const task of tasks) {

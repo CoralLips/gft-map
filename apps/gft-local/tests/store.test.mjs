@@ -100,11 +100,21 @@ test('创建主题持久化稳定 ID 与范围；空主题可编辑，允许首�
   const beforeTasks = (await store.listTasks()).length;
   const first = await store.createTask(draft.id, 'update', '社区图书角：先取得许可再试办。');
   assert.equal(first.status, 'pending');
-  await store.createComputation(draft.id, edited.revision, {
-    action: 'update',
-    system: 'test',
-    user: 'test',
+  // A page before 0.3.13 could leave a browser-built "compute" task behind. It is
+  // neither run as a normal task nor applied.
+  const retired = randomUUID();
+  await store.writeJsonAtomic(path.join(store.homeDir(), 'tasks', `${retired}.json`), {
+    id: retired,
+    topicId: draft.id,
+    action: 'tidy',
+    mode: 'compute',
+    request: { action: 'tidy', system: 'test', user: 'test' },
+    baseRevision: edited.revision,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
   });
+  await assert.rejects(store.taskPrompt(retired), { status: 410 });
+  await assert.rejects(store.completeTask(retired, '<noop/>'), { status: 410 });
   assert.equal((await store.listTasks()).length, beforeTasks + 2);
   const ready = await store.saveDoc(
     draft.id,

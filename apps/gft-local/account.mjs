@@ -234,7 +234,7 @@ export function createAccount({
         }
         const payload = JSON.parse(raw);
         if (payload.state !== state || pending !== attempt || attempt.used || epoch !== generation)
-          return send(403, { error: '登录请求已失效，请从 GFT Map 重新发起' });
+          return send(403, { error: '登录请求已失效，请从 GFT-Map 重新发起' });
         if (typeof payload.token_hash !== 'string' || !payload.token_hash)
           throw new Error('缺少登录凭证');
         attempt.used = true;

@@ -900,14 +900,14 @@ test('手改立即整理先结清自动保存；整理期间旧定时器不重�
   );
 });
 
-test('只改善正文也算整理完成，不为减少节点追加调用，仍可撤回', async () => {
-  let calls = 0;
+test('整理进行中页面收到已写出的编辑动作并高亮涉及节点，结束后清除', async () => {
+  const release = deferred();
+  const written = '<merge title="先访谈验证需求" body="依据" members="n1,n2"/>\n';
   await fixture(
-    async task => {
-      calls++;
-      if (calls === 1)
-        return '<prose domain="验证" refs="n1,n2,n3,n4,n5,n6">先验证需求，随后再评估开发。保留三位访谈对象与记录拒绝原因的要求。</prose>';
-      throw new Error('只改正文后不应再调用模型');
+    async (task, { onText }) => {
+      onText(written);
+      await release.promise;
+      return `${written}<prose domain="验证" refs="n1,n2,n3,n4,n5,n6,n7,n8,n9">合并后仍保留各自依据。</prose>`;
     },
     async ({ local }) => {
       local.store
@@ -915,17 +915,62 @@ test('只改善正文也算整理完成，不为减少节点追加调用，仍�
         .updateLedger(
           '[场次 2026-09-18T10:00:00Z · 合成验证]\n走向 p1 [主题]\n仅记录需求验证。\n' +
             Array.from(
-              { length: 6 },
+              { length: 9 },
+              (_, i) => `◇ j${i + 1} [验证] 合成判断${i + 1}\n保留依据${i + 1}`,
+            ).join('\n'),
+        );
+      const running = local.store.getState().tidyWhitebox();
+      const shown = await waitFor(
+        () => local.store.getState().progressActions,
+        actions => !!actions?.length,
+      );
+      assert.deepEqual(shown, [{ kind: 'merge', title: '先访谈验证需求', ids: ['j1', 'j2'] }]);
+      release.resolve();
+      await running;
+      assert.equal(local.store.getState().progressActions, null, '结束后不再显示过程');
+    },
+  );
+});
+
+test('第一轮只改正文时追加一次明确收拢请求，归并补充说明，整次可撤回', async () => {
+  let calls = 0;
+  await fixture(
+    async task => {
+      calls++;
+      if (calls === 1)
+        return '<prose domain="验证" refs="n1,n2,n3,n4,n5,n6,n7,n8,n9">先验证需求，随后再评估开发。保留三位访谈对象与记录拒绝原因的要求。</prose>';
+      assert.match(task.user, /上一轮尚未完成收拢/);
+      assert.match(task.system, /补充理由、示例/);
+      return '<merge title="先访谈验证需求" body="先找三位访谈对象并记录拒绝原因。" members="n1,n2,n3"/>\n<prose domain="验证" refs="n1,n2,n3,n4,n5,n6,n7,n8,n9">先找三位访谈对象并记录拒绝原因，验证需求后再评估开发；其余独立依据仍保留，不能当作需求已获验证。</prose>';
+    },
+    async ({ local, a }) => {
+      local.store
+        .getState()
+        .updateLedger(
+          '[场次 2026-09-18T10:00:00Z · 合成验证]\n走向 p1 [主题]\n仅记录需求验证。\n' +
+            Array.from(
+              { length: 9 },
               (_, i) => `◇ j${i + 1} [验证] 合成判断${i + 1}\n保留依据${i + 1}`,
             ).join('\n'),
         );
       const report = await local.store.getState().tidyWhitebox();
-      assert.equal(calls, 1);
-      assert.equal(report.before, 6);
-      assert.equal(report.after, 6);
+      assert.equal(calls, 2);
+      assert.equal(report.before, 9);
+      assert.equal(report.after, 7);
       assert.match(local.store.getState().doc, /三位访谈对象/);
       local.store.getState().undo();
-      assert.equal(local.store.getState().nodes.length, 6);
+      assert.equal(local.store.getState().nodes.length, 9, '收拢与正文改动是一次整理，一步撤回');
+      // The rollback lands on the server before redo writes the tidy back.
+      await waitFor(
+        () => backend.getTopic(a.id),
+        topic => !/先访谈验证需求/.test(topic.ledger),
+      );
+      local.store.getState().redo();
+      assert.equal(local.store.getState().nodes.length, 7, 'Ctrl+Y 拉回撤回的整理');
+      await waitFor(
+        () => backend.getTopic(a.id),
+        topic => /先访谈验证需求/.test(topic.ledger),
+      );
     },
   );
 });
@@ -1791,7 +1836,11 @@ test('node tidy rewrites only its own title and full explanation, leaves the Doc
       return `<node title="内部安排省去重复订约" body="${note}"/>`;
     },
     async ({ local, a, errors }) => {
-      const before = local.store.getState(),
+      // Under load the topic may still be loading when the fixture hands over.
+      const before = await waitFor(
+          () => local.store.getState(),
+          state => state.ledgerState.judgments.has('j16'),
+        ),
         ledger = before.ledger,
         original = before.ledgerState.judgments.get('j16').content;
       const run = before.refineNode('j16');

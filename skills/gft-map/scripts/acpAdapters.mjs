@@ -3,6 +3,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   copyFile,
@@ -17,8 +18,8 @@ import { homeDir, withRecordLock } from './store.mjs';
 
 // Tested adapter releases. Upgrades are explicit, never an unpinned npx on each task.
 export const adapterReleases = {
-  'codex-acp': { name: '@agentclientprotocol/codex-acp', version: '1.12.0' },
-  'claude-acp': { name: '@agentclientprotocol/claude-agent-acp', version: '0.78.0' },
+  'codex-acp': { name: '@agentclientprotocol/codex-acp', version: '2.2.2' },
+  'claude-acp': { name: '@agentclientprotocol/claude-agent-acp', version: '0.93.0' },
 };
 const execute = promisify(execFile);
 const pending = new Map();
@@ -58,8 +59,21 @@ async function npmEntry() {
   for (const candidate of candidates)
     if (candidate.endsWith('npm-cli.js') && (await exists(candidate))) return candidate;
   throw new Error(
-    '自动准备 Agent 连接需要 Node.js 22 或更新版本及 npm，请安装后重新打开 GFT Map。',
+    '自动准备 Agent 连接需要 Node.js 22 或更新版本及 npm，请安装后重新打开 GFT-Map。',
   );
+}
+
+/**
+ * Once the pinned install is ready, older versions and replaced copies of the same
+ * adapter are dead weight (hundreds of MB each). Best effort: a busy file stays for next time.
+ */
+async function removeOtherInstalls(agent, target) {
+  const root = path.dirname(target);
+  for (const name of await readdir(root).catch(() => []))
+    if (name.startsWith(`${agent}-`) && name !== path.basename(target))
+      await rm(path.join(root, name), { recursive: true, force: true, maxRetries: 3 }).catch(
+        () => {},
+      );
 }
 
 /** Install beside the data, in a new directory; only a complete install becomes active. */
@@ -70,7 +84,7 @@ export function ensureAdapter(agent) {
   if (pending.has(target)) return pending.get(target);
   const promise = (async () => {
     if (Number(process.versions.node.split('.')[0]) < 22)
-      throw new Error('Agent 连接需要 Node.js 22 或更新版本，请升级后重新打开 GFT Map。');
+      throw new Error('Agent 连接需要 Node.js 22 或更新版本，请升级后重新打开 GFT-Map。');
     const stamp = await adapterCacheStamp(agent);
     let entry = await installed(target, release, stamp);
     if (!entry) {
@@ -157,6 +171,7 @@ export function ensureAdapter(agent) {
           await rm(staging, { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
       }
     }
+    await removeOtherInstalls(agent, target);
     return { binary: process.execPath, prefixArgs: [entry] };
   })().finally(() => pending.delete(target));
   pending.set(target, promise);

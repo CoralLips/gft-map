@@ -124,7 +124,7 @@ async function checkInstallation(directory, dataDirectory) {
     throw new Error('数据目录位于程序目录内，请先移出并设置 GFT_LOCAL_HOME，再更新。');
   const skill = await readFile(path.join(directory, 'SKILL.md'), 'utf8');
   if (!/^name:\s*gft-map\s*$/m.test(skill))
-    throw new Error('这不是 GFT Map Skill 安装目录；源码请通过 Git 更新。');
+    throw new Error('这不是 GFT-Map Skill 安装目录；源码请通过 Git 更新。');
   await lstat(path.join(directory, 'scripts/cli.mjs'));
 }
 
