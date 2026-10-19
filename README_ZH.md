@@ -86,7 +86,7 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 **直接修改**：主题、文稿和 Log 都能直接编辑，失焦或按 Ctrl+S 保存。在 Map 中点节点可以改标题和说明，点连线可以改这条关系的说明。[编辑与选择的细节](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
-**任务与撤回**：切换脉络、刷新或关闭网页，不会停掉已经开始的 AI 任务；回来后能看到进度，也能停止；处理中，按钮上会显示 AI 正在写的修改，比如合并了哪几条、正在改写哪一章。**Ctrl+Z** 按顺序撤回，**Ctrl+Y** 重做，刷新后依然有效；设置里的 **操作历史** 可以查看并撤回最近 30 次修改。撤回聊天更新时，原始材料保留，下次更新会重新读到那批消息。
+**任务与撤回**：切换脉络、刷新或关闭网页，不会停掉已经开始的 AI 任务；回来后能看到进度，也能停止；处理中，按钮上会显示 AI 正在写的修改，比如合并了哪几条、正在改写哪一章。**Ctrl+Z** 按顺序撤回，刷新后依然有效；**Ctrl+Y** 重做刚撤回的修改；设置里的 **操作历史** 可以查看并撤回最近 30 次修改。撤回聊天更新时，原始材料保留，下次更新会重新读到那批消息。
 
 **带走内容**
 
@@ -111,7 +111,7 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.13](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+当前正式版为 [v0.3.14](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
 
 同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
 

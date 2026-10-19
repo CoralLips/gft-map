@@ -283,8 +283,9 @@ async function createService(
   let preparingInitial = false;
   async function prepareInitialExecutor() {
     try {
-      runner = await createRunner(activeAgent, activeRunnerOptions);
-      await runner.check();
+      const ready = await checkedRunner(activeAgent, activeRunnerOptions);
+      runner = ready.candidate;
+      activeRunnerOptions = ready.options;
       if (managed && !closed) {
         const saved = await loadExecutorConfig();
         if (
@@ -294,6 +295,8 @@ async function createService(
           await saveExecutorConfig({ agent: activeAgent, runnerOptions: activeRunnerOptions });
       }
     } catch (error) {
+      // Keep the failed runner: tasks re-check it, and status reads its snapshot.
+      runner = error.candidate ?? runner;
       lastError = errorRecord(error, error.code);
     }
   }
@@ -322,7 +325,10 @@ async function createService(
   let activeController = null;
   let tickPromise = null;
   const nodeJobs = new Map();
-  const hasActiveWork = () => busy || nodeJobs.size > 0;
+  // `busy` only keeps ticks from overlapping; an idle tick that merely scans for
+  // materials is not work, or a switch landing in that moment is refused as busy.
+  // Material processing is guarded by its own job state where it matters.
+  const hasActiveWork = () => activeTaskId !== null || nodeJobs.size > 0;
 
   const materialWorker = materials.createWorker({
     run: async (request, signal) => {
@@ -409,14 +415,41 @@ async function createService(
       : undefined;
   }
 
+  /**
+   * Creates and checks a runner. With `fallback`, a model chosen earlier that the
+   * provider has since withdrawn gives way to the recommended one; otherwise the
+   * agent would stay unusable, since the dialog cannot select an unavailable agent.
+   * A failure carries the last runner as `error.candidate`.
+   */
+  async function checkedRunner(agentName, options, fallback = true) {
+    let candidate = await createRunner(agentName, options);
+    try {
+      await candidate.check();
+      return { candidate, options };
+    } catch (error) {
+      if (!fallback || error.code !== 'RUNNER_MODEL' || !options?.model)
+        throw Object.assign(error, { candidate });
+      await candidate.waitForIdle();
+      const { model: _withdrawn, ...recommended } = options;
+      candidate = await createRunner(agentName, recommended);
+      try {
+        await candidate.check();
+      } catch (retryError) {
+        throw Object.assign(retryError, { candidate });
+      }
+      return { candidate, options: recommended };
+    }
+  }
+
   async function checkExecutor(agentName) {
     if (agentName === activeAgent && runner && hasActiveWork())
       return { agent: agentName, ...runner.snapshot() };
     let candidate;
     try {
-      candidate = await createRunner(agentName, await optionsFor(agentName));
-      return { agent: agentName, ...(await candidate.check()) };
+      ({ candidate } = await checkedRunner(agentName, await optionsFor(agentName)));
+      return { agent: agentName, ...candidate.snapshot() };
     } catch (error) {
+      candidate = error.candidate;
       return { agent: agentName, status: 'unavailable', error: error.message };
     } finally {
       await candidate?.waitForIdle();
@@ -484,10 +517,13 @@ async function createService(
   async function activateExecutor(requested, model) {
     const { model: savedModel, ...rest } = (await optionsFor(requested)) || {};
     const chosen = model === undefined ? savedModel : model;
-    const options = { ...rest, ...(chosen ? { model: chosen } : {}) };
-    const candidate = await createRunner(requested, options);
     try {
-      await candidate.check();
+      // A model picked just now must work; a saved one may fall back if withdrawn.
+      const { candidate, options } = await checkedRunner(
+        requested,
+        { ...rest, ...(chosen ? { model: chosen } : {}) },
+        model === undefined,
+      );
       if (closed || hasActiveWork() || (await hasQueuedTasks()))
         throw store.fail('仍有任务正在处理，请完成或停止后再切换。', 409);
       await saveExecutorConfig({ agent: requested, runnerOptions: options });

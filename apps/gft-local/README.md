@@ -89,7 +89,7 @@ Each map includes **Doc for writing, Map for relationships, and Log for source m
 
 **Edit directly:** the topic, document, and Log are all editable; click outside the editor or press Ctrl+S to save. In Map, click a node to edit its title and explanation, or click a line to edit how one idea leads to the next. [Editing and selection details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
-**Tasks and undo:** switching maps, refreshing, or closing the page does not stop an AI task that has started; come back to see its progress or stop it. While it runs, the button shows the edit the AI is writing, such as which items it merges or which chapter it rewrites. **Ctrl+Z** undoes changes in order and **Ctrl+Y** redoes them, even after a refresh, and **Operation history** in Settings shows and undoes the latest 30 changes. Undoing a chat update keeps the original material, and the next update reads those messages again.
+**Tasks and undo:** switching maps, refreshing, or closing the page does not stop an AI task that has started; come back to see its progress or stop it. While it runs, the button shows the edit the AI is writing, such as which items it merges or which chapter it rewrites. **Ctrl+Z** undoes changes in order, even after a refresh; **Ctrl+Y** redoes what you just undid; and **Operation history** in Settings shows and undoes the latest 30 changes. Undoing a chat update keeps the original material, and the next update reads those messages again.
 
 **Take your work with you**
 
@@ -114,7 +114,7 @@ Pause file processing and finish or cancel other running tasks before updating. 
 
 ## Project status and feedback
 
-The current stable release is [v0.3.13](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
+The current stable release is [v0.3.14](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
 
 Sibling tool: [GFT-Merge](https://github.com/CoralLips/gft-merge) combines several Claude Code and Codex sessions and starts a new session that carries their context.
 

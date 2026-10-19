@@ -299,6 +299,7 @@ export function createUpdates({
     onStatus: (status?: string) => unknown,
   ) {
     const show = (actions: OperationProgress[] | null) => store().getState().showProgress(actions);
+    show(null);
     try {
       return await tasks().followTask(
         taskId,

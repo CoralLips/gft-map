@@ -503,7 +503,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     if (!bound) return null;
     const epoch = projectEpoch;
     const current = () => epoch === projectEpoch && store.getState().boundProjectId === bound;
-    store.setState({ ...busy, error: null });
+    // A run left on another map may have stopped reporting; start this one clean.
+    store.setState({ ...busy, progressActions: null, error: null });
     try {
       const onRound = request.kind === 'tidy' ? (round: number) => { if (current()) store.setState({ tidyRound: round }); } : undefined;
       const onProgress = (actions: OperationProgress[]) => { if (current()) store.setState({ progressActions: actions }); };

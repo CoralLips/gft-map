@@ -247,6 +247,18 @@ test('AI 处理可选模型：选中后生效并在重开后保留，选回推�
       assert.equal((await choose({ agent: 'codex-acp', model: null })).status, 200);
       assert.equal(server.runtime().executor.model, 'fixture-default');
       assert.equal(server.runtime().executor.modelSource, 'provider-default');
+      // A saved model the provider has since withdrawn falls back instead of leaving
+      // the agent unusable (the dialog cannot select an unavailable agent).
+      await server.shutdown();
+      await saveExecutorConfig({
+        agent: 'codex-acp',
+        runnerOptions: { ...fake, model: 'withdrawn' },
+      });
+      server = await startServer({ port: 0, ...defaultExecutor(await loadExecutorConfig()) });
+      while (!['ready', 'unavailable'].includes(server.runtime().executor.status))
+        await new Promise(resolve => setTimeout(resolve, 20));
+      assert.equal(server.runtime().executor.status, 'ready', '已下架的所选模型不让执行器卡死');
+      assert.equal(server.runtime().executor.model, 'fixture-default');
     } finally {
       await server.shutdown();
     }
