@@ -24,6 +24,16 @@ Your work is saved locally. Export it to share with someone else, or let an agen
 
 The examples use prewritten material, with English and Chinese versions. Edit and export them without installing anything or calling a model. AI-powered Update, Tidy, and Redraw require the local app.
 
+### A real handoff review
+
+In [this public discussion](https://github.com/openai/codex/discussions/55901), the Turnfeed Kingdoms author wanted a fresh chat to continue a game where players give orders in chat while the existing kingdom map stays visible. With AI assistance, we manually organized his [public excerpt](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) into a [readable document and importable GFT archive](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea).
+
+He [reviewed the result](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095) and added a boundary: a map-only session must not fall back to visible council controls without the player's agreement. The document and GFT nodes now include that correction and keep "order executed" separate from "chosen experience preserved."
+
+**Still untested:** using this handoff in the game or a fresh chat, and whether the GFT diagram helps more than Markdown containing the same information. Hand-editing Doc does not automatically update the map nodes, or vice versa. [Initial GFT decision diagram](https://raw.githubusercontent.com/CoralLips/gft-map/b8021c47d3daa92a4da31d37771d911e23a9e27e/apps/gft-local/showcase/assets/walkthrough-20261022/turnfeed-map.png) — this is not the game's kingdom map.
+
+Have a similar handoff? Share a short, non-sensitive excerpt and your next step in [Issues](https://github.com/CoralLips/gft-map/issues). We can start with a readable version before installation.
+
 <a id="第一次使用"></a>
 <a id="开始使用"></a>
 
