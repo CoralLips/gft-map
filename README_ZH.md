@@ -24,6 +24,16 @@
 
 示例使用预置材料，可直接编辑、导出；无需安装，不调用模型。AI 更新、整理和重画需安装本地版。
 
+### 一次真实材料的交接审阅
+
+在[这场公开讨论](https://github.com/openai/codex/discussions/55901)中，Turnfeed Kingdoms 作者想让新会话接着玩游戏：玩家在聊天里下令，原有王国地图保持可见。我们用 AI 协助手工把他[公开的一小段材料](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382)整理成[文稿和可导入的 GFT 档案](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea)。
+
+作者[读后补充](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)：要求只看地图的会话，不能未经玩家同意就退回可见的议事控制界面。文稿与 GFT 节点已补上这条，并把“命令执行成功”和“保持原来的游戏体验”分开判断。
+
+**仍待验证：** 这份交接尚未用于实际游戏或新会话接续；GFT 图是否比包含同样信息的 Markdown 更有帮助，仍未验证。手动修改 Doc 不会自动更新图中节点，反之亦然。[初版 GFT 决策图](https://raw.githubusercontent.com/CoralLips/gft-map/b8021c47d3daa92a4da31d37771d911e23a9e27e/apps/gft-local/showcase/assets/walkthrough-20261022/turnfeed-map.png)不是游戏中的王国地图。
+
+如果你也要交接一段讨论，可以在 [Issues](https://github.com/CoralLips/gft-map/issues) 提供一小段不敏感材料和下一步要做的事，先看整理后的内容，再决定是否安装。
+
 <a id="第一次使用"></a>
 
 ## 开始使用
