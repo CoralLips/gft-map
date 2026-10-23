@@ -7,8 +7,9 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const bundled = await build({
   stdin: {
     contents: `export * from './apps/gft-local/core.ts';
-export { parseLedger, appendLines, liveProse } from './src/service/ledger/index.ts';
-export { tidyOpsToLines } from './src/service/ledger/bridge.ts';`,
+export { parseLedger, appendLines, liveProse, legacyToLedger } from './src/service/ledger/index.ts';
+export { tidyOpsToLines } from './src/service/ledger/bridge.ts';
+export { splitDocTheme, joinDocTheme } from './src/service/ledger/docEdit.ts';`,
     resolveDir: root,
     loader: 'ts',
   },
@@ -162,6 +163,84 @@ test('增量正文必须覆盖已有同章判断，未知引用和跨章引用�
     after.graph.nodes.find(node => node.title === '样本是否足够？').content,
     '目前还没有确定样本数量。',
   );
+});
+
+/** 2026-09-06 一次性迁移的旧图：「# 标题／> 定位」成为无域导语，没有主题与原始 Log。 */
+function legacyTopic() {
+  const at = Date.parse('2026-08-28T10:00:00Z');
+  const legacyDoc = `# 选题池
+
+> 定位：功能与选题设想先落这里。
+
+## 主线
+
+两个设想先记着，平台能否承载还没定。
+
+## 设想
+
+### ◇ AI 评委擂台 ^j1
+AI 在讨论中判断谁的论证更站得住。
+
+### ？ 平台能否承载这类功能 ^j2
+还没定。
+
+## 死路
+
+## 场次日志
+
+- 8/28 起图`;
+  const nodes = [
+    ['j1', 'AI 评委擂台'],
+    ['j2', '平台能否承载这类功能？'],
+  ].map(([anchor, title]) => ({ id: `n-${anchor}`, anchor, title, createdAt: at }));
+  const edges = [{ id: 'e1', from: 'n-j1', to: 'n-j2' }];
+  return Object.freeze({
+    id: 'synthetic-legacy-migration',
+    name: '选题池',
+    scope: '',
+    ledger: core.legacyToLedger({ nodes, edges, doc: legacyDoc }, at).ledger,
+    raw: '',
+    revision: 1,
+    updatedAt: '2026-09-06T00:00:00Z',
+  });
+}
+
+test('旧迁移账：模型视图把旧导语放在章节前，新材料写入不丢原内容', () => {
+  const migrated = legacyTopic();
+  const { system } = core.prepareTask(migrated, 'update', '新材料：每日安排器的设想。');
+  const whitebox = system.slice(system.indexOf('# 白盒文档'));
+  assert.ok(
+    whitebox.indexOf('# 选题池') < whitebox.indexOf('## 主线'),
+    '旧导语排在主线之后会被模型读成统领全部判断的总章',
+  );
+  const next = applyUnchanged(
+    migrated,
+    'update',
+    `<doc>
+## 安排器
+### ◇ 每日安排先求认可
+讨论当天安排时以获得用户认可为目标。
+</doc>
+<prose domain="安排器" refs="d1">新设想把每日安排讨论的目标定为获得用户认可。</prose>`,
+  );
+  const before = core.parseLedger(migrated.ledger),
+    after = core.parseLedger(next.ledger);
+  for (const id of ['j1', 'j2']) assert.deepEqual(after.judgments.get(id), before.judgments.get(id));
+  const doc = core.viewTopic(next).doc;
+  for (const text of ['> 定位：功能与选题设想先落这里。', '两个设想先记着', '- 8/28 起图', '## 安排器'])
+    assert.ok(doc.includes(text), text);
+});
+
+test('旧迁移账：在主题栏写主题会接替旧导语并生效，其余内容不变', () => {
+  const migrated = legacyTopic();
+  const theme = '功能与选题设想：值不值得做、能否做成。';
+  const before = core.viewTopic(migrated);
+  const edited = core.joinDocTheme(theme, core.splitDocTheme(before.doc).body);
+  const next = { ...migrated, ...core.editDocument(migrated, edited) };
+  const after = core.viewTopic(next);
+  assert.equal(after.scope, theme);
+  assert.deepEqual(after.graph, before.graph);
+  assert.equal(core.splitDocTheme(after.doc).body, core.splitDocTheme(before.doc).body.replace(/\n\n# 选题池\n\n> 定位：功能与选题设想先落这里。/, ''));
 });
 
 test('只改判断档位时也要同步受影响章节正文，不要求重写无关旧章', () => {

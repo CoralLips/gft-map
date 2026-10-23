@@ -9,7 +9,7 @@ import * as store from '../store.mjs';
 
 const fixture = fileURLToPath(new URL('./fixtures/fake-codex.mjs', import.meta.url));
 async function waitFor(read, accept) {
-  const until = Date.now() + 12000;
+  const until = Date.now() + 60000;
   while (Date.now() < until) {
     const value = await read();
     if (accept(value)) return value;
@@ -20,7 +20,7 @@ async function waitFor(read, accept) {
 
 test(
   '异常事件只使当前任务失败，同一服务保留原内容并继续处理合法任务',
-  { timeout: 25000 },
+  { timeout: 120000 },
   async t => {
     const directory = await mkdtemp(path.join(tmpdir(), 'gft-runner-protocol-'));
     const previous = process.env.GFT_LOCAL_HOME;
@@ -34,7 +34,8 @@ test(
           binary: process.execPath,
           prefixArgs: [fixture, '--fixture-mode=protocol-by-input'],
           model: 'fixture-model',
-          timeoutMs: 5000,
+          // Generous: under a full parallel run, starting the fixture process alone can take seconds.
+          timeoutMs: 30000,
         },
       });
       const origin = `http://127.0.0.1:${server.address().port}`,

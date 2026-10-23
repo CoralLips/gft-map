@@ -224,7 +224,8 @@ export function docEditLines(st: LedgerState, edited: string, at = Date.now()): 
         } else if (first) lines.push(decision.remove(first.id));
         for (const p of others) lines.push(decision.remove(p.id));
       }
-      if (renamedFrom(d.name)) for (const id of seqIds.slice(0, firstPos)) if (proseById.has(id) && canWrite(id)) lines.push(decision.redomain(id, d.name));
+      // 旧迁移的无域导语（域名为空串）也按位置改名，例如在主题栏写主题时接替旧导语。
+      if (renamedFrom(d.name) !== undefined) for (const id of seqIds.slice(0, firstPos)) if (proseById.has(id) && canWrite(id)) lines.push(decision.redomain(id, d.name));
 
       // ② 条目后面的走向段：先看谁的 tail 里一字不差地有它（先问按位置该归的那条，再问其他条），抠出来；谁都没有 → 删（内容已并进表述）
       for (const pid of seqIds.slice(firstPos + 1)) {

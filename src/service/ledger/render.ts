@@ -150,8 +150,9 @@ function renderDocRaw(st: LedgerState, source = false): string {
     if (!byDomain.has(b.domain)) { byDomain.set(b.domain, []); seen.push(b.domain); }
     byDomain.get(b.domain)!.push(b);
   }
-  // 主题第一、主线第二（这张脉络记什么、现在到哪了），其余按首次出现
-  const pinned = ['主题', '主线', 'Main thread'].filter(d => byDomain.has(d));
+  // 主题第一、主线第二（这张脉络记什么、现在到哪了），其余按首次出现。
+  // 模型视图里无域段（旧迁移留下的「# 标题／> 定位」导语）放在所有章节之前：排在主线后会被读成总章。
+  const pinned = [...(source ? [''] : []), '主题', '主线', 'Main thread'].filter(d => byDomain.has(d));
   const order = [...pinned, ...seen.filter(d => !pinned.includes(d))];
   const out: string[] = [];
   for (const d of order) {

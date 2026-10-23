@@ -735,7 +735,7 @@ function renderDocRaw(st, source = false) {
     }
     byDomain.get(b.domain).push(b);
   }
-  const pinned = ["\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].filter((d) => byDomain.has(d));
+  const pinned = [...source ? [""] : [], "\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].filter((d) => byDomain.has(d));
   const order = [...pinned, ...seen.filter((d) => !pinned.includes(d))];
   const out = [];
   for (const d of order) {
@@ -785,6 +785,9 @@ function actions(actor) {
 }
 var decision = actions("\u672C\u4EBA");
 var aiDecision = actions("AI");
+function allocId(st, kind, offset = 0) {
+  return `${kind}${st.nextNum + offset}`;
+}
 function appendLines(ledger, lines) {
   if (lines.length === 0) return ledger;
   const base = ledger.replace(/\n+$/, "");
@@ -2271,6 +2274,21 @@ function linesFromLegacyDelta(st, remote, at) {
   }
   return { lines: [sessionLine(at, "mcp", "\u5916\u90E8\u5199\u5165\u5E76\u5165"), ...lines], newIds };
 }
+var PREFACE_LINE_RE = /^(#\s+\S.*|>\s*定位[：:]\s*(.*))$/;
+function legacyPrefaceLines(ledger, at = Date.now()) {
+  const st = parseLedger(ledger);
+  const unchaptered = liveProse(st).filter((p) => p.domain === "");
+  if (!unchaptered.length) return [];
+  const pure = (p) => {
+    const text = p.lines.map((l) => l.trim()).filter(Boolean);
+    return text.length > 0 && text.every((l) => PREFACE_LINE_RE.test(l));
+  };
+  const positioning = unchaptered.filter(pure).flatMap((p) => p.lines.map((l) => PREFACE_LINE_RE.exec(l.trim())?.[2]?.trim() ?? "")).find((text) => text && !/^（.*）$/.test(text));
+  const lines = [sessionLine(at, "\u672C\u4EBA", "\u65E7\u683C\u5F0F\u8F6C\u6362")];
+  if (positioning && !themeOf(st).trim()) lines.push(...proseLines(allocId(st, "p"), "\u4E3B\u9898", positioning));
+  for (const p of unchaptered) lines.push(pure(p) ? decision.remove(p.id) : decision.redomain(p.id, "\u4E3B\u7EBF"));
+  return lines;
+}
 function absorbLegacyRow(ledger, row, at = Date.now()) {
   const nodes = row.nodes ?? [];
   const edges = row.edges ?? [];
@@ -2286,6 +2304,11 @@ function absorbLegacyRow(ledger, row, at = Date.now()) {
   const up = upgradeLedger(ledger);
   if (up.changed) {
     ledger = up.text;
+    migrated = true;
+  }
+  const preface = legacyPrefaceLines(ledger, at);
+  if (preface.length) {
+    ledger = appendLines(ledger, preface);
     migrated = true;
   }
   let newIds = [];
@@ -2517,7 +2540,7 @@ function docEditLines(st, edited, at = Date.now()) {
         } else if (first) lines.push(decision.remove(first.id));
         for (const p of others) lines.push(decision.remove(p.id));
       }
-      if (renamedFrom(d.name)) {
+      if (renamedFrom(d.name) !== void 0) {
         for (const id of seqIds.slice(0, firstPos)) if (proseById.has(id) && canWrite(id)) lines.push(decision.redomain(id, d.name));
       }
       for (const pid of seqIds.slice(firstPos + 1)) {

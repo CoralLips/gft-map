@@ -14,7 +14,7 @@ import { canMergeJudgments } from './topology';
 import { markdownLines } from './text';
 import {
   parseLedger, renderDoc, renderSourceDoc, renderGraph, liveJudgments, liveProse, themeOf, judgmentLines, proseLines, relationLine, sessionLine,
-  aiDecision, legacyToLedger, appendLines, upgradeLedger, type LedgerState, type LedgerMark,
+  aiDecision, decision, allocId, legacyToLedger, appendLines, upgradeLedger, type LedgerState, type LedgerMark,
 } from './index';
 
 const BARE_ENTRY_RE = /^###\s*(◆|◇|？|\?|✗|⏸)\s*(.+?)\s*$/;
@@ -565,6 +565,33 @@ export function linesFromLegacyDelta(
   return { lines: [sessionLine(at, 'mcp', '外部写入并入'), ...lines], newIds };
 }
 
+const PREFACE_LINE_RE = /^(#\s+\S.*|>\s*定位[：:]\s*(.*))$/;
+/**
+ * 新格式里每段正文都属于一个章节，旧账里没有章节的走向段在加载时转换一次：
+ * - 9 月一次性迁移留下的纯导语（只有「# 标题」和「> 定位：…」）：收录边界写进「主题」，
+ *   有实质的定位转成主题（尚无主题时），模板占位与重复标题去掉；
+ * - 写了正文的无章节段落归入「主线」：阅读视图本来就把它接在主线正文后面，内容与位置不变
+ *   （原本没有主线时顶上多一个「主线」标题）；改 Doc 别处时也不会再被算进主线、原段被记删。
+ * 转过一次后不再有无章节段，不会重复转换。
+ */
+export function legacyPrefaceLines(ledger: string, at = Date.now()): string[] {
+  const st = parseLedger(ledger);
+  const unchaptered = liveProse(st).filter(p => p.domain === '');
+  if (!unchaptered.length) return [];
+  const pure = (p: (typeof unchaptered)[number]) => {
+    const text = p.lines.map(l => l.trim()).filter(Boolean);
+    return text.length > 0 && text.every(l => PREFACE_LINE_RE.test(l));
+  };
+  const positioning = unchaptered
+    .filter(pure)
+    .flatMap(p => p.lines.map(l => PREFACE_LINE_RE.exec(l.trim())?.[2]?.trim() ?? ''))
+    .find(text => text && !/^（.*）$/.test(text));
+  const lines = [sessionLine(at, '本人', '旧格式转换')];
+  if (positioning && !themeOf(st).trim()) lines.push(...proseLines(allocId(st, 'p'), '主题', positioning));
+  for (const p of unchaptered) lines.push(pure(p) ? decision.remove(p.id) : decision.redomain(p.id, '主线'));
+  return lines;
+}
+
 /**
  * 一行库记录 → 账（网页端加载/同步与 MCP 端点共用同一规则）：
  *   有账读账（旧格式就地升级：走向段补号）；无账但有旧数据（迁移前的行）→ 当场一次性转账；
@@ -589,6 +616,8 @@ export function absorbLegacyRow(
   }
   const up = upgradeLedger(ledger);
   if (up.changed) { ledger = up.text; migrated = true; }
+  const preface = legacyPrefaceLines(ledger, at);
+  if (preface.length) { ledger = appendLines(ledger, preface); migrated = true; }
   let newIds: string[] = [];
   if (ledger) {
     const delta = linesFromLegacyDelta(parseLedger(ledger), { nodes, edges, doc }, at);

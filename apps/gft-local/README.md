@@ -124,7 +124,7 @@ Pause file processing and finish or cancel other running tasks before updating. 
 
 ## Project status and feedback
 
-The current stable release is [v0.3.14](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
+The current stable release is [v0.3.15](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
 
 Sibling tool: [GFT-Merge](https://github.com/CoralLips/gft-merge) combines several Claude Code and Codex sessions and starts a new session that carries their context.
 
