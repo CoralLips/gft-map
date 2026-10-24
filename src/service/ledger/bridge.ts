@@ -11,7 +11,7 @@ import type { DocSegment, WhiteboxMark } from '../whiteboxDoc';
 import type { TidyAiOp, TidyInput } from '../tidyCore';
 import { assertTidyScopeIds, validTidyRelation, tidyDomain } from '../tidyCore';
 import { canMergeJudgments } from './topology';
-import { markdownLines } from './text';
+import { mapReferenceLines, markdownLines } from './text';
 import {
   parseLedger, renderDoc, renderSourceDoc, renderGraph, liveJudgments, liveProse, themeOf, judgmentLines, proseLines, relationLine, sessionLine,
   aiDecision, decision, allocId, legacyToLedger, appendLines, upgradeLedger, type LedgerState, type LedgerMark,
@@ -294,9 +294,10 @@ export function linesFromGenerate(
   const chapters = new Map((result.docSegments ?? []).filter(seg => seg.refs !== undefined).map(seg => [seg.domain, seg]));
   for (const [domain, seg] of chapters) {
     if (domain === '主题' || !seg.text.trim()) continue;
-    const refs = [...new Set(seg.refs!.map(ref => /^d\d+$/.test(ref) ? allEntryIds[Number(ref.slice(1)) - 1] : ref))]
+    const resolve = (ref: string) => /^d\d+$/.test(ref) ? allEntryIds[Number(ref.slice(1)) - 1] : ref;
+    const refs = [...new Set(seg.refs!.map(resolve))]
       .filter(id => chapterEntries.some(j => j.id === id && j.domain === domain));
-    const text = narrativeText(seg.text, refs);
+    const text = narrativeText(seg.text, refs, resolve);
     for (const p of chapterProse) if (p.domain === domain && /^p\d+$/.test(p.id)) lines.push(aiDecision.remove(p.id));
     const id = alloc('p');
     const newProse = proseLines(id, domain, text);
@@ -309,8 +310,30 @@ export function linesFromGenerate(
   return { lines, rawLines, idMap, newIds, sourceIncomplete };
 }
 
-const narrativeText = (text: string, refs: string[]): string => refs.length
-  ? `${refs.map(id => `> ^${id}`).join('\n')}\n\n${text.trim()}` : text.trim();
+/**
+ * 章节正文落账：正文里写在讲到它位置的引用行原位保留（D61），每条判断只引用一次；
+ * 本章判断没在正文里出现引用的，照旧放在章首，保证每条判断都在 Doc 里看得到。
+ */
+function narrativeText(text: string, refs: string[], resolve: (token: string) => string | undefined = token => token): string {
+  const placed = new Set<string>();
+  const marker = '\u0000ref:';
+  const body = mapReferenceLines(text.trim(), token => {
+    const id = resolve(token);
+    if (!id || !refs.includes(id) || placed.has(id)) return undefined;
+    placed.add(id);
+    return `${marker}${id}`;
+  }).split('\n');
+  // 引用自成一段：与前后行文之间各留一个空行，连续的引用保持成组。
+  const out: string[] = [];
+  body.forEach((line, i) => {
+    const isRef = line.startsWith(`> ^${marker}`), previousRef = i > 0 && body[i - 1].startsWith(`> ^${marker}`);
+    if (isRef !== previousRef && out.length && out[out.length - 1].trim() && line.trim()) out.push('');
+    out.push(isRef ? line.replace(marker, '') : line);
+  });
+  const rest = refs.filter(id => !placed.has(id));
+  const prose = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return rest.length ? `${rest.map(id => `> ^${id}`).join('\n')}\n\n${prose}`.trim() : prose;
+}
 
 /** 整理的输入：全部活着的判断、边、各域走向 */
 export function tidyInput(st: LedgerState, unreadIds: Set<string>, raw?: LedgerState): Omit<TidyInput, 'target'> {
@@ -338,7 +361,26 @@ export function tidyInput(st: LedgerState, unreadIds: Set<string>, raw?: LedgerS
     byDomain.get(p.domain)!.push(text);
   }
   const prose = [...byDomain.entries()].filter(([domain]) => domain !== '主题').map(([domain, texts]) => ({ domain, text: texts.join('\n\n') }));
-  return { judgments, edges, prose, theme: themeOf(st), ...(raw ? { sourceDoc: renderSourceDoc(raw) } : {}) };
+  const legacy = legacyChapters(st);
+  return { judgments, edges, prose, theme: themeOf(st), ...(legacy.length ? { legacyChapters: legacy } : {}), ...(raw ? { sourceDoc: renderSourceDoc(raw) } : {}) };
+}
+
+/**
+ * 还是 D61 之前排法的章节：有判断却没有章节正文、有判断没被正文引用（更早的导语＋小标题），
+ * 或正文第一行就是引用（D52 把引用组放在章首；新写法先提出本章问题）。只看排法、不看字数。
+ * 整理时一并转换；没转完的章节下次整理仍会列出，不需要额外的转换入口或标记。
+ */
+export function legacyChapters(st: LedgerState): string[] {
+  const out: string[] = [];
+  const prose = liveProse(st);
+  for (const domain of new Set(liveJudgments(st).map(j => j.domain))) {
+    const lines = prose.filter(p => p.domain === domain).flatMap(p => markdownLines(p.lines));
+    const refs = new Set(lines.flatMap(({ line, code }) => code ? [] : [/^>\s*\^(j\d+)\s*$/.exec(line)?.[1] ?? '']));
+    const first = lines.find(({ line, code }) => code || line.trim());
+    const startsWithRef = !!first && !first.code && /^>\s*\^j\d+\s*$/.test(first.line);
+    if (!first || startsWithRef || liveJudgments(st).some(j => j.domain === domain && !refs.has(j.id))) out.push(domain);
+  }
+  return out;
 }
 
 /** 新整理的操作流 → 账行：合并＝新判断「合并自」；去掉＝删；改锐利＝改；走向＝改该域第一段、删其余段 */
@@ -492,7 +534,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], raw?: LedgerSta
     const refs = [...new Set((op.refs ?? []).map(id => mergedRefs.get(id) ?? id))]
       .filter(id => chapterEntries.some(j => j.id === id && j.domain === domain));
     refs.forEach(id => explained.add(id));
-    const text = narrativeText(op.text, refs);
+    const text = narrativeText(op.text, refs, id => mergedRefs.get(id) ?? id);
     const blocks = liveProse(st).filter(p => p.domain === domain && /^p\d+$/.test(p.id));
     const first = chapterEntries.find(j => j.domain === domain);
     if (scopeIds && !first && !blocks.length && domain !== '主线') continue;
@@ -572,12 +614,19 @@ const PREFACE_LINE_RE = /^(#\s+\S.*|>\s*定位[：:]\s*(.*))$/;
  *   有实质的定位转成主题（尚无主题时），模板占位与重复标题去掉；
  * - 写了正文的无章节段落归入「主线」：阅读视图本来就把它接在主线正文后面，内容与位置不变
  *   （原本没有主线时顶上多一个「主线」标题）；改 Doc 别处时也不会再被算进主线、原段被记删。
- * 转过一次后不再有无章节段，不会重复转换。
+ * - 迁移带来的旧模板空章节（如「死路」：没有正文、章节里也没有判断）去掉，免得文稿里只剩一个空标题。
+ * 转过一次后不再有这些段，不会重复转换。
  */
 export function legacyPrefaceLines(ledger: string, at = Date.now()): string[] {
   const st = parseLedger(ledger);
-  const unchaptered = liveProse(st).filter(p => p.domain === '');
-  if (!unchaptered.length) return [];
+  const prose = liveProse(st);
+  const unchaptered = prose.filter(p => p.domain === '');
+  const judgmentDomains = new Set(liveJudgments(st).map(j => j.domain));
+  // 只认迁移带来的空章节：人自己写下、留待以后补的空标题不动。
+  const emptyChapters = prose.filter(
+    p => p.source === '迁移' && p.domain && !['主题', '主线'].includes(p.domain) && !judgmentDomains.has(p.domain) && !p.lines.some(l => l.trim()),
+  );
+  if (!unchaptered.length && !emptyChapters.length) return [];
   const pure = (p: (typeof unchaptered)[number]) => {
     const text = p.lines.map(l => l.trim()).filter(Boolean);
     return text.length > 0 && text.every(l => PREFACE_LINE_RE.test(l));
@@ -589,6 +638,7 @@ export function legacyPrefaceLines(ledger: string, at = Date.now()): string[] {
   const lines = [sessionLine(at, '本人', '旧格式转换')];
   if (positioning && !themeOf(st).trim()) lines.push(...proseLines(allocId(st, 'p'), '主题', positioning));
   for (const p of unchaptered) lines.push(pure(p) ? decision.remove(p.id) : decision.redomain(p.id, '主线'));
+  for (const p of emptyChapters) lines.push(decision.remove(p.id));
   return lines;
 }
 

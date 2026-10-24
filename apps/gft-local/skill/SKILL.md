@@ -139,7 +139,7 @@ node scripts/cli.mjs task --id TASK_ID
 
 `start` 只确保面板可用，不打开浏览器；`status` 和 `stop` 不会启动已关闭的面板。关闭或重启遇到未完成任务返回 409，向用户说明具体任务，让其选择等待还是取消后再执行，不擅自取消。恢复服务不代表模型任务成功；用 `task-status --id TASK_ID --remote` 核对结果。已开始但中断的普通模型任务需按需重新发起，排队任务按原流程处理，HTTP请求失败后不自动重发。大文件按既有存档续做，主动暂停的保持暂停。
 
-默认保留之前选择的 Agent，以 ACP 连接；首次检查 Codex。页面任务使用厂商推荐模型及默认强度，清除 GFT 旧模型固定值，不沿用个人调高的设置。页面设置只选择 Codex 或 Claude Code，不暴露协议。页面先可用，后台通过锁定完整依赖树的 npm ci --ignore-scripts 准备连接组件（Node.js 22+ 与 npm，需要网络），复用原登录；不要要求用户配置适配器路径。切换可在设置的“任务 → 选择处理 Agent”完成，或 `restart --agent codex-acp` / `restart --agent claude-acp`。只有确认 ACP 兼容障碍时才临时使用原生 `--agent codex` / `--agent claude`；不要因登录、额度或限流问题自动回退。检查不等于真实模型成功，需用合成材料验收。纯手动模式用 `open --manual`。详见 [连接与排障](references/acp.md)。
+默认保留之前选择的 Agent；首次检查 Codex。Codex 经本机 Codex 自带的 app-server 在不保留的临时线程里运行，Claude Code 经 ACP 连接。页面任务使用厂商推荐模型及默认强度，清除 GFT 旧模型固定值，不沿用个人调高的设置。页面设置只选择 Codex 或 Claude Code，不暴露协议。页面先可用；Claude 由后台通过锁定完整依赖树的 npm ci --ignore-scripts 准备连接组件（Node.js 22+ 与 npm，需要网络），复用原登录；不要要求用户配置适配器路径。切换可在设置的“任务 → 选择处理 Agent”完成，或 `restart --agent codex-acp` / `restart --agent claude-acp`。只有确认默认连接存在兼容障碍时才临时使用原生 `--agent codex` / `--agent claude`；不要因登录、额度或限流问题自动回退。检查不等于真实模型成功，需用合成材料验收。纯手动模式用 `open --manual`。详见 [连接与排障](references/acp.md)。
 
 启动命令返回的 `runtime` 或 `/api/runtime` 才是验收依据：页面处理需要所选 `agent`、`mode: automatic`，以及执行器为 `ready` 或正在处理。若执行器未就绪，报告实际登录或配置提示；手动模式可在任务页点击“连接 Codex”。保留相同端口与 `GFT_LOCAL_HOME`，不把“页面能打开”当成“Agent 已连接”。
 

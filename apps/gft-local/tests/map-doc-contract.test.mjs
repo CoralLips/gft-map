@@ -42,7 +42,8 @@ test('提示词接线：首次、更新、重画与长历史成稿注入同一�
   for (const prompt of prompts) {
     assert(prompt.includes(core.MAP_DOC_RULES));
     assert(prompt.includes('<prose domain='));
-    assert(prompt.includes('中等篇幅'));
+    assert(prompt.includes('一两句概述'));
+    assert(prompt.includes('> ^'));
     assert(!prompt.includes('不限长度'));
     assert(!prompt.includes('格式要求只有两条'));
     assert(!prompt.includes('按本节覆盖前面'));

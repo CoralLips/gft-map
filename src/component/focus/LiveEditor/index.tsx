@@ -363,6 +363,15 @@ const LiveEditor = forwardRef<LiveEditorHandle, LiveEditorProps>(({
 
     // 点 ^jN 锚 → 回调（不吞其它点击）
     const anchorClick = EditorView.domEventHandlers({
+      // Doc 节点块标题行末的入口：按下即定位 Map 节点；等到 click 时光标已进入该行、入口已还原成原文。
+      mousedown: event => {
+        const cb = onAnchorClickRef.current;
+        const link = (event.target as HTMLElement | null)?.closest?.('[data-gft-anchor]') as HTMLElement | null;
+        if (!cb || event.button !== 0 || !link?.dataset.gftAnchor) return false;
+        event.preventDefault();
+        cb(link.dataset.gftAnchor);
+        return true;
+      },
       click: (event, view) => {
         const cb = onAnchorClickRef.current;
         if (!cb || !(event.ctrlKey || event.metaKey)) return false;
@@ -374,6 +383,13 @@ const LiveEditor = forwardRef<LiveEditorHandle, LiveEditorProps>(({
         while ((m = re.exec(line.text)) !== null) {
           const from = line.from + m.index;
           if (pos >= from && pos <= from + m[0].length) { cb(m[1]); return true; }
+        }
+        // Ctrl/⌘+点节点块里任意一行（标题或概述）：沿引用块向上找到它的标题行。
+        for (let number = line.number; number >= 1; number--) {
+          const text = view.state.doc.line(number).text;
+          if (!/^ {0,3}>/.test(text)) break;
+          const anchor = /^ {0,3}>\s+[◆◇？✗⏸]\s+.+?\s+\^(j\d+)\s*$/.exec(text);
+          if (anchor) { cb(anchor[1]); return true; }
         }
         return false;
       },

@@ -174,13 +174,28 @@ test('整理结构纠错期间仍可明确停止，迟到结果不得写入', as
   );
 });
 
-test('节点整理只改该节点标题与说明，结果按节点核对后写入并留回执', () =>
-  isolated(
+test('节点整理保留长说明中的证据与条件，图文同源且可撤销（执行器回放）', () => {
+  const original =
+    '客户甲在9月6日试用，保存按钮失败了三次，依据是工单A-17和当日录屏。三次都在离线编辑后重连时发生，在线直接保存尚未复现；目前只排查重连后的保存流程，不能据此判断所有保存都会失败。客户暂未提供浏览器版本，根因仍未确定。';
+  const revised =
+    '客户甲9月6日试用时，离线编辑后重连保存失败了三次，证据为工单A-17和当日录屏。在线直接保存尚未复现，因此目前只排查重连后的保存流程，不能推断所有保存都会失败。客户暂未提供浏览器版本，根因仍未确定。';
+  const seed = `${ledger.replace('先约定职责\n双方先谈好职责和报酬，具体任务以后再定。', `重连保存待排查\n${original}`)}
+走向 p4 [组织]
+本章记录目前能确认的情况。
+> ^j2
+这段独立说明保持原样。
+> ^j3`;
+  assert(original.length > 80 && revised.length > 80);
+  return isolated(
     async request => {
-      assert.match(request.system, /完整说明/);
-      return '<node title="先约定职责与范围" body="双方先谈好职责、报酬与可调整的范围，具体任务以后再定。"/>';
+      assert(request.system.includes(original), '执行器收到完整原说明');
+      assert.match(request.system, /保留原标题和说明里的全部信息/);
+      assert.match(request.system, /不会修改章节正文/);
+      assert.doesNotMatch(request.system, /40[–—-]80/);
+      return `<node title="重连保存问题待核实" body="${revised}"/>`;
     },
     async ({ topic, post, finished }) => {
+      const before = await store.getView(topic.id);
       const task = await post(`/api/topics/${topic.id}/tasks`, {
         action: 'refine',
         params: { nodeId: 'j2' },
@@ -190,14 +205,28 @@ test('节点整理只改该节点标题与说明，结果按节点核对后写�
       assert.equal(done.changed, true);
       const view = await store.getView(topic.id);
       const node = view.graph.nodes.find(n => n.id === 'j2');
-      assert.equal(node.title, '先约定职责与范围');
-      assert.match(node.content, /可调整的范围/);
-      assert.equal(view.graph.nodes.find(n => n.id === 'j3').title, '内部组织也有代价');
+      assert.equal(node.title, '重连保存问题待核实');
+      assert.equal(node.content, revised);
+      assert.equal(
+        view.doc,
+        before.doc.replace('重连保存待排查', node.title).replace(original, revised),
+      );
+      assert.deepEqual(
+        view.graph.nodes.find(n => n.id === 'j3'),
+        before.graph.nodes.find(n => n.id === 'j3'),
+      );
+      assert.deepEqual(view.graph.edges, before.graph.edges);
       const { operations } = await store.getOperations(topic.id);
       assert.equal(operations[0].id, task.id);
       assert.equal(operations[0].canRollback, true);
+      await store.rollbackOperation(topic.id, view.revision, task.id);
+      const restored = await store.getView(topic.id);
+      assert.equal(restored.doc, before.doc);
+      assert.deepEqual(restored.graph, before.graph);
     },
-  ));
+    seed,
+  );
+});
 
 test('节点在处理期间被改过时，旧结果不覆盖当前内容', () => {
   let release;

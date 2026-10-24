@@ -13,14 +13,14 @@
 | 能力 | 支持情况 |
 |---|---|
 | 本地面板、Doc／Map 编辑、文件迁移 | 可用，无需 GFT 登录。 |
-| Codex 页面 AI 操作 | 默认通过 ACP 连接本机 Agent，已完成真实任务验收。 |
+| Codex 页面 AI 操作 | 默认经本机 Codex 自带的 app-server 运行，任务线程不留在 Codex 里；已完成真实任务验收。 |
 | Codex／Claude Code 聊天来源 | 可选择具体会话，按各自进度收录增量。 |
 | Claude Code 页面 AI 操作 | 默认通过 ACP 连接，需先在终端运行一次 `claude auth login`；已完成真实任务验收。 |
 | MCP 原生连接表单 | 可选，是否显示取决于客户端；也可使用网页入口。 |
 
 读取聊天来源和执行模型分别配置。例如，可用 Codex 执行器处理选定的 Claude Code 聊天。支持 ACP 不代表已经适配所有 Agent 的聊天历史。
 
-在“设置 → AI 处理”中选择页面更新、整理、重画使用的 Agent。界面只列 Codex 和 Claude Code，默认通过 ACP 连接；CLI 留作明确的兼容入口，不在失败时自动切换。检查不运行模型，也不证明仍有可用额度。任务结束或停止后才能切换；切换前先检查，失败保留原执行器，成功后记住选择。页面默认采用厂商推荐的模型，也可以在“AI 处理”里为每家选别的模型并会被记住；思考强度始终用所选模型的默认值，不沿用个人调高的配置；额度属于它在本机登录的账号或 API 配置，不会因为聊天来源不同而自动换家。在聊天中直接调用 Skill，则由那场聊天的 Agent 完成推理。
+在“设置 → AI 处理”中选择页面更新、整理、重画使用的 Agent。界面只列 Codex 和 Claude Code，Codex 经它自带的 app-server、Claude Code 经 ACP 连接；CLI 留作明确的兼容入口，不在失败时自动切换。检查不运行模型，也不证明仍有可用额度。任务结束或停止后才能切换；切换前先检查，失败保留原执行器，成功后记住选择。页面默认采用厂商推荐的模型，也可以在“AI 处理”里为每家选别的模型并会被记住；思考强度始终用所选模型的默认值，不沿用个人调高的配置；额度属于它在本机登录的账号或 API 配置，不会因为聊天来源不同而自动换家。在聊天中直接调用 Skill，则由那场聊天的 Agent 完成推理。
 
 ### 手动安装
 
@@ -94,30 +94,32 @@ node scripts/cli.mjs open
 
 桌面版 Claude 的登录不与命令行共用。首次使用前在终端运行一次 `claude auth login` 完成网页授权，再到“设置 → AI 处理”重新检查。Windows 上会自动找到 npm 安装的 `claude.exe`；其他位置可用 `GFT_CLAUDE_BIN` 指定原生可执行文件。从 Claude Code 会话中启动面板时，父会话的内部变量不会传给这个子进程。
 
-## ACP 执行器
+## 默认执行器
 
-ACP 是本工具与 Agent 交换任务、输出和取消请求的协议，也是默认连接方式。页面只选择 Codex 或 Claude Code。首次使用自动将经过验证的固定版本适配器安装到数据目录的 `adapters` 子目录，成功后复用；新版本先在独立目录准备，完整后才启用，不覆盖现有组件。需要 Node.js 22 或更新版本及 npm，首次准备需要网络。登录由用户在对应 Agent 中完成。
+页面只选择 Codex 或 Claude Code。登录由用户在对应 Agent 中完成。
 
 ```text
 node scripts/cli.mjs doctor --agent codex-acp
 node scripts/cli.mjs serve --port 4317 --agent codex-acp
 ```
 
-Claude 使用 `--agent claude-acp`。普通 `open` / `start` / `restart` 会保留所选 Agent 并使用 ACP；保留超时设置，清除旧的模型固定值，原 CLI 程序路径不会误传给适配器。组件来自 [Codex ACP](https://github.com/agentclientprotocol/codex-acp) 与 [Claude ACP](https://github.com/agentclientprotocol/claude-agent-acp)。
+**Codex** 经本机 Codex 自带的 app-server（`codex app-server`）运行，不需要另装组件。每次任务开一个 Codex 不保留的临时线程（`ephemeral`）：不出现在 Codex 的会话列表和归档里，用的是同一账号额度，回答边写边传回页面显示进度。线程只读、拒绝一切审批请求，关闭工具、插件、技能、项目说明与记忆。可执行文件依次取 `GFT_CODEX_BIN`、Codex 应用自带的 `codex`（Windows 上的 `%LOCALAPPDATA%\OpenAI\Codex\bin`，最新一版）、PATH 中的 `codex`；应用自带的那份随应用更新，模型列表最新。名称 `codex-acp` 沿用旧名，以保留已保存的选择。
 
-当前固定版本为 Codex ACP 2.2.2、Claude ACP 0.93.0。握手成功不能代替具体任务成功或保证账号额度。页面默认使用厂商推荐的模型，选了别的模型时只换模型，思考强度仍用该模型的默认值，不沿用个人调高的设置：Codex 读取适配器的推荐模型及该模型推荐强度；Claude 明确选择 default 模型和自动强度，隔离个人模型设置。推荐值随版本、账号和提供商变化，不等于最便宜的模型。不会修改全局 Agent 配置。登录、额度和上游错误不会触发切换提供商或自动重发。
+**Claude Code** 使用 `--agent claude-acp`，经 ACP（本工具与 Agent 交换任务、输出和取消请求的协议）连接，会话不持久化。首次使用自动将经过验证的固定版本适配器安装到数据目录的 `adapters` 子目录，成功后复用；新版本先在独立目录准备，完整后才启用，不覆盖现有组件。需要 Node.js 22 或更新版本及 npm，首次准备需要网络。组件来自 [Claude ACP](https://github.com/agentclientprotocol/claude-agent-acp)，当前固定版本 0.93.0。早期版本为 Codex 安装的 ACP 适配器在服务启动时自动清理。
 
-只有确认 ACP 存在实际兼容问题时，才用 `restart --agent codex` 或 `restart --agent claude` 临时启用对应原生 CLI。下一次普通启动仍优先 ACP；这两个兼容入口不出现在页面选择列表中。
+普通 `open` / `start` / `restart` 会保留所选 Agent；保留超时设置，清除旧的模型固定值，原 CLI 程序路径不会误传给新连接。握手成功不能代替具体任务成功或保证账号额度。页面默认使用厂商推荐的模型，选了别的模型时只换模型，思考强度仍用该模型的默认值，不沿用个人调高的设置：Codex 读取 app-server 模型列表里的推荐模型及该模型的默认强度；Claude 明确选择 default 模型和自动强度，隔离个人模型设置。推荐值随版本、账号和提供商变化，不等于最便宜的模型。不会修改全局 Agent 配置。登录、额度和上游错误不会触发切换提供商或自动重发。
 
-Windows 不通过 `.cmd` 或 shell 字符串启动。可以指定原生可执行文件，或用 Node 的绝对路径加适配器的 JavaScript 入口：
+只有确认默认连接存在实际兼容问题时，才用 `restart --agent codex` 或 `restart --agent claude` 临时启用对应原生 CLI。下一次普通启动仍优先默认连接；这两个兼容入口不出现在页面选择列表中。
+
+Windows 不通过 `.cmd` 或 shell 字符串启动。诊断时可以指定原生可执行文件（Codex 为 `codex` 本身），或用 Node 的绝对路径加适配器的 JavaScript 入口：
 
 ```text
-node scripts/cli.mjs doctor --agent codex-acp --acp-bin "C:/Program Files/nodejs/node.exe" --acp-arg "D:/adapters/codex-acp/dist/index.js"
+node scripts/cli.mjs doctor --agent claude-acp --acp-bin "C:/Program Files/nodejs/node.exe" --acp-arg "D:/adapters/claude-acp/dist/index.js"
 ```
 
-上面的入口是写法示例，以所装适配器 `package.json` 的 `bin` 字段为准；同一组参数也传给 `serve`。每个额外参数单独重复 `--acp-arg`，不把整段命令放进一个字符串。也可使用 `GFT_CODEX_ACP_BIN` 与 `GFT_CODEX_ACP_ARGS`，Claude 对应 `GFT_CLAUDE_ACP_BIN` / `GFT_CLAUDE_ACP_ARGS`；`_ARGS` 是 JSON 字符串数组。ACP 使用厂商默认配置；`--model` 只用于原生 CLI 兼容诊断。
+上面的入口是写法示例，以所装适配器 `package.json` 的 `bin` 字段为准；同一组参数也传给 `serve`。每个额外参数单独重复 `--acp-arg`，不把整段命令放进一个字符串。也可使用 `GFT_CODEX_ACP_BIN` 与 `GFT_CODEX_ACP_ARGS`，Claude 对应 `GFT_CLAUDE_ACP_BIN` / `GFT_CLAUDE_ACP_ARGS`；`_ARGS` 是 JSON 字符串数组。默认连接使用厂商推荐配置；`--model` 只用于原生 CLI 兼容诊断。
 
-ACP 负责执行一次更新、整理或重画任务。读取已有聊天由另外的 Codex / Claude Code 来源适配器负责；支持 ACP 不代表支持所有 Agent 的聊天历史。
+执行器负责一次更新、整理或重画任务。读取已有聊天由另外的 Codex / Claude Code 来源适配器负责；能执行任务不代表支持所有 Agent 的聊天历史。
 
 ## 连接聊天与增量更新
 
@@ -149,7 +151,7 @@ node scripts/cli.mjs mcp-config
 
 ## 原生 CLI 兼容诊断
 
-仅在 ACP 存在已确认的兼容障碍时，才临时使用本机 Codex CLI：
+仅在默认连接存在已确认的兼容障碍时，才临时使用本机 Codex CLI：
 
 ```text
 node scripts/cli.mjs doctor --agent codex
@@ -158,15 +160,15 @@ node scripts/cli.mjs restart --agent codex
 
 它使用现有登录和账户额度，另起一个临时 Codex CLI 进程。`--ephemeral` 不保存聊天记录；本次调用的 `model_instructions_file` 只包含 GFT 图文处理要求，替换默认编程任务说明。忽略用户配置、仓库规则和记忆，关闭工具、插件与派生任务，不经过 ACP 适配器的自动标题生成。临时说明文件在任务退出后清理，不修改用户的全局配置。默认通过 Codex 的只读模型列表获取当前默认模型和思考强度，每次新任务重新解析，不会跟随另一个聊天输入框。命令行 `--model MODEL` 保留作显式诊断覆盖，旧 `GFT_CODEX_MODEL` 环境变量不再固定页面默认值。原生程序路径使用 `GFT_CODEX_BIN`。
 
-ACP v1 使用 `session/new` 与 `session/prompt`，没有统一的无会话单次推理接口，也没有各家通用的临时会话或关闭标题开关。因此 Codex 内部 ACP 会话结束后归档，原生临时执行保留作兼容入口；正常使用仍默认 ACP。Skill 提供指令和工具入口，本身不是模型推理服务。
+这条路径只在结束时一次性给出回答，页面看不到边写边显示的进度，所以只作兼容入口；正常使用仍走默认连接。Skill 提供指令和工具入口，本身不是模型推理服务。
 
-参考：[Codex 非交互与临时执行](https://learn.chatgpt.com/docs/non-interactive-mode)、[单次调用说明文件](https://learn.chatgpt.com/docs/config-file/config-reference)、[ACP v1 会话](https://agentclientprotocol.com/protocol/v1/session-setup)。
+参考：[Codex 非交互与临时执行](https://learn.chatgpt.com/docs/non-interactive-mode)、[单次调用说明文件](https://learn.chatgpt.com/docs/config-file/config-reference)。
 
 两种执行路径都另起任务进程，不是当前聊天的后台续接，不保证一次任务只发生一次模型请求。页面显示任务进度与失败原因。刷新／关闭页面和短暂查询失败不会取消已提交的服务端任务；重开后恢复进度与停止入口。切换主题只脱离当前页面的观察，任务继续写回原主题；切回后恢复来源、进度和停止入口。只有明确停止才取消该任务。执行超时默认 900 秒，可用 `--timeout-seconds` 调整。服务崩溃后普通 AI 任务不会自动重放；应检查遗留的适配器和 Agent 子进程，`recover` 只修复本地记录状态。文件材料按存档批次续接；尚未提交的浏览器侧后续聊天批次仍需重新发起更新。失败或旧版本结果不会覆盖已经保存的内容。
 
-内部 Codex ACP 调用结束后尝试归档本次生成的会话（保留诊断记录，不删除用户聊天）；Claude ACP 禁用临时会话持久化。适配器缓存损坏时，先安装并验证新副本，再隔离旧缓存并替换，避免不完整文件阻塞重试。
+Codex 的任务线程是临时的，结束后不留在 Codex 里；Claude ACP 禁用临时会话持久化。适配器缓存损坏时，先安装并验证新副本，再隔离旧缓存并替换，避免不完整文件阻塞重试。
 
-共享右栏的“整理”最多运行三轮，每轮是独立处理，达到目标或不再改善就停止；一次点击的总开销可能是多轮之和。这是原有收拢逻辑，与是否经过 ACP 无关。执行记录分别保存每轮实际耗时、用量及工具调用数，不能把单轮实测当作所有点击的固定开销。
+共享右栏的“整理”通常最多运行两轮；整图整理转换旧主题格式时，每轮最多处理六章，有进展才继续，最多五轮。达到目标或不再改善就停止；一次点击的总开销可能是多轮之和。这些轮次与是否经过 ACP 无关。执行记录分别保存每轮实际耗时、用量及工具调用数，不能把单轮实测当作所有点击的固定开销。
 
 数据文件和服务留在本机；登录 GFT 后，脉络内容自动双向同步到该账号。选择联网 Agent 时，任务所需内容会交给该 Agent 的模型服务；图文处理不调用 GFT 云端生成 API。
 

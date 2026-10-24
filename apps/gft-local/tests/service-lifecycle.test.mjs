@@ -385,13 +385,15 @@ test('服务退出后立即关闭会禁用待重试守护', { timeout: 30000 }, 
   }),
 );
 
-test('后台启动迁移原 Codex 选择为 ACP，并由合成子进程完成任务', { timeout: 30000 }, () =>
+test('后台启动迁移原 Codex 选择，并由合成子进程完成任务', { timeout: 30000 }, () =>
   scenario(async ({ directory, reserve, call }) => {
     await saveExecutorConfig({
       agent: 'codex-acp',
       runnerOptions: {
         binary: process.execPath,
-        prefixArgs: [fileURLToPath(new URL('./fixtures/fake-acp.mjs', import.meta.url))],
+        prefixArgs: [
+          fileURLToPath(new URL('./fixtures/fake-codex-app-server.mjs', import.meta.url)),
+        ],
         model: 'fixture-model',
       },
     });
@@ -422,7 +424,7 @@ test('后台启动迁移原 Codex 选择为 ACP，并由合成子进程完成任
       value => ['completed', 'failed'].includes(value.status),
     );
     assert.equal(completed.status, 'completed', completed.error);
-    assert.match((await store.getView(topic.id)).doc, /ACP 合成结果已回填/);
+    assert.match((await store.getView(topic.id)).doc, /Codex 合成结果已回填/);
     await call(url, ['stop']);
     const restored = await call(url, ['start']);
     assert.equal(restored.runtime.agent, 'codex-acp');

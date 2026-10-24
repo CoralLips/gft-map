@@ -1,8 +1,8 @@
 /** 多轮整理：浏览器与本地服务共用的同一套循环；模型调用由调用方注入。 */
 import { parseLedger, appendLines, liveJudgments, themeOf, type LedgerState } from './ledger';
-import { tidyInput, tidyOpsToLines, ChapterCoverageError } from './ledger/bridge';
+import { legacyChapters, tidyInput, tidyOpsToLines, ChapterCoverageError } from './ledger/bridge';
 import { renderSourceLog } from './sourceLog';
-import { tidyTarget, TIDY_MAX_ROUNDS, type TidyAiOp, type TidyInput } from './tidyCore';
+import { tidyTarget, TIDY_CONVERT_ROUNDS, TIDY_MAX_ROUNDS, type TidyAiOp, type TidyInput } from './tidyCore';
 
 export interface TidyRoundsOptions {
   ledger: string;
@@ -57,14 +57,16 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
   let cur = parseLedger(text);
   const newIds: string[] = [];
   let merged = 0, dropped = 0, applied = 0, rounds = 0;
-  let correctionUsed = false;
   let consolidationRetry = false;
   let retriedConsolidation = false;
-  for (let round = 1; round <= TIDY_MAX_ROUNDS; round++) {
+  // 旧写法的图（D61）：每轮转换一批章节，有进展就接着转，直到转完或到轮数上限。
+  let converting = false;
+  for (let round = 1; round <= (converting ? TIDY_CONVERT_ROUNDS : TIDY_MAX_ROUNDS); round++) {
     const count = countInScope(cur);
-    if (round > 1 && count <= target) break;
+    if (round > 1 && count <= target && !converting) break;
+    const continuation = converting;
+    const legacyBefore = scope ? 0 : legacyChapters(cur).length;
     await options.onRound?.(round);
-    rounds = round;
     const input: TidyInput = {
       ...tidyInput(cur, options.unreadIds, source),
       sourceDoc: renderSourceLog(options.raw),
@@ -72,18 +74,24 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
       consolidationRetry,
       ...(scope ? { scopeIds: [...scope] } : {}),
     };
+    // 每轮最多一次结构纠错。接着转换的一轮仍不合格就停下，前几轮已转好的保留，余下的下次整理再转。
     let ops = await options.tidy(input);
     if (options.stillCurrent && !options.stillCurrent()) return null;
     let r;
     try {
-      r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+      try {
+        r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+      } catch (error) {
+        if (!(error instanceof ChapterCoverageError)) throw error;
+        ops = await options.tidy({ ...input, validationFeedback: error.message });
+        if (options.stillCurrent && !options.stillCurrent()) return null;
+        r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+      }
     } catch (error) {
-      if (!(error instanceof ChapterCoverageError) || correctionUsed) throw error;
-      correctionUsed = true;
-      ops = await options.tidy({ ...input, validationFeedback: error.message });
-      if (options.stillCurrent && !options.stillCurrent()) return null;
-      r = tidyOpsToLines(cur, ops, source, scope, { requireChapterDoc: true });
+      if (continuation) break;
+      throw error;
     }
+    rounds = round;
     // A theme proposal is ignored by the shared writer: no retry, no empty session.
     if (!r.lines.length && themeOf(cur) && ops.length && ops.every(op => op.kind === 'prose' && op.domain === '主题')) break;
     lines.push(...r.lines);
@@ -96,6 +104,12 @@ export async function runTidyRounds(options: TidyRoundsOptions): Promise<TidyRou
     if (scope) {
       r.newIds.forEach(id => scope.add(id));
       keepAlive(cur);
+    }
+    const legacyAfter = scope ? 0 : legacyChapters(cur).length;
+    converting = legacyAfter > 0 && legacyAfter < legacyBefore;
+    if (converting) {
+      consolidationRetry = false;
+      continue;
     }
     if (ops.some(op => op.kind === 'add')) break;
     if (countInScope(cur) >= count) {

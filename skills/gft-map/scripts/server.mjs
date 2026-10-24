@@ -14,7 +14,8 @@ import { createCloudSync } from './sync.mjs';
 import { pendingNotices, acknowledgeNotices } from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
 import { createClaudeRunner } from './claudeRunner.mjs';
-import { ensureAdapter } from './acpAdapters.mjs';
+import { createCodexAppServerRunner } from './codexAppServer.mjs';
+import { ensureAdapter, removeRetiredAdapters } from './acpAdapters.mjs';
 import { programVersion, installationId } from './version.mjs';
 import { progressOf } from './progress.mjs';
 import {
@@ -99,17 +100,14 @@ export async function createRunner(agent = 'codex', options) {
   if (agent === 'codex') return createCodexRunner(options);
   if (agent === 'claude') return createClaudeRunner(options);
   if (!agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
-  const { createAcpRunner } = await import('./dist/acp.mjs');
   const configured = { binary: acpBinary(agent), prefixArgs: acpArguments(agent), ...options };
+  // The vendor's recommended model unless one was chosen in "AI 处理"; effort stays the default.
+  if (agent === 'codex-acp') return createCodexAppServerRunner(configured);
+  const { createAcpRunner } = await import('./dist/acp.mjs');
   if (!configured.binary) {
     Object.assign(configured, await ensureAdapter(agent));
   }
-  // The vendor's recommended model unless one was chosen in "AI 处理"; effort stays the default.
-  return createAcpRunner({
-    ...configured,
-    providerDefaults: true,
-    adapter: agent === 'codex-acp' ? 'codex' : 'claude',
-  });
+  return createAcpRunner({ ...configured, providerDefaults: true });
 }
 
 const errorRecord = (error, code = error.code || null) => ({
@@ -270,6 +268,8 @@ async function createService(
   await store.recover();
   // Housekeeping; a failure here must not keep the service from starting.
   await store.tidyTaskRecords().catch(error => console.warn('任务记录整理未完成：', error.message));
+  // Hundreds of MB that nothing runs any more; removed in the background, best effort.
+  void removeRetiredAdapters();
 
   // Executor. A switch replaces `runner` only after the new one passes its check.
   let activeAgent = agent;

@@ -1,10 +1,18 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import type { ReactFlowInstance, Viewport } from 'reactflow';
+import { zoomIdentity } from 'd3-zoom';
+import type { useStoreApi, Viewport } from 'reactflow';
 import { clampReadingViewport, nodeToolbarSpace, overviewViewport, readingExtent, resizeToolbarBounds, unionBounds, NODE_TOOLBAR_SPACE, VIEWPORT_PADDING, type ContentBounds, type ViewportSize } from './viewport';
 import { chooseDetailPlacement, fitDetailPlacement, DETAIL_PANEL_GAP, type DetailSide } from './detailPlacement';
 
 const sameViewport = (a: Viewport, b: Viewport) =>
   Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.zoom - b.zoom) < 1e-9;
+
+export type FlowStore = ReturnType<typeof useStoreApi>;
+
+const viewportOf = (flow: FlowStore): Viewport => {
+  const [x, y, zoom] = flow.getState().transform;
+  return { x, y, zoom };
+};
 
 /** Reading is always 1:1; overview is a frozen camera with a saved return position. */
 export function useMapViewport(
@@ -13,7 +21,9 @@ export function useMapViewport(
   openPanelId: string | null,
   generation: number,
 ) {
-  const [instance, setInstance] = useState<ReactFlowInstance | null>(null);
+  const [flow, setFlow] = useState<FlowStore | null>(null);
+  // Measurements also run from observers between renders; read the live store.
+  const flowRef = useRef<FlowStore | null>(null);
   const [overview, setOverview] = useState(false);
   const [geometry, setGeometry] = useState(() => {
     const size = { width: 0, height: 0 };
@@ -45,9 +55,14 @@ export function useMapViewport(
     pendingCenter.current = null;
   }
 
-  const apply = useCallback((next: Viewport, target = instance) => {
-    if (target && !sameViewport(target.getViewport(), next)) target.setViewport(next);
-  }, [instance]);
+  // ReactFlow 11's setViewport always runs through a d3 transition, which lands
+  // on the next animation frame. Transform the zoom selection now instead.
+  const apply = useCallback((next: Viewport, target = flowRef.current) => {
+    const { d3Zoom, d3Selection } = target?.getState() ?? {};
+    if (target && d3Zoom && d3Selection && !sameViewport(viewportOf(target), next)) {
+      d3Zoom.transform(d3Selection, zoomIdentity.translate(next.x, next.y).scale(next.zoom));
+    }
+  }, []);
 
   const constrain = useCallback((next: Viewport) => {
     const { bounds, size } = geometryRef.current;
@@ -62,9 +77,13 @@ export function useMapViewport(
     if (!sameViewport(next, bounded)) apply(bounded);
   }, [apply, constrain]);
 
-  const onInit = useCallback((target: ReactFlowInstance) => {
-    setInstance(target);
-    apply(constrain(camera.current.reading), target);
+  const onInit = useCallback((target: FlowStore) => {
+    flowRef.current = target;
+    setFlow(target);
+    // Place the camera and any open card now; waiting for the re-render would
+    // show the unplaced first frame.
+    if (measureRef.current) measureRef.current();
+    else apply(constrain(camera.current.reading), target);
   }, [apply, constrain]);
 
   useLayoutEffect(() => {
@@ -88,9 +107,10 @@ export function useMapViewport(
         observedPanel = panel;
       }
       let pairBounds: ContentBounds | null = null;
-      if (panel && instance) {
+      const live = flowRef.current;
+      if (panel && live) {
         const host = container.getBoundingClientRect();
-        const view = instance.getViewport();
+        const view = viewportOf(live);
         const node = panel.closest<HTMLElement>('.react-flow__node')!;
         const nodeRect = node.getBoundingClientRect();
         const nodeX = nodeRect.left - host.left, nodeY = nodeRect.top - host.top;
@@ -189,10 +209,10 @@ export function useMapViewport(
       window.removeEventListener('resize', measure);
       if (measureRef.current === measure) measureRef.current = null;
     };
-  }, [containerRef, contentBounds, openPanelId, generation, instance, apply, constrain]);
+  }, [containerRef, contentBounds, openPanelId, generation, flow, apply, constrain]);
 
   const toggleOverview = useCallback(() => {
-    if (!instance) return;
+    if (!flow) return;
     const state = camera.current;
     pendingCenter.current = null;
     if (state.overview) {
@@ -202,12 +222,12 @@ export function useMapViewport(
       setOverview(false);
     } else {
       const { bounds, size } = geometryRef.current;
-      state.reading = clampReadingViewport(instance.getViewport(), bounds, size);
+      state.reading = clampReadingViewport(viewportOf(flow), bounds, size);
       state.overview = { bounds, size, toolbar: nodeToolbarSpace(size), viewport: overviewViewport(bounds, size) };
       apply(state.overview.viewport);
       setOverview(true);
     }
-  }, [instance, constrain, apply]);
+  }, [flow, constrain, apply]);
 
   const centerOn = useCallback((x: number, y: number, panelId?: string) => {
     if (camera.current.overview) return;
@@ -224,7 +244,7 @@ export function useMapViewport(
 
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container || !instance) return;
+    if (!container || !flow) return;
     const wheel = (event: WheelEvent) => {
       // Do not let ReactFlow swallow browser zoom, or the card's native scroll.
       event.stopPropagation();
@@ -236,14 +256,14 @@ export function useMapViewport(
       const factor = event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? size.height : 1;
       const dx = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
       const dy = event.shiftKey && !event.deltaX ? 0 : event.deltaY;
-      const current = instance.getViewport();
+      const current = viewportOf(flow);
       const next = constrain({ x: current.x - dx * factor, y: current.y - dy * factor, zoom: 1 });
       camera.current.reading = next;
       apply(next);
     };
     container.addEventListener('wheel', wheel, { capture: true, passive: false });
     return () => container.removeEventListener('wheel', wheel, { capture: true });
-  }, [containerRef, instance, constrain, apply]);
+  }, [containerRef, flow, constrain, apply]);
 
   const translateExtent = useMemo<[[number, number], [number, number]]>(() => {
     const locked = camera.current.overview;

@@ -72,23 +72,29 @@ function parseEditedDoc(text: string): DocDomain[] {
   type DraftDomain = { name: string; lead: string[]; entries: Array<Omit<DocEntry, 'tail'> & { tail: string[] }>; hasReferences: boolean };
   let cur: DraftDomain = { name: '', lead: [], entries: [], hasReferences: false };
   let entry: { tail: string[] } | null = null;
+  // 引用行下紧接的引用块是这条判断的概述（D61）：改它就是改节点，空行或普通段落结束。
+  let summary: { tail: string[] } | null = null;
   const closeDomain = () => {
     if (cur.name || cur.lead.some(l => l.trim()) || cur.entries.length) {
       domains.push({ name: cur.name, lead: trimBlank(cur.lead.join('\n')), entries: cur.entries.map(e => ({ ...e, tail: trimBlank(e.tail.join('\n')) })), hasReferences: cur.hasReferences });
     }
   };
   for (const { line, code } of markdownLines(text.split('\n'))) {
-    if (code) { if (entry) entry.tail.push(line); else cur.lead.push(line); continue; }
+    if (code) { summary = null; if (entry) entry.tail.push(line); else cur.lead.push(line); continue; }
+    const ref = REFERENCE_RE.exec(line);
+    if (summary && !ref && /^ {0,3}>/.test(line)) { summary.tail.push(line.replace(/^ {0,3}>\s?/, '')); continue; }
+    summary = null;
     const dm = DOM_RE.exec(line);
     if (dm && !line.startsWith('###')) { entry = null; closeDomain(); cur = { name: dm[1].trim(), lead: [], entries: [], hasReferences: false }; continue; }
-    const ref = REFERENCE_RE.exec(line);
     if (ref) {
-      cur.entries.push({ id: ref[3], mark: ref[1] ? (ref[1] === '?' ? '？' : ref[1]) as LedgerMark : undefined, title: ref[2]?.trim() ?? '', tail: [], reference: true });
-      // 引用组是节点在 Doc 中的可见行：删除它仍表示删除判断，不是取消关联。
-      // 后续解释属于整组 prose，绝不能成为最后一个节点的 canonical body。
+      const e = { id: ref[3], mark: ref[1] ? (ref[1] === '?' ? '？' : ref[1]) as LedgerMark : undefined, title: ref[2]?.trim() ?? '', tail: [] as string[], reference: true };
+      cur.entries.push(e);
+      // 引用是节点在 Doc 中的可见块：删除它仍表示删除判断，不是取消关联。
+      // 引用块之外的行文属于章节 prose，绝不能成为节点的 canonical body。
       cur.lead.push(`> ^${ref[3]}`);
       cur.hasReferences = true;
       entry = null;
+      summary = e;
       continue;
     }
     const em = ENTRY_RE.exec(line);
@@ -257,8 +263,12 @@ export function docEditLines(st: LedgerState, edited: string, at = Date.now()): 
       if (e.title && e.title !== cur.title) lines.push(decision.retitle(cur.id, e.title));
       if (e.mark && e.mark !== cur.mark) lines.push(decision.remark(cur.id, e.mark));
       if (d.name !== cur.domain) lines.push(decision.redomain(cur.id, d.name));
-      const content = tails.get(cur.id) ?? '';
-      if (!e.reference && content !== trimBlank(cur.content)) lines.push(...decision.rewrite(cur.id, content));
+      if (e.reference) {
+        if (e.tail.trim() !== cur.content.trim()) lines.push(...decision.rewrite(cur.id, e.tail.trim()));
+      } else {
+        const content = tails.get(cur.id) ?? '';
+        if (content !== trimBlank(cur.content)) lines.push(...decision.rewrite(cur.id, content));
+      }
     }
 
     // ④ 顺序：域内条目先后变了 → 序（只挪最少的那几条）

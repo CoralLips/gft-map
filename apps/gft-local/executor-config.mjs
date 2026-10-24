@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fail, homeDir, writeJsonAtomic } from './store.mjs';
 
+// Saved ids keep their first names so existing choices load unchanged: `codex-acp` is the
+// default Codex executor, now Codex's own app-server; `codex`/`claude` are the native CLIs.
 const agents = new Set(['codex', 'claude', 'codex-acp', 'claude-acp']);
 const file = () => path.join(homeDir(), 'executor.json');
 
@@ -62,10 +64,10 @@ export async function saveExecutorConfig({ agent, runnerOptions } = {}) {
 
 const acpPrefix = agent => (agent === 'claude-acp' ? 'GFT_CLAUDE_ACP' : 'GFT_CODEX_ACP');
 
-/** ACP adapter executable from GFT_CODEX_ACP_BIN / GFT_CLAUDE_ACP_BIN. */
+/** Executable from GFT_CODEX_ACP_BIN (Codex) / GFT_CLAUDE_ACP_BIN (the Claude ACP adapter). */
 export const acpBinary = agent => process.env[`${acpPrefix(agent)}_BIN`];
 
-/** ACP adapter arguments from GFT_CODEX_ACP_ARGS / GFT_CLAUDE_ACP_ARGS (a JSON array). */
+/** Leading arguments from GFT_CODEX_ACP_ARGS / GFT_CLAUDE_ACP_ARGS (a JSON array). */
 export function acpArguments(agent) {
   const name = `${acpPrefix(agent)}_ARGS`;
   if (!process.env[name]) return undefined;

@@ -121,7 +121,7 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.15](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+当前正式版为 [v0.3.16](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
 
 同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
 

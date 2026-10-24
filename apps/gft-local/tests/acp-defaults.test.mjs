@@ -4,7 +4,12 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defaultExecutor } from '../executor-config.mjs';
-import { ensureAdapter, adapterReleases, adapterCacheStamp } from '../acpAdapters.mjs';
+import {
+  ensureAdapter,
+  adapterReleases,
+  adapterCacheStamp,
+  removeRetiredAdapters,
+} from '../acpAdapters.mjs';
 
 test('failed locked install preserves useful diagnostics without credentials and permits retry', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'gft-adapter-error-'));
@@ -17,7 +22,7 @@ test('failed locked install preserves useful diagnostics without credentials and
       process.env.npm_execpath,
       `if(!process.argv.includes('ci')||!process.argv.includes('--ignore-scripts'))process.exit(19);console.error('npm error ENOTFOUND registry lookup failed\\nAuthorization: synthetic-private-value\\nhttps://private:password@example.invalid');process.exit(7);`,
     );
-    await assert.rejects(ensureAdapter('codex-acp'), /网络连接失败.*install-errors.log/);
+    await assert.rejects(ensureAdapter('claude-acp'), /网络连接失败.*install-errors.log/);
     const log = await readFile(path.join(directory, 'adapters/install-errors.log'), 'utf8');
     assert.match(log, /code=7/);
     assert.match(log, /ENOTFOUND/);
@@ -42,28 +47,31 @@ test('a damaged adapter cache is replaced only after a complete staging install,
     npm = process.env.npm_execpath;
   process.env.GFT_LOCAL_HOME = directory;
   process.env.npm_execpath = path.join(directory, 'npm-cli.js');
+  const release = adapterReleases['claude-acp'];
   try {
     await writeFile(
       process.env.npm_execpath,
-      `const fs=require('node:fs'),p=require('node:path');const d=p.join(process.argv[process.argv.indexOf('--prefix')+1],'node_modules/@agentclientprotocol/codex-acp');fs.mkdirSync(p.join(d,'dist'),{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({version:'${adapterReleases['codex-acp'].version}'}));fs.writeFileSync(p.join(d,'dist/index.js'),'// complete');`,
+      `const fs=require('node:fs'),p=require('node:path');const d=p.join(process.argv[process.argv.indexOf('--prefix')+1],'node_modules/${release.name}');fs.mkdirSync(p.join(d,'dist'),{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({version:'${release.version}'}));fs.writeFileSync(p.join(d,'dist/index.js'),'// complete');`,
     );
     const root = path.join(directory, 'adapters');
-    const active = `codex-acp-${adapterReleases['codex-acp'].version}`;
+    const active = `claude-acp-${release.version}`;
     await mkdir(path.join(root, active), { recursive: true });
     await writeFile(path.join(root, active, 'broken'), 'old cache');
-    for (const old of ['codex-acp-0.0.1', 'claude-acp-0.0.1'])
+    for (const old of ['claude-acp-0.0.1', 'codex-acp-2.2.2'])
       await mkdir(path.join(root, old, 'node_modules'), { recursive: true });
-    const result = await ensureAdapter('codex-acp');
+    const result = await ensureAdapter('claude-acp');
     assert.ok(
       result.prefixArgs[0].endsWith('dist/index.js') ||
         result.prefixArgs[0].endsWith('dist\\index.js'),
     );
     assert.deepEqual(
       (await readdir(root)).sort(),
-      ['claude-acp-0.0.1', active],
+      [active, 'codex-acp-2.2.2'],
       '替换下来的旧副本和旧版本被清掉，另一家的安装不动',
     );
-    assert.deepEqual(await ensureAdapter('codex-acp'), result);
+    assert.deepEqual(await ensureAdapter('claude-acp'), result);
+    await removeRetiredAdapters();
+    assert.deepEqual(await readdir(root), [active], 'Codex 不再用的 ACP 适配器安装被清掉');
   } finally {
     if (previous === undefined) delete process.env.GFT_LOCAL_HOME;
     else process.env.GFT_LOCAL_HOME = previous;

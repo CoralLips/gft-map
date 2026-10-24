@@ -7,15 +7,12 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 const mode = args.find(arg => arg.startsWith('--fixture-mode='))?.split('=')[1] || 'success';
-const adapter = args.find(arg => arg.startsWith('--fixture-adapter='))?.split('=')[1] || 'codex';
 const sessionId = `fixture-session-${process.pid}`;
-const safeMode = adapter === 'claude' ? 'plan' : 'read-only';
+const safeMode = 'plan';
 const invocation = {
   pid: process.pid,
   args,
   requests: [],
-  codexConfig: process.env.CODEX_CONFIG ? JSON.parse(process.env.CODEX_CONFIG) : null,
-  initialMode: process.env.INITIAL_AGENT_MODE || null,
   effortEnv: process.env.CLAUDE_CODE_EFFORT_LEVEL || null,
   modelEnv: process.env.ANTHROPIC_MODEL || null,
 };
@@ -63,9 +60,6 @@ const config = () => [
           category: 'model',
           type: 'select',
           currentValue: selectedModel,
-          ...(mode === 'no-recommendation'
-            ? {}
-            : { _meta: { jetbrains: { air: { recommendedValue: 'fixture-default' } } } }),
           options: [
             {
               group: 'Available',
@@ -86,7 +80,6 @@ const config = () => [
     category: 'thought_level',
     type: 'select',
     currentValue: selectedEffort,
-    _meta: { jetbrains: { air: { recommendedValue: 'medium' } } },
     options: ['default', 'low', 'medium', 'xhigh'].map(value => ({ value, name: value })),
   },
 ];
@@ -109,12 +102,10 @@ async function handle(message) {
     if (mode === 'hang-initialize') return;
     result(id, {
       protocolVersion: mode === 'bad-version' ? 999 : params.protocolVersion,
-      agentInfo: { name: `fixture-${adapter}`, version: 'fixture-1.0' },
+      agentInfo: { name: 'fixture-claude', version: 'fixture-1.0' },
       agentCapabilities: {},
       authMethods: [{ id: 'fixture-login', name: 'Fixture login', description: 'Synthetic' }],
     });
-  } else if (method === 'session/delete') {
-    result(id, {});
   } else if (method === 'session/new') {
     if (mode === 'auth-failure') {
       failure(id, -32000, 'Authentication required');

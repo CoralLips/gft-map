@@ -215,19 +215,32 @@
   line-height: 0.85;
 }
 
-/* 相邻判断是一组共同论述的落点，不是逐条卡片。块形状不随光标进入而变化。 */
+/* 节点引用块（D61）：标题＋概述就是 Map 节点本身，一条档位色条标出关联；
+   块形状不随光标进入而变化。其余行文是 Doc 自己的正文，不加样式。 */
 .compact :global(.cm-doc-node) {
-  border-left: 2px solid var(--poe-gray-200);
+  --node-tone: var(--poe-blue);
+  border-left: 3px solid var(--node-tone);
   background: var(--poe-gray-50);
-  padding: 2px 12px;
-  font-size: 13.5px;
-  font-weight: 500;
-  line-height: 1.65;
+  padding: 1px 12px;
+  line-height: 1.75;
   color: var(--poe-gray-800, #303746);
 }
 
+.compact :global(.cm-doc-node-solid) { --node-tone: var(--poe-gray-700); }
+.compact :global(.cm-doc-node-open) { --node-tone: var(--poe-blue); }
+.compact :global(.cm-doc-node-ask) { --node-tone: var(--poe-purple); }
+.compact :global(.cm-doc-node-off) { --node-tone: var(--poe-gray-300); }
+
+.compact :global(.cm-doc-node-title) {
+  font-weight: 600;
+  color: var(--poe-gray-900);
+}
+
+/* 行不能用 margin（编辑器按行测高）；用透明边框把相邻两个节点块隔开。 */
 .compact :global(.cm-doc-node-start) {
   padding-top: 8px;
+  border-top: 4px solid transparent;
+  background-clip: padding-box;
   border-top-right-radius: 4px;
 }
 
@@ -237,8 +250,24 @@
 }
 
 .compact :global(.cm-doc-node-mark) {
-  color: var(--poe-gray-500);
+  color: var(--node-tone);
   font-weight: 400;
+}
+
+.compact :global(.cm-doc-node-link) {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--poe-gray-400);
+  font-weight: 400;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.compact :global(.cm-doc-node-link:hover) {
+  color: var(--poe-blue-dark);
+  background: var(--poe-gray-100);
+  opacity: 1;
 }
 
 /* 白盒留痕行（`> ◇→✗ 日期：理由`）：柔化成小字灰——记录在，但不抢阅读注意力

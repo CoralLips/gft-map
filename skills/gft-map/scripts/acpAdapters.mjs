@@ -18,9 +18,10 @@ import { homeDir, withRecordLock } from './store.mjs';
 
 // Tested adapter releases. Upgrades are explicit, never an unpinned npx on each task.
 export const adapterReleases = {
-  'codex-acp': { name: '@agentclientprotocol/codex-acp', version: '2.2.2' },
   'claude-acp': { name: '@agentclientprotocol/claude-agent-acp', version: '0.93.0' },
 };
+// Adapters no longer used: Codex runs through its own app-server (codexAppServer.mjs).
+const retiredAdapters = ['codex-acp'];
 const execute = promisify(execFile);
 const pending = new Map();
 const exists = file =>
@@ -64,16 +65,20 @@ async function npmEntry() {
 }
 
 /**
- * Once the pinned install is ready, older versions and replaced copies of the same
- * adapter are dead weight (hundreds of MB each). Best effort: a busy file stays for next time.
+ * Installs of `agent` other than `keep`: older versions, replaced copies, or all of a
+ * retired adapter. Dead weight (hundreds of MB each); best effort, a busy file stays for next time.
  */
-async function removeOtherInstalls(agent, target) {
-  const root = path.dirname(target);
+async function removeInstalls(agent, keep) {
+  const root = path.resolve(homeDir(), 'adapters');
   for (const name of await readdir(root).catch(() => []))
-    if (name.startsWith(`${agent}-`) && name !== path.basename(target))
+    if (name.startsWith(`${agent}-`) && name !== keep)
       await rm(path.join(root, name), { recursive: true, force: true, maxRetries: 3 }).catch(
         () => {},
       );
+}
+
+export async function removeRetiredAdapters() {
+  for (const agent of retiredAdapters) await removeInstalls(agent);
 }
 
 /** Install beside the data, in a new directory; only a complete install becomes active. */
@@ -171,7 +176,7 @@ export function ensureAdapter(agent) {
           await rm(staging, { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
       }
     }
-    await removeOtherInstalls(agent, target);
+    await removeInstalls(agent, path.basename(target));
     return { binary: process.execPath, prefixArgs: [entry] };
   })().finally(() => pending.delete(target));
   pending.set(target, promise);

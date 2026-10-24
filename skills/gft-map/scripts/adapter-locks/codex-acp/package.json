@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "@agentclientprotocol/codex-acp": "2.2.2"
-  },
-  "name": "gft-codex-acp-runtime",
-  "version": "1.0.0",
-  "private": true
-}

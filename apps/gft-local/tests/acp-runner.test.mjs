@@ -11,7 +11,7 @@ import { syncBuiltinESMExports } from 'node:module';
 const fixture = fileURLToPath(new URL('./fixtures/fake-acp.mjs', import.meta.url));
 const options = (mode = 'success', extra = {}) => ({
   binary: process.execPath,
-  prefixArgs: [fixture, `--fixture-mode=${mode}`, `--fixture-adapter=${extra.adapter || 'codex'}`],
+  prefixArgs: [fixture, `--fixture-mode=${mode}`],
   ...extra,
 });
 const task = { id: 'synthetic-acp-task', system: '合成系统规则', user: '合成用户材料' };
@@ -136,7 +136,6 @@ test('ACP初始化/新会话/配置/流式文本与用量来自实际进程，�
         'session/set_config_option',
         'session/set_config_option',
         'session/prompt',
-        'session/delete',
       ],
     );
     assert.deepEqual(input.requests[0].params.clientCapabilities, {
@@ -145,14 +144,9 @@ test('ACP初始化/新会话/配置/流式文本与用量来自实际进程，�
     });
     assert.equal(input.requests[1].params.cwd, directory);
     assert.deepEqual(input.requests[1].params.mcpServers, []);
-    assert.equal(input.requests[2].params.value, 'read-only');
+    assert.equal(input.requests[2].params.value, 'plan');
     assert.equal(input.requests[3].params.value, 'fixture-model');
-    assert.match(input.requests[4].params.prompt[0].text, /合成系统规则[\s\S]*合成用户材料/);
-    assert.equal(input.initialMode, 'read-only');
-    assert.equal(input.codexConfig.features.plugins, false);
-    assert.equal(input.codexConfig.skills.include_instructions, false);
-    assert.equal(input.codexConfig.features.hooks, false);
-    assert.deepEqual(input.codexConfig.notify, []);
+    assert.match(input.requests[4].params.prompt[0].text, /合成用户材料/);
     assert.equal(result.output, chunks.join(''));
     assert.equal(chunks.length, 2);
     assert.match(result.output, /ACP 合成结果已回填/);
@@ -167,7 +161,7 @@ test('ACP初始化/新会话/配置/流式文本与用量来自实际进程，�
     assert.equal(result.execution.usage.cache_write_tokens, undefined);
     assert.deepEqual(result.execution.contextUsage, { used: 70, size: 200000 });
     assert.equal(result.execution.model, 'fixture-model');
-    assert.equal(result.execution.mode, 'read-only');
+    assert.equal(result.execution.mode, 'plan');
     assert.ok(result.execution.elapsedMs > 0);
     assert.equal(result.execution.toolCallCount, 0);
     await waitForExit(input.pid);
@@ -181,9 +175,9 @@ test('ACP初始化/新会话/配置/流式文本与用量来自实际进程，�
 
 test('Claude使用明确adapter扩展禁工具/设置来源并选plan，不继承旧会话', () =>
   isolated(async directory => {
-    const result = await createAcpRunner(
-      options('success', { adapter: 'claude', model: 'fixture-model' }),
-    ).run(task, { directory });
+    const result = await createAcpRunner(options('success', { model: 'fixture-model' })).run(task, {
+      directory,
+    });
     const input = await invocation(directory),
       session = input.requests.find(request => request.method === 'session/new').params;
     assert.deepEqual(session._meta.claudeCode.options, {
@@ -246,7 +240,7 @@ test('不支持模式/模型时不发送任务；认证与非完整结果明确�
     const legacy = await createAcpRunner(options('legacy-mode')).run(task, {
       directory: path.join(dir, 'legacy'),
     });
-    assert.equal(legacy.execution.mode, 'read-only');
+    assert.equal(legacy.execution.mode, 'plan');
   }));
 
 test('ACP取消发送协议通知并结束实际进程树，busy及waitForIdle保持正确', () =>
@@ -308,12 +302,12 @@ test('a chosen model replaces only the recommended model; effort stays its defau
     ).run(task, { directory });
     assert.equal(result.execution.model, 'fixture-model');
     assert.equal(result.execution.modelSource, 'chosen');
-    assert.equal(result.execution.effort, 'medium');
+    assert.equal(result.execution.effort, 'auto');
     const requests = (await invocation(directory)).requests;
     const selections = requests.filter(item => item.method === 'session/set_config_option');
     assert.deepEqual(
       selections.map(item => item.params.value),
-      ['read-only', 'fixture-model', 'medium'],
+      ['plan', 'fixture-model', 'default'],
     );
     assert.ok(
       requests.findIndex(item => item.method === 'session/prompt') >
@@ -324,7 +318,7 @@ test('a chosen model replaces only the recommended model; effort stays its defau
 test('missing recommended model stops before inference rather than using personal settings', () =>
   isolated(async directory => {
     await assert.rejects(
-      createAcpRunner(options('no-recommendation', { providerDefaults: true })).run(task, {
+      createAcpRunner(options('no-model', { providerDefaults: true })).run(task, {
         directory,
       }),
       { code: 'RUNNER_DEFAULT' },
@@ -342,9 +336,10 @@ test('Claude default model and auto effort do not inherit personal model environ
     process.env.ANTHROPIC_MODEL = 'personal-model';
     process.env.CLAUDE_CODE_EFFORT_LEVEL = 'max';
     try {
-      const result = await createAcpRunner(
-        options('success', { adapter: 'claude', providerDefaults: true }),
-      ).run(task, { directory });
+      const result = await createAcpRunner(options('success', { providerDefaults: true })).run(
+        task,
+        { directory },
+      );
       const call = await invocation(directory);
       assert.equal(result.execution.model, 'default');
       assert.equal(result.execution.effort, 'auto');

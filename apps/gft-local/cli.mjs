@@ -80,7 +80,7 @@ const USAGE = [
 ]
   .map(([title, commands]) => `${title}: ${commands.join(' | ')}`)
   .concat(
-    '默认使用 ACP，首次自动准备固定版本连接组件（需 Node.js 22+、npm 和网络）。原生 codex/claude 入口仅用于明确的兼容障碍。诊断覆盖参数: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。open/start 自动启动或复用同一安装和数据的面板，默认恢复执行器，首次使用 Codex；stop/restart 遇到未完成任务时保留任务并提示。serve 保留前台运行；需要纯手动模式时使用 --manual。',
+    'Codex（codex-acp）经本机 Codex 自带的 app-server 运行，任务线程不留在 Codex 里，可执行文件依次取 GFT_CODEX_BIN、Codex 应用自带的 codex、PATH 中的 codex；Claude（claude-acp）使用 ACP，首次自动准备固定版本连接组件（需 Node.js 22+、npm 和网络）。原生 codex/claude 入口仅用于明确的兼容障碍。诊断覆盖参数: --acp-bin ABSOLUTE_EXECUTABLE [--acp-arg ARG ...]，或 GFT_CODEX_ACP_BIN/GFT_CLAUDE_ACP_BIN 与对应 _ARGS JSON数组。旧Codex入口继续使用 GFT_CODEX_BIN。open/start 自动启动或复用同一安装和数据的面板，默认恢复执行器，首次使用 Codex；stop/restart 遇到未完成任务时保留任务并提示。serve 保留前台运行；需要纯手动模式时使用 --manual。',
   )
   .join('\n');
 
@@ -114,10 +114,13 @@ function runnerOptions(agent) {
     ...(timeoutMs ? { timeoutMs } : {}),
   };
   if (!agent?.endsWith('-acp')) return common;
-  if (arg('model')) throw store.fail('ACP 使用厂商默认模型；--model 仅用于原生 CLI 兼容诊断。');
+  if (arg('model'))
+    throw store.fail(
+      '默认执行器使用厂商推荐模型，可在“AI 处理”中改选；--model 仅用于原生 CLI 兼容诊断。',
+    );
   if (has('acp-bin') && !arg('acp-bin')) throw store.fail('缺少 --acp-bin');
   const binary = arg('acp-bin') || acpBinary(agent);
-  if (binary && !path.isAbsolute(binary)) throw store.fail('ACP binary 必须是可执行文件的绝对路径');
+  if (binary && !path.isAbsolute(binary)) throw store.fail('--acp-bin 必须是可执行文件的绝对路径');
   const prefixArgs = values('acp-arg').length ? values('acp-arg') : (acpArguments(agent) ?? []);
   if (
     !Array.isArray(prefixArgs) ||

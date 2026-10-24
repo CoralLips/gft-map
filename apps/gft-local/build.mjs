@@ -164,6 +164,7 @@ if (process.argv.includes('--skill')) {
     'sync.mjs',
     'runner.mjs',
     'claudeRunner.mjs',
+    'codexAppServer.mjs',
     'childProcess.mjs',
     'connections.mjs',
     'memory.mjs',

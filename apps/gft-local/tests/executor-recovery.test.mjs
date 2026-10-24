@@ -18,10 +18,11 @@ const fakeOptions = mode => ({
   prefixArgs: [fixture, `--fixture-mode=${mode}`],
   model: 'fixture-model',
 });
-const fakeClaude = {
+const fakeClaude = { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] };
+const fakeCodexApp = (mode = 'success') => ({
   binary: process.execPath,
-  prefixArgs: [here('fixtures/fake-acp.mjs'), '--fixture-adapter=claude'],
-};
+  prefixArgs: [here('fixtures/fake-codex-app-server.mjs'), `--fixture-mode=${mode}`],
+});
 async function isolated(run) {
   const directory = await mkdtemp(path.join(tmpdir(), 'gft-executor-recovery-'));
   const previous = process.env.GFT_LOCAL_HOME;
@@ -98,12 +99,7 @@ test('managed service serves content while the Agent initializes, then reports i
       port: 0,
       managed: true,
       agent: 'codex-acp',
-      runnerOptions: {
-        binary: process.execPath,
-        prefixArgs: [here('fixtures/fake-acp.mjs'), '--fixture-mode=hang-initialize'],
-        timeoutMs: 1800,
-        checkTimeoutMs: 1800,
-      },
+      runnerOptions: { ...fakeCodexApp('hang-initialize'), timeoutMs: 1800, checkTimeoutMs: 1800 },
     });
     const base = `http://127.0.0.1:${server.address().port}`;
     try {
@@ -201,10 +197,7 @@ test('连接执行器只接受枚举值，任务运行时拒绝检查且不改�
 
 test('配置的执行器不会被 --manual 运行抹掉（配置文件仅成功选择时更新）', () =>
   isolated(async directory => {
-    await saveExecutorConfig({
-      agent: 'codex-acp',
-      runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
-    });
+    await saveExecutorConfig({ agent: 'codex-acp', runnerOptions: fakeCodexApp() });
     await saveExecutorConfig({ agent: 'codex', runnerOptions: fakeOptions('success') });
     const configBefore = await readFile(path.join(directory, 'executor.json'), 'utf8');
     assert.equal(JSON.parse(configBefore).agent, 'codex');
@@ -218,7 +211,7 @@ test('配置的执行器不会被 --manual 运行抹掉（配置文件仅成功�
 
 test('AI 处理可选模型：选中后生效并在重开后保留，选回推荐即恢复厂商推荐', () =>
   isolated(async () => {
-    const fake = { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] };
+    const fake = fakeCodexApp();
     await saveExecutorConfig({ agent: 'codex-acp', runnerOptions: fake });
     let server = await startServer({ port: 0, agent: 'codex-acp', runnerOptions: fake });
     const base = () => `http://127.0.0.1:${server.address().port}`;
@@ -230,7 +223,7 @@ test('AI 处理可选模型：选中后生效并在重开后保留，选回推�
       const offered = await (await json(base(), '/api/runtime/executors?agent=codex-acp')).json();
       assert.deepEqual(
         offered.models.map(item => item.value),
-        ['fixture-default', 'fixture-model', 'default'],
+        ['fixture-default', 'fixture-model'],
       );
       assert.equal(offered.model, 'fixture-default');
       assert.equal((await choose({ agent: 'codex-acp', model: 'fixture-model' })).status, 200);
@@ -270,7 +263,7 @@ test('AI 处理逐家返回：当前 Agent 用已通过的检查，另一家记�
     const server = await startServer({
       port: 0,
       agent: 'codex-acp',
-      runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
+      runnerOptions: fakeCodexApp(),
     });
     const base = `http://127.0.0.1:${server.address().port}`;
     const candidate = async query => (await json(base, `/api/runtime/executors?${query}`)).json();
@@ -289,10 +282,7 @@ test('AI 处理逐家返回：当前 Agent 用已通过的检查，另一家记�
         agent: 'claude-acp',
         runnerOptions: { binary: path.resolve('missing-acp-executable') },
       });
-      await saveExecutorConfig({
-        agent: 'codex-acp',
-        runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
-      });
+      await saveExecutorConfig({ agent: 'codex-acp', runnerOptions: fakeCodexApp() });
       assert.equal(
         (await candidate('agent=claude-acp')).checkedAt,
         claude.checkedAt,
@@ -307,10 +297,7 @@ test('AI 处理逐家返回：当前 Agent 用已通过的检查，另一家记�
 
 test('设置检查不改当前Agent，空闲时可切换并保留每家配置，失败不丢原连接', () =>
   isolated(async () => {
-    await saveExecutorConfig({
-      agent: 'codex-acp',
-      runnerOptions: { binary: process.execPath, prefixArgs: [here('fixtures/fake-acp.mjs')] },
-    });
+    await saveExecutorConfig({ agent: 'codex-acp', runnerOptions: fakeCodexApp() });
     await saveExecutorConfig({ agent: 'claude-acp', runnerOptions: fakeClaude });
     await saveExecutorConfig({ agent: 'codex', runnerOptions: fakeOptions('success') });
     const server = await startServer({

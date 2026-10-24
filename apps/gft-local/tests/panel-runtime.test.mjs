@@ -1823,7 +1823,7 @@ test('a tidy that lands while the node is open for editing stays under the perso
   );
 });
 
-test('node tidy rewrites only its own title and full explanation, leaves the Doc, and undoes by receipt', async () => {
+test('node tidy rewrites only its own title and summary, leaves the Doc prose, and undoes by receipt', async () => {
   const entered = deferred(),
     release = deferred();
   let calls = 0;
@@ -1858,7 +1858,9 @@ test('node tidy rewrites only its own title and full explanation, leaves the Doc
       );
       for (const node of before.nodes.filter(n => n.id !== 'j16'))
         assert.equal(body(local, node.id), before.ledgerState.judgments.get(node.id).content);
-      assert.doesNotMatch(local.store.getState().doc, /Avoiding renegotiation/, '说明不写进文档');
+      // D61: the summary shows where Doc quotes the node; the Doc's own prose stays as it was.
+      const prose = doc => doc.split('\n').filter(line => !line.startsWith('>')).join('\n');
+      assert.equal(prose(local.store.getState().doc), prose(before.doc), '只改节点，不改文档行文');
       assert.equal(local.store.getState().tidyScopeIds, null);
       assert.equal(calls, 1);
       assert.deepEqual(errors, []);

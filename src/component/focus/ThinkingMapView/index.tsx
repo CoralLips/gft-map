@@ -10,11 +10,12 @@ import {changedSelection} from '../../../service/mapSelection';
 
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import ReactFlow, { Background, BaseEdge, getSmoothStepPath } from 'reactflow';
+import { flushSync } from 'react-dom';
+import ReactFlow, { Background, BaseEdge, getSmoothStepPath, useReactFlow, useStoreApi } from 'reactflow';
 import type { Node, Edge, NodeChange, EdgeChange, ReactFlowInstance, EdgeProps, Position } from 'reactflow';
 import { layoutGraph, estimateNodeHeight, NODE_WIDTH, type MeasuredSizes } from './layout';
 import { nodeReadingBounds, nodeToolbarSpace, unionBounds, type ViewportSize } from './viewport';
-import { useMapViewport } from './useMapViewport';
+import { useMapViewport, type FlowStore } from './useMapViewport';
 import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import { wouldCycle } from '../../../type/thinkingMap';
@@ -206,6 +207,17 @@ function RoutedOutlinedEdge(props: EdgeProps): JSX.Element {
 }
 const MAP_EDGE_TYPES = Object.freeze({ outlined: RoutedOutlinedEdge });
 
+/** ReactFlow 11 的 onInit 走定时器，晚于首帧绘制；改由子组件交出实例与 store，首帧即按最终视口摆好。
+ *  用被动副作用：它排在 ZoomPane 注册 zoom 监听之后（同一次提交、树序在前），视口变换才会写回 store。 */
+function InstanceReady({ onReady }: { onReady: (instance: ReactFlowInstance, flow: FlowStore) => void }): null {
+  const instance = useReactFlow();
+  const flow = useStoreApi();
+  useEffect(() => {
+    if (instance.viewportInitialized) onReady(instance, flow);
+  }, [instance, flow, onReady]);
+  return null;
+}
+
 function ThinkingMapViewImpl(): JSX.Element {
   const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
@@ -316,7 +328,10 @@ function ThinkingMapViewImpl(): JSX.Element {
         setDragPos({ id: c.id, x: c.position.x, y: c.position.y });
       }
     }
-    setMeasured(prev => {
+    if (!changes.some(c => c.type === 'dimensions')) return;
+    // 尺寸由 ReactFlow 的 ResizeObserver 在绘制前回报；普通 setState 会排到绘制之后，
+    // 首帧就只剩边、节点仍隐藏。同步提交，让实测重排落在同一帧。
+    flushSync(() => setMeasured(prev => {
       let next: MeasuredSizes | null = null;
       for (const c of changes) {
         if (c.type !== 'dimensions' || !c.dimensions) continue;
@@ -329,7 +344,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         next.set(c.id, { w: width, h: height });
       }
       return next ?? prev;
-    });
+    }));
   }, [deleteElements,setSelectedNodes,useThinkingMapStore]);
 
   // 节点本体点击：直接展开/收起详情（hover 已承担操作入口）；连线态下=选定连线目标
@@ -919,9 +934,9 @@ function ThinkingMapViewImpl(): JSX.Element {
   }, [linkingFromId, linkHoverId, linkMouse, linkVerdict]);
 
   // 手动加节点后：视口平移到新节点（它在时序尾部，多半在视口外）
-  const handleInit = useCallback((inst: ReactFlowInstance) => {
+  const handleInit = useCallback((inst: ReactFlowInstance, flow: FlowStore) => {
     rfInstanceRef.current = inst;
-    viewport.onInit(inst);
+    viewport.onInit(flow);
   }, [viewport.onInit]);
   useLayoutEffect(() => {
     if (!editingNodeId) return;
@@ -929,22 +944,23 @@ function ThinkingMapViewImpl(): JSX.Element {
     if (position) centerOn(position.x + NODE_WIDTH / 2, position.y + 60);
   }, [editingNodeId, layoutPositions, centerOn]);
 
-  // 文档 ^id 跳过来：打开面板 + 居中（布局可能还没算好，每 100ms 试一次，最多 2s）
-  useEffect(() => {
-    if (!focusNodeId) return;
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries += 1;
-      if (layoutPositions.has(focusNodeId) && rfInstanceRef.current) {
+  // 文档 ^id 跳过来：与地图同一帧打开面板；节点实测后再居中——估算位置会在实测重排后偏开
+  const focusTargetRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (focusNodeId) {
+      if (layoutPositions.has(focusNodeId)) {
+        focusTargetRef.current = focusNodeId;
         setOpenPanelId(focusNodeId);
-        centerOnOpenNode(focusNodeId);
         markNodeRead(focusNodeId);
-        clearInterval(timer);
-        clearMapFocus();
-      } else if (tries >= 20) { clearInterval(timer); clearMapFocus(); }
-    }, 100);
-    return () => clearInterval(timer);
-  }, [focusNodeId, layoutPositions, centerOnOpenNode, markNodeRead, clearMapFocus]);
+      }
+      clearMapFocus();
+    }
+    const target = focusTargetRef.current;
+    if (target && measured.has(target)) {
+      focusTargetRef.current = null;
+      centerOnOpenNode(target);
+    }
+  }, [focusNodeId, layoutPositions, measured, centerOnOpenNode, markNodeRead, clearMapFocus]);
 
   // 分享图（一图流）已删（2026-08-05 用户拍：假设了不存在的行为）——html-to-image 捕获+品牌框整段撤；
   // 需要时从 git 历史取回
@@ -1091,7 +1107,6 @@ function ThinkingMapViewImpl(): JSX.Element {
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
-        onInit={handleInit}
         onMove={viewport.onMove}
         translateExtent={viewport.translateExtent}
         nodesDraggable={!overview}
@@ -1118,6 +1133,7 @@ function ThinkingMapViewImpl(): JSX.Element {
         proOptions={{ hideAttribution: true }}
       >
         <Background color="var(--poe-gray-200)" gap={16} />
+        <InstanceReady onReady={handleInit} />
       </ReactFlow>}
       </EdgeGeomContext.Provider>
     </div>

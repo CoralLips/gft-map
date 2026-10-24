@@ -13,7 +13,8 @@
   border-color: var(--tint-green-border);           /* 浅绿边（旧 type_fragment 默认色）*/
   background-color: var(--tint-green-bg);       /* 浅绿底 */
   padding: 0.5rem 0.75rem;
-  transition: all 0.2s;
+  /* 不用 all：ReactFlow 测尺寸前把节点设为 hidden，继承的 visibility 一参与过渡，首帧就只剩连线 */
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   max-width: 180px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
@@ -1338,7 +1339,7 @@
   border-radius: 6px;
   padding: 1px 6px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: color 0.12s, border-color 0.12s;
 }
 
 .dissolveBtn:hover {

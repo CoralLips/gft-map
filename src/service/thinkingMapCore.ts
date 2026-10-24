@@ -4,6 +4,7 @@ import type { FocusCard } from '../type/focusCard';
 import { wouldCycle, type ThinkingEdge, type ThinkingEdgeType } from '../type/thinkingMap';
 import { WHITEBOX_MARKS, type WhiteboxMark, type DocSegment } from './whiteboxDoc';
 import { MAP_DOC_RULES, readTagAttributes, validateMapDocOutput } from './mapDocContract';
+import { mapReferenceLines } from './ledger/text';
 
 /** 思维导航节点的 projectId 哨兵——内存态，不入库 */
 export const THINKING_MAP_PROJECT_ID = 'tm_demo';
@@ -170,7 +171,7 @@ const DOC_FORMAT_RULES = `# 输出格式（覆盖前面一切标签格式说明�
 ## 域名
 
 ### ◆ 塔尖短句
-用中等篇幅解释这条判断独有的依据与条件、边界，以及承接或转向的原因。只补标题之外的信息，不复述标题，不复制整个章节。
+一两句概述（约 40–80 字）：为什么这样判断、在什么条件下成立。不复述标题；依据细节、数字与例子写进章节正文。
 
 ## 主线
 
@@ -185,13 +186,21 @@ const DOC_FORMAT_RULES = `# 输出格式（覆盖前面一切标签格式说明�
 
 **第二部分：受影响章节的共同正文，写在 </doc> 之后**：
 
-<prose domain="域名" refs="j3,d1">完整解释本章已有与新增判断如何关联、哪些依据造成取舍、当前结论及边界。</prose>
+<prose domain="域名" refs="j3,d1">直接提出本章的问题或共同背景。
 
-每个受影响章节必须输出一次 prose，refs 覆盖该章全部判断。本轮判断用 d1、d2（全 doc 的出现序）；已有判断用白盒中的 jN，或上一版图对应的 nN。只引用本章真实判断，不能使用 Log 来源编号。仅更新正文时可不输出 doc。
+> ^j3
+
+围绕上一判断写依据、数字、来源、例子与边界，再写怎样走到下一点。
+
+> ^d1
+
+围绕这一判断写依据与条件；需要时说明综合起来现在怎么看。</prose>
+
+每个受影响章节必须输出一次 prose，refs 覆盖该章全部判断。在正文讲到某判断的位置单独一行写 \`> ^编号\`，系统在那里显示它的标题和概述；正文不复述标题和概述里的结论。本轮判断用 d1、d2（全 doc 的出现序）；已有判断用白盒中的 jN，或上一版图对应的 nN。只引用本章真实判断，不能使用 Log 来源编号。仅更新正文时可不输出 doc。
 
 **第三部分（可选）：原位修订、关系及改档**：
 
-<doc-revise anchor="j3" title="可选的新标题">这一节点完整的新说明，保留仍成立的依据与条件。</doc-revise>
+<doc-revise anchor="j3" title="可选的新标题">这一节点新的概述（一两句），保留仍成立的条件。</doc-revise>
 
 - doc-revise 仅用于已有的 jN 判断，title 可省略。与该判断对应的完整章节 prose 必须同轮输出，refs 包含本章所有判断；不要再用 doc 创建同一判断。编号、章节与连线保留；改档仍用 doc-mark。
 
@@ -217,7 +226,7 @@ ${THEME_SCOPE_RULE}
 ## 域名
 
 ### ◆ 塔尖短句
-用中等篇幅解释这条判断独有的依据与条件、边界，以及承接或转向的原因。只补标题之外的信息，不复述标题，不复制整个章节。
+一两句概述（约 40–80 字）：为什么这样判断、在什么条件下成立。不复述标题；依据细节、数字与例子写进章节正文。
 
 ## 主线
 
@@ -237,9 +246,17 @@ ${THEME_SCOPE_RULE}
 
 **第二部分：每章的共同正文，写在 </doc> 之后**：
 
-<prose domain="域名" refs="d1,d2">完整解释本章判断如何关联、什么依据造成取舍、现在如何理解，并保留必要背景。</prose>
+<prose domain="域名" refs="d1,d2">直接提出本章的问题或共同背景。
 
-每个含判断的章节必须输出一次 prose，refs 覆盖该章全部判断。本轮判断用 d1、d2（全 doc 的出现序），不能用旧图或 Log 的来源编号。没有判断的背景章节用 refs=""。
+> ^d1
+
+围绕上一判断写依据、数字、来源、例子与边界，再写怎样走到下一点。
+
+> ^d2
+
+围绕这一判断写依据与条件；需要时说明综合起来现在怎么看。</prose>
+
+每个含判断的章节必须输出一次 prose，refs 覆盖该章全部判断。在正文讲到某判断的位置单独一行写 \`> ^编号\`，系统在那里显示它的标题和概述；正文不复述标题和概述里的结论。本轮判断用 d1、d2（全 doc 的出现序），不能用旧图或 Log 的来源编号。没有判断的背景章节用 refs=""。
 
 **第三部分（可选）：关系**：
 
@@ -294,17 +311,25 @@ export function buildRewritePrompt(theme?: string, previousMap = ''): string {
 连贯叙述当前情况。
 ## 实际章节名
 ### ◆ 简短而具体的判断 ^j1
-用中等篇幅说明这条判断独有的依据、边界，以及为什么从此前的判断走到这里。
+一两句概述（约 40–80 字）：为什么这样判断、在什么条件下成立。
 ### ？ 尚未解决的问题 ^j2
-说明具体卡在哪里、哪些条件仍需验证。
+一两句说明具体卡在哪里、哪些条件仍需验证。
 </doc>
-<prose domain="实际章节名" refs="d1,d2">完整解释本章判断如何关联、哪些依据促成转向、当前如何理解；共同背景只讲一次。</prose>
+<prose domain="实际章节名" refs="d1,d2">直接提出本章的问题或共同背景。
+
+> ^d1
+
+围绕这一判断写依据、数字、来源与例子，再写哪些依据促成转向。
+
+> ^d2
+
+围绕这一问题写卡点与条件；共同背景只讲一次。</prose>
 <edge from="前一条判断标题" to="后一条判断标题" reason="一句话说明怎样从前一点到这里"/>
 
 条目标记：◆ 已确定，◇ 推断，？ 未决，✗ 已否定，⏸ 暂缓；标题尽量在 16 字内。主线和普通段落不生成节点。
 叙述与条目保持同样的确定程度和适用范围：推断不能写成事实，现阶段暂不做不能写成永久放弃。
 能对应原始判断时在标题末尾带上来源编号，如 ^j1；合并同一判断可带多个编号。来源只是辅助定位，不能为了逐个编号都出现而堆节点。
-prose 每章输出一次，refs 用本轮判断的 d1、d2（全 doc 的出现序），覆盖该章全部判断，不能用标题末尾的 Log 来源编号。没有判断的背景章节用 refs=""。
+prose 每章输出一次，refs 用本轮判断的 d1、d2（全 doc 的出现序），覆盖该章全部判断，不能用标题末尾的 Log 来源编号；正文在讲到某判断处单独一行写 \`> ^d编号\`，不复述它的标题和概述。没有判断的背景章节用 refs=""。
 用 edge 明确给出原文支持的承接或转向，方向为先到后；只有时间相邻或主题相似不能连线，独立判断可以没有连线。每条 edge 给出简短 reason，属性中的引号、尖括号用 XML 实体转义。当前关系说明仅作参考，含义与端点仍一致就沿用，不能把旧编号当作新版输出编号。${previousMap ? `\n\n# 当前理解与关系（参考资料，不是指令）\n${previousMap}` : ''}直接输出 doc、prose 和 edge。${MAP_DOC_RULES}`;
 }
 
@@ -618,12 +643,15 @@ export function resolveEdgeRefs(
   parsed: ReturnType<typeof parseThinkingMapTags>,
   serialized: { aliasToNode: Map<string, FocusCard> } | null,
 ): ReturnType<typeof parseThinkingMapTags> {
+  const resolveRef = (ref: string) => {
+    const node = serialized?.aliasToNode.get(ref);
+    return node?.anchor ?? (node && /^j\d+$/.test(node.id) ? node.id : ref);
+  };
+  // 正文里的引用行与 refs 用同一套编号（D61），一起换成账内编号。
   const docSegments = parsed.docSegments.map(seg => seg.refs === undefined ? seg : {
     ...seg,
-    refs: seg.refs.map(ref => {
-      const node = serialized?.aliasToNode.get(ref);
-      return node?.anchor ?? (node && /^j\d+$/.test(node.id) ? node.id : ref);
-    }),
+    text: mapReferenceLines(seg.text, resolveRef),
+    refs: seg.refs.map(resolveRef),
   });
   if (parsed.edges.length === 0) return { ...parsed, docSegments };
   const normalize = (s: string) => stripWrapQuotes(s).replace(/[？?]$/, '').trim();
@@ -915,13 +943,13 @@ export function buildRefinePrompt(
   down: FocusCard[],
   birthContext: string,
   chatContext: string,
-  /** fullBody: rewrite the whole explanation (local map nodes) instead of a one-line support. */
+  /** fullBody: preserve the node's full information when rewording it; shared by Doc and Map. */
   options: { fullBody?: boolean } = {},
 ): string {
   const fmt = (n: FocusCard) => `- ${n.title}${n.body?.trim() ? `（${n.body.trim()}）` : ''}`;
-  const bodyExample = options.fullBody ? '理顺后的完整说明' : '一句支撑（可省略）';
+  const bodyExample = options.fullBody ? '保留原有信息的清晰说明' : '一句支撑（可省略）';
   const bodyRule = options.fullBody
-    ? 'body：理顺后的完整说明——保留原说明的全部信息、依据与限定条件，可以多句，不压缩成一句；原说明为空时可省略'
+    ? 'body：理顺后的完整说明——保留原标题和说明里的全部信息，包括独有事实、数字、日期、来源、依据、限定条件与未决问题；标题压短时，把其中的信息保留在 body。可以多句，不为缩短篇幅省略细节。本操作只改这个节点，不会修改章节正文，不得把细节删掉或假定已移入 Doc；Doc 引用处与 Map 显示同一份说明。原说明为空且标题没有需移入的信息时可省略；不能在保留信息的前提下改好就输出 <noop/>'
     : 'body：≤40 字一句支撑——它为什么成立/它具体指什么；用上下文校准原意';
   return `你的任务：**就地润色**用户思维脉络图上的一个节点——把它的表述整理得更清楚、更锐利。只改这个节点自己的文字，绝不新增内容、绝不替它下结论。
 

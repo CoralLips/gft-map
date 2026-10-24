@@ -12,6 +12,27 @@ class HiddenMarkerWidget extends WidgetType {
   }
 }
 
+/** Doc 节点块标题行末的小入口：点它在 Map 上定位同一节点（编辑器统一接管点击）。 */
+class MapLinkWidget extends WidgetType {
+  constructor(readonly anchor: string) {
+    super();
+  }
+  eq(other: MapLinkWidget) {
+    return other.anchor === this.anchor;
+  }
+  toDOM() {
+    const link = document.createElement('span');
+    link.className = 'cm-doc-node-link';
+    link.dataset.gftAnchor = this.anchor;
+    link.title = '在 Map 中查看';
+    link.textContent = '↗';
+    return link;
+  }
+  ignoreEvent() {
+    return false;
+  }
+}
+
 class LatexWidget extends WidgetType {
   constructor(readonly latex: string, readonly displayMode: boolean) {
     super();
@@ -107,16 +128,25 @@ function findLatexMatches(text: string, offset: number): Array<{ from: number; t
 }
 
 const docNodeLine = /^( {0,3}>\s+)([◆◇？✗⏸])\s+.+?\s+\^j\d+\s*$/;
+const quoteLine = /^( {0,3}>\s?)/;
+const markTone: Record<string, string> = { '◆': 'solid', '◇': 'open', '？': 'ask', '✗': 'off', '⏸': 'off' };
 
 // 右栏 Doc 的块级字阶独立于光标和预览：编辑标题时仍保持相同字号、行高和留白。
 // 直接从整份文本建立行装饰，滚到后文前已知块高，不因可视区变化再跳动。
+// 节点引用＝标题行＋紧随的概述行（D61），与 Map 节点同一份文字，整块一条档位色条。
 function compactDocDecorations(doc: Text): DecorationSet {
   const decorations: Range<Decoration>[] = [];
   let fence: { marker: string; length: number } | null = null;
+  let tone: string | null = null;
+  const inBlock = (number: number) => {
+    const text = doc.line(number).text;
+    return docNodeLine.test(text) || quoteLine.test(text);
+  };
   for (let number = 1; number <= doc.lines; number++) {
     const line = doc.line(number);
     const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line.text);
     if (fenceMatch) {
+      tone = null;
       const marker = fenceMatch[1][0];
       if (!fence) fence = { marker, length: fenceMatch[1].length };
       else if (marker === fence.marker && fenceMatch[1].length >= fence.length && !fenceMatch[2].trim()) fence = null;
@@ -124,15 +154,19 @@ function compactDocDecorations(doc: Text): DecorationSet {
     }
     if (fence) continue;
     const node = docNodeLine.exec(line.text);
-    if (node) {
-      const startsGroup = number === 1 || !docNodeLine.test(doc.line(number - 1).text);
-      const endsGroup = number === doc.lines || !docNodeLine.test(doc.line(number + 1).text);
-      const className = ['cm-doc-node', startsGroup && 'cm-doc-node-start', endsGroup && 'cm-doc-node-end'].filter(Boolean).join(' ');
+    if (node || (tone && quoteLine.test(line.text))) {
+      if (node) tone = markTone[node[2]] ?? 'open';
+      const next = number < doc.lines ? doc.line(number + 1).text : '';
+      const endsBlock = number === doc.lines || docNodeLine.test(next) || !inBlock(number + 1);
+      const className = ['cm-doc-node', `cm-doc-node-${tone}`, node ? 'cm-doc-node-title cm-doc-node-start' : 'cm-doc-node-summary', endsBlock && 'cm-doc-node-end'].filter(Boolean).join(' ');
       decorations.push(Decoration.line({ class: className }).range(line.from));
-      const markFrom = line.from + node[1].length;
-      decorations.push(Decoration.mark({ class: 'cm-doc-node-mark' }).range(markFrom, markFrom + node[2].length));
+      if (node) {
+        const markFrom = line.from + node[1].length;
+        decorations.push(Decoration.mark({ class: 'cm-doc-node-mark' }).range(markFrom, markFrom + node[2].length));
+      }
       continue;
     }
+    tone = null;
     const heading = /^ {0,3}(#{1,6})(?:\s|$)/.exec(line.text);
     const className = heading
       ? `cm-doc-heading cm-doc-heading-${heading[1].length}`
@@ -180,19 +214,19 @@ function buildDecorations(view: EditorView): DecorationSet {
     for (let ln = fromLine; ln <= toLine; ln++) {
       const line = doc.line(ln);
       if (cursorLines.has(ln)) continue;
-      // 只收起 compact Doc 节点组的引用符；普通引用、非 compact 编辑器保持原样。
-      const node = compactNodeLines.has(line.from) && docNodeLine.exec(line.text);
-      if (node) {
+      // 只收起 compact Doc 节点块（标题与概述行）的引用符；普通引用、非 compact 编辑器保持原样。
+      const quote = compactNodeLines.has(line.from) && quoteLine.exec(line.text);
+      if (quote && quote[1].length) {
         decorations.push(
           Decoration.replace({ widget: new HiddenMarkerWidget() })
-            .range(line.from, line.from + node[1].length)
+            .range(line.from, line.from + quote[1].length)
         );
       }
-      // 锚：条目头尾部的 ` ^jN`
-      const am = /\s\^j\d+\s*$/.exec(line.text);
+      // 锚：条目头尾部的 ` ^jN`；Doc 节点块里换成跳到 Map 节点的入口。
+      const am = /\s\^(j\d+)\s*$/.exec(line.text);
       if (am) {
         decorations.push(
-          Decoration.replace({ widget: new HiddenMarkerWidget() })
+          Decoration.replace({ widget: compactNodeLines.has(line.from) ? new MapLinkWidget(am[1]) : new HiddenMarkerWidget() })
             .range(line.from + am.index, line.from + am.index + am[0].length)
         );
       }

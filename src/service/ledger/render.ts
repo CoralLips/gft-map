@@ -129,7 +129,8 @@ function renderDocRaw(st: LedgerState, source = false): string {
   const blocks: Block[] = [];
   const covered = new Set<string>();
   for (const p of liveProse(st)) {
-    // 引用只保存编号，节点名和档位始终从同一份判断派生。旧导语没有引用，不会隐藏节点正文。
+    // 引用只保存编号，标题、档位与概述始终从同一份判断派生（D61）：Doc 引用处与 Map 节点是同一份文字。
+    // 旧导语没有引用，不会隐藏节点正文。模型视图另列完整判断，引用处只留标题。
     const hasExplanation = p.lines.some(line => line.trim() && !/^>\s*\^j\d+\s*$/.test(line));
     const lines = markdownLines(p.lines).flatMap(({ line, code }) => {
       const ref = !code && /^>\s*\^(j\d+)\s*$/.exec(line);
@@ -138,7 +139,8 @@ function renderDocRaw(st: LedgerState, source = false): string {
       if (!j || j.deleted || j.legacyCover || j.domain !== p.domain || !hasExplanation) return [];
       if (!source && covered.has(j.id)) return [];
       covered.add(j.id);
-      return [`> ${j.mark} ${j.title} ^${j.id}`];
+      const summary = source || !j.content.trim() ? [] : j.content.trim().split('\n').map(text => text.trim() ? `> ${text}` : '>');
+      return [`> ${j.mark} ${j.title} ^${j.id}`, ...summary];
     });
     blocks.push({ key: key(p.id, p.seq), domain: p.domain, lines });
   }

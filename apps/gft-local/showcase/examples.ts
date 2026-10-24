@@ -271,15 +271,21 @@ export function getExamples(lang: ShowcaseLanguage): readonly Example[] {
 }
 
 export function exampleBundle(example: Example, lang: ShowcaseLanguage = 'zh') {
+  const nodeId = (i: number) => `j${i + 6}`;
+  // 每章正文之后引用本章判断（D61）：Doc 在这里显示节点的标题与概述，与 Map 同一份文字。
+  const chapter = (domain: string, text: string) => {
+    const refs = example.nodes.flatMap(([, d], i) => (d === domain ? [`> ^${nodeId(i)}`] : []));
+    return refs.length ? `${text}\n\n${refs.join('\n\n')}` : text;
+  };
   const ledger = appendLines('', [
     `[场次 2026-09-18T08:00:00Z · ${lang === 'en' ? 'GFT-Map authored example' : 'GFT-Map 公开示例 · 人工编写'}]`,
     ...proseLines('p1', '主题', example.scope),
     ...proseLines('p2', lang === 'en' ? 'Main thread' : '主线', example.summary),
-    ...example.sections.flatMap(([domain, text], i) => proseLines(`p${i + 3}`, domain, text)),
+    ...example.sections.flatMap(([domain, text], i) => proseLines(`p${i + 3}`, domain, chapter(domain, text))),
     ...example.nodes.flatMap(([mark, domain, title, body], i) =>
-      judgmentLines(`j${i + 6}`, mark, domain, title, body),
+      judgmentLines(nodeId(i), mark, domain, title, body),
     ),
-    ...example.edges.map(([from, to]) => relationLine(`j${to + 6}`, `j${from + 6}`)),
+    ...example.edges.map(([from, to]) => relationLine(nodeId(to), nodeId(from))),
   ]);
   const raw = appendSourceLog(
     '',

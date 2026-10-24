@@ -521,7 +521,7 @@ export async function tidyOperation(
   };
 }
 
-/** Rewords one judgment's title and explanation only; the Doc is left to the next full tidy. */
+/** Rewords one judgment without summarizing away details; Doc references share the change, prose is untouched. */
 export async function refineOperation(
   topic: Topic,
   { nodeId }: { nodeId: string },

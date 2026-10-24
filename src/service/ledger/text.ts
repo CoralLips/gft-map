@@ -15,6 +15,19 @@ export function literalLine(line: string): string | undefined {
   return needsEscape(body) ? body : undefined;
 }
 
+/** 章节正文里单独一行的判断引用（`> ^d1`、`> ^n3`、`> ^j12`、`> ^new1`），D61 起可写在正文任意位置。 */
+const REFERENCE_LINE = /^ {0,3}>\s*\^([A-Za-z]*\d+)\s*$/;
+
+/** 把正文引用行里的编号换成另一套编号；围栏内是示例文字，不换。返回 undefined 的引用行去掉。 */
+export function mapReferenceLines(text: string, resolve: (token: string) => string | undefined): string {
+  return markdownLines(text.split('\n')).flatMap(({ line, code }) => {
+    const ref = !code && REFERENCE_LINE.exec(line);
+    if (!ref) return [line];
+    const id = resolve(ref[1]);
+    return id ? [`> ^${id}`] : [];
+  }).join('\n');
+}
+
 /** Markdown 围栏内的标题、节点引用都是示例文字；兼容反引号、波浪线和较长围栏。 */
 export function markdownLines(lines: string[], boundary?: (line: string) => boolean): Array<{ line: string; code: boolean }> {
   let fence: string | undefined;
