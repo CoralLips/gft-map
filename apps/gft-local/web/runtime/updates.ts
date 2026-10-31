@@ -147,7 +147,7 @@ export function createUpdates({
       });
     chatUpdate.controller.abort(detach ? MAP_VIEW_DETACHED : undefined);
   }
-  /** Manual material runs as a server update; the server keeps the text in the Log itself. */
+  /** Manual material runs as a server update; long text is saved as a material file first. */
   async function generateManual(id: string, input: string) {
     if (input.length > DIRECT_INPUT_LIMIT) {
       store().getState().flushDocEdits();

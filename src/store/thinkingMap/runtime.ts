@@ -1,7 +1,7 @@
 import type { StoreApi, UseBoundStore } from 'zustand';
 import type { FocusCard } from '../../type/focusCard';
 import type { ThinkingEdge, PersistedThinkingMap } from '../../type/thinkingMap';
-import type { CondensationEvent, SourceBatch } from '../../type/sourceSnapshot';
+import type { CondensationEvent } from '../../type/sourceSnapshot';
 import type { GenerateOptions, ThinkingMapResult, RefineResult } from '../../service/thinkingMapCore';
 import type { TidyInput, TidyAiOp } from '../../service/tidyCore';
 import type { ThinkingMapState, ThinkingMapActions } from './createStore';
@@ -26,8 +26,8 @@ export interface MapHostSnapshot {
   pendingTaskLabel?: string;
   projectNameFallback?: string;
   showMemoryToggle?: boolean;
-  hasSourceMaterial?: boolean;
-  redrawDescription?: string;
+  /** 这张图的节点上限（D63）；不传用默认值 */
+  nodeCap?: number;
 }
 /** Application ownership and input sources; graph interactions stay in the store. */
 export interface ThinkingMapHost {
@@ -38,7 +38,6 @@ export interface ThinkingMapHost {
   renameProject(id: string, name: string): Promise<void>;
   deleteProject(id: string): Promise<void>;
   ensureCanGenerate(): boolean;
-  fetchSourceBatches(id: string, alive: Set<string>): Promise<SourceBatch[]>;
   requestUpdate?(): Promise<void>;
   importBundle?(bundle: unknown): Promise<void>;
   downloadBundle?(): Promise<void>;
@@ -58,8 +57,6 @@ export interface MapComputeContext {
   signal: AbortSignal;
   /** Reattach to an existing server task without submitting a second operation. */
   taskId?: string;
-  /** A server tidy reports each round it starts. */
-  onRound?: (round: number) => void;
   /** The edits written so far by the running call, oldest first. */
   onProgress?: (actions: OperationProgress[]) => void;
   /** Output-only calculation; the caller revalidates its input before committing. */
@@ -68,7 +65,6 @@ export interface MapComputeContext {
 /** A model operation the host can run and save on its own server. */
 export type MapOperationRequest =
   | { kind: 'update'; input: string }
-  | { kind: 'redraw' }
   | { kind: 'tidy'; scopeIds?: string[]; unreadIds?: string[] }
   | { kind: 'refine'; nodeId: string }
   | { kind: 'relation'; from: string; to: string };
@@ -90,7 +86,6 @@ export interface ThinkingMapRuntime {
   };
   host: ThinkingMapHost;
   persistence: {
-    migrateLegacySources?: boolean;
     load(projectId: string): Promise<PersistedThinkingMap | null>;
     loadCached(projectId: string): PersistedThinkingMap | null;
     save(projectId: string, map: PersistedThinkingMap): Promise<PersistedThinkingMap | null>;
@@ -99,7 +94,6 @@ export interface ThinkingMapRuntime {
     hasRemoteChanges(projectId: string, map: PersistedThinkingMap): boolean;
     accept(projectId: string, remote: PersistedThinkingMap, applied?: PersistedThinkingMap): void;
     insertCondensation(projectId: string, event: CondensationEvent): Promise<void>;
-    clearCondensations(projectId: string): Promise<void>;
     fetchSourceSnapshots(projectId: string, nodeIds: string[]): Promise<string>;
   };
   /** Model calls made in the browser. Required unless the host provides `operations`. */

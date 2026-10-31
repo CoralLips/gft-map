@@ -1,7 +1,6 @@
 import { deriveCaches } from '../../../../src/service/ledger/bridge';
 import { parseLedger } from '../../../../src/service/ledger';
-import { isEditedSourceLog, mergeSourceLogs } from '../../../../src/service/sourceLog';
-import { mergeLedgerPair } from '../../../../src/service/ledger/merge';
+import { mergeLedgers } from '../../../../src/service/ledger/merge';
 import { sessionLine } from '../../../../src/service/ledger/write';
 import type { PersistedThinkingMap } from '../../../../src/type/thinkingMap';
 import { LocalApiError, keyOf, storage, type Request } from './api';
@@ -65,7 +64,6 @@ export function createMapCache({
       edges: derived.edges,
       doc: derived.doc,
       ledger: topic.ledger,
-      raw: topic.raw,
       watermarks: topic.panel?.watermarks || {},
     };
     remoteVersions.set(map, topic.revision);
@@ -85,7 +83,7 @@ export function createMapCache({
       base:
         old?.base ??
         (old && !old.pending
-          ? { ledger: old.map.ledger || '', raw: old.map.raw || '' }
+          ? { ledger: old.map.ledger || '' }
           : undefined),
       revision: old?.revision ?? 1,
       serial: ++serial,
@@ -113,24 +111,20 @@ export function createMapCache({
       .topic;
     const latest = read(id)!;
     const base = latest.base;
-    let merged;
     if (
-      base &&
-      remote.appendRevision === remote.revision &&
-      remote.ledger.startsWith(base.ledger) &&
-      (latest.map.ledger || '').startsWith(base.ledger)
-    ) {
-      // Both sides append operations to the accepted version. Keep the
-      // server's lines first and the user's later operations last; remap new IDs.
-      const ledger = ownSession(base.ledger, latest.map.ledger || '');
-      merged = mergeLedgerPair(remote, { ...latest.map, ledger });
-    } else if (remote.ledger === latest.map.ledger && isEditedSourceLog(latest.map.raw ?? '')) {
-      merged = { ledger: remote.ledger, raw: mergeSourceLogs(latest.map.raw ?? '', remote.raw) };
-    } else return null; // Destructive/ambiguous edits still require review.
-    const rebasedMap = mapOf({ ...remote, ...merged });
+      !base ||
+      remote.appendRevision !== remote.revision ||
+      !remote.ledger.startsWith(base.ledger) ||
+      !(latest.map.ledger || '').startsWith(base.ledger)
+    )
+      return null; // Destructive/ambiguous edits still require review.
+    // Both sides append operations to the accepted version. Keep the
+    // server's lines first and the user's later operations last; remap new IDs.
+    const ledger = mergeLedgers(remote.ledger, ownSession(base.ledger, latest.map.ledger || ''));
+    const rebasedMap = mapOf({ ...remote, ledger });
     const entry = {
       ...latest,
-      base: { ledger: remote.ledger, raw: remote.raw },
+      base: { ledger: remote.ledger },
       revision: remote.revision,
       map: { ...rebasedMap, watermarks: { ...rebasedMap.watermarks, ...latest.map.watermarks } },
       pending: true,
@@ -166,7 +160,7 @@ export function createMapCache({
           failedSaves.delete(id);
           write(id, {
             ...latest,
-            base: { ledger: entry.map.ledger || '', raw: entry.map.raw || '' },
+            base: { ledger: entry.map.ledger || '' },
             revision: Math.max(latest.revision, saved.revision),
             pending: latest.serial !== entry.serial,
           });
@@ -215,7 +209,6 @@ export function createMapCache({
       if (
         read(id)?.serial === entry.serial &&
         remote.ledger === (entry.map.ledger || '') &&
-        remote.raw === (entry.map.raw || '') &&
         JSON.stringify(remote.panel?.watermarks || {}) ===
           JSON.stringify(entry.map.watermarks || {}) &&
         unread(remote.panel) === unread(entry.map)
@@ -225,7 +218,7 @@ export function createMapCache({
           ...entry,
           revision: remote.revision,
           pending: false,
-          base: { ledger: remote.ledger, raw: remote.raw },
+          base: { ledger: remote.ledger },
         });
         return;
       }
@@ -259,7 +252,7 @@ export function createMapCache({
       const old = read(id);
       write(id, {
         map: applied,
-        base: { ledger: remote.ledger || '', raw: remote.raw || '' },
+        base: { ledger: remote.ledger || '' },
         revision,
         pending: old?.pending || false,
         serial: ++serial,

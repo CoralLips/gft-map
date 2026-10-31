@@ -313,7 +313,7 @@ export function Materials({
           </p>
           <p className="gft-local-note">
             {tr(
-              '文件原文与处理进度保存在本机，下载完整存档可带走；云端同步仍包含主题、Doc／Map 和 Log。',
+              '文件原文与处理进度保存在本机，下载完整存档可带走；云端同步包含主题和 Doc／Map。',
             )}
           </p>
           {!executor && (

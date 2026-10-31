@@ -315,14 +315,18 @@ export function createConnections({ readers } = {}) {
     });
   }
 
-  async function readConnectedSources({ provider, sessionId, topicId, cursor } = {}) {
+  /** An Agent's edited Doc for one connected topic; the reply says what the save did to the nodes. */
+  async function writeConnectedDoc({ provider, sessionId, topicId, baseRevision, doc } = {}) {
     sourceIdentity({ provider, id: sessionId });
     topicSelection([topicId]);
-    return store.withSourceConnections(provider, sessionId, async group => {
+    if (!Number.isInteger(baseRevision))
+      throw store.fail('请传读取时返回的 revision 作为 baseRevision');
+    await store.withSourceConnections(provider, sessionId, async group => {
       if (!group.connections.some(binding => active(binding) && binding.topicId === topicId))
         throw store.fail('该会话尚未连接所选主题，请先连接', 404);
-      return store.readSources(topicId, cursor); // Source reads do not mark the current Doc as loaded.
     });
+    const saved = await store.saveDoc(topicId, baseRevision, doc);
+    return { topicId, revision: saved.revision, operation: saved.operation };
   }
 
   async function createSourceUpdate(topicId, { connectionId, continuous = false, until } = {}) {
@@ -474,7 +478,7 @@ export function createConnections({ readers } = {}) {
     connectSource,
     disconnectSource,
     readConnectedContext,
-    readConnectedSources,
+    writeConnectedDoc,
     createSourceUpdate,
   };
 }
@@ -485,5 +489,6 @@ export const {
   connectSource,
   disconnectSource,
   readConnectedContext,
+  writeConnectedDoc,
   createSourceUpdate,
 } = defaults;

@@ -2,20 +2,18 @@ import { useRef, useState, type ReactNode } from 'react';
 import { ProjectDropdown } from '../../page/FocusLab/ProjectDropdown';
 import { ThinkingMapPanel } from './ThinkingMapPanel';
 import { WhiteboxDocPanel } from './WhiteboxDocPanel';
-import { LedgerSourcePanel } from './LedgerSourcePanel';
 import { useThinkingMapHost, useThinkingMapRuntime } from './ThinkingMapRuntime';
 import styles from '../../page/FocusLab.module.css';
 import { useT } from '../../i18n';
 
 /** The original FocusLab right pane, shared without changing its markup or styles. */
-export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, secondaryActions }: { showLogTab?: boolean; showExport?: boolean; secondaryActions?: ReactNode }) {
+export function ThinkingMapWorkspace({ showExport = true, secondaryActions }: { showExport?: boolean; secondaryActions?: ReactNode }) {
   const tr = useT();
   const { store: useThinkingMapStore, host } = useThinkingMapRuntime();
   const projects = useThinkingMapHost(s => s.projects);
   const currentProjectId = useThinkingMapHost(s => s.currentProjectId);
   const fallbackName = useThinkingMapHost(s => s.projectNameFallback);
-  const selectedView = useThinkingMapStore(s => s.rightView);
-  const rightView = selectedView === 'source' && !showLogTab ? 'doc' : selectedView;
+  const rightView = useThinkingMapStore(s => s.rightView);
   const setRightView = useThinkingMapStore(s => s.setRightView);
   const importRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState('');
@@ -38,7 +36,6 @@ export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, sec
         <div className={styles.mapDocTabs}>
           <button className={`${styles.mapDocTab} ${rightView === 'map' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('map')} title={tr('Map：关键判断与问题的导航图')}>Map</button>
           <button className={`${styles.mapDocTab} ${rightView === 'doc' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('doc')} title={tr('Doc：连贯的章节正文，可直接编辑；Map 帮助定位要点')}>Doc</button>
-          {showLogTab && <button className={`${styles.mapDocTab} ${rightView === 'source' ? styles.mapDocTabActive : ''}`} onClick={() => setRightView('source')} title={tr('Log：已接收的来源材料')}>Log</button>}
         </div>
       </div>
       {secondaryActions && <div className={styles.networkHeaderRight}>{secondaryActions}</div>}
@@ -53,7 +50,7 @@ export function ThinkingMapWorkspace({ showLogTab = true, showExport = true, sec
     {importState && <div role="status" style={{ padding: '8px 16px', fontSize: 12 }}>{tr(importState)}<button onClick={() => setImportState('')} aria-label={tr('关闭导入提示')}> × </button></div>}
     <div className={styles.networkContent}>
       <div className={styles.networkContentInner}>
-        {rightView === 'doc' ? <WhiteboxDocPanel showExport={showExport} /> : rightView === 'source' ? <LedgerSourcePanel showExport={showExport} /> : <ThinkingMapPanel showExport={showExport} />}
+        {rightView === 'doc' ? <WhiteboxDocPanel showExport={showExport} /> : <ThinkingMapPanel showExport={showExport} />}
       </div>
     </div>
   </div>;

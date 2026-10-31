@@ -6,12 +6,9 @@ import {
   ThinkingMapRuntimeProvider,
   useThinkingMapHost,
 } from '../../../src/component/focus/ThinkingMapRuntime';
-import {
-  SourceLogEditor,
-  type SourceLogEditorHandle,
-} from '../../../src/component/focus/SourceLogEditor';
 import { useLangStore, useT } from '../../../src/i18n';
 import { initTheme, getThemePref, setThemePref, type ThemePref } from '../../../src/util/theme';
+import { NODE_CAP_DEFAULT, NODE_CAP_MIN, NODE_CAP_MAX } from '../../../src/service/nodeCap';
 import { ImportDialog } from './ImportDialog';
 import { Materials, addMaterial } from './Materials';
 import { AccountDialog } from './AccountDialog';
@@ -49,7 +46,6 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 const actionNames: Record<string, string> = {
   update: '更新',
   tidy: '整理',
-  redraw: '重画',
   refine: '润色',
   theme: '推荐主题',
   compact: '提炼历史',
@@ -68,22 +64,6 @@ const executorReady = (value: RuntimeStatus | null) =>
   value?.mode === 'automatic' && ['ready', 'running'].includes(value.executor?.status || '');
 const Workspace = memo(ThinkingMapWorkspace);
 
-function HistoryDialog({ projectId, onClose }: { projectId: string; onClose(): void }) {
-  const editor = useRef<SourceLogEditorHandle>(null);
-  return (
-    <Modal
-      title="Log"
-      wide
-      onClose={() => {
-        if (editor.current?.save()) onClose();
-      }}
-    >
-      <Materials key={projectId} topicId={projectId} />
-      <SourceLogEditor ref={editor} projectId={projectId} />
-    </Modal>
-  );
-}
-
 // Polling stays outside the shared Doc and canvas to preserve editor selections.
 const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRuntime }) {
   const tr = useT();
@@ -91,10 +71,11 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
   const setLang = useLangStore(s => s.setLang);
   const projectId = useThinkingMapHost(snapshot => snapshot.currentProjectId);
   const projects = useThinkingMapHost(snapshot => snapshot.projects);
+  const nodeCap = useThinkingMapHost(snapshot => snapshot.nodeCap) ?? NODE_CAP_DEFAULT;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [dialog, setDialog] = useState<
-    'tasks' | 'history' | 'import' | 'account' | 'files' | 'operations' | 'executor' | null
+    'tasks' | 'import' | 'account' | 'files' | 'operations' | 'executor' | null
   >(null);
   const [error, setError] = useState('');
   const service = useSyncExternalStore(runtime.service.subscribe, runtime.service.getSnapshot);
@@ -281,6 +262,29 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
               ))}
             </div>
           </div>
+          <div
+            className="gft-local-appearance"
+            title={tr('一张图最多多少个节点：整理、更新、Doc 编辑和其他 Agent 写入都不会超过它')}
+          >
+            <span>{tr('节点上限')}</span>
+            <div role="group" aria-label={tr('节点上限')}>
+              <button
+                aria-label={tr('减少')}
+                disabled={nodeCap <= NODE_CAP_MIN}
+                onClick={() => void runtime.setNodeCap(nodeCap - 1)}
+              >
+                −
+              </button>
+              <output className="gft-local-cap">{nodeCap}</output>
+              <button
+                aria-label={tr('增加')}
+                disabled={nodeCap >= NODE_CAP_MAX}
+                onClick={() => void runtime.setNodeCap(nodeCap + 1)}
+              >
+                +
+              </button>
+            </div>
+          </div>
           <button onClick={() => open('tasks')}>
             {tr('任务')}
             {active > 0 ? ` · ${active} ${tr('处理中')}` : ''}
@@ -291,9 +295,6 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
           </button>
           <button disabled={!projectId} onClick={() => open('operations')}>
             {tr('操作历史')}
-          </button>
-          <button disabled={!projectId} onClick={() => open('history')}>
-            Log
           </button>
           <button onClick={() => open('account')}>{tr('GFT 账号')}</button>
         </div>
@@ -346,9 +347,6 @@ const LocalActions = memo(function LocalActions({ runtime }: { runtime: LocalRun
             ×
           </button>
         </div>
-      )}
-      {dialog === 'history' && projectId && (
-        <HistoryDialog key={projectId} projectId={projectId} onClose={() => setDialog(null)} />
       )}
       {dialog === 'tasks' && (
         <Modal title={tr('任务')} wide onClose={() => setDialog(null)}>
@@ -513,7 +511,7 @@ function App() {
     >
       <main className="gft-local-shell">
         {ready ? (
-          <Workspace showLogTab={false} showExport={false} secondaryActions={actions} />
+          <Workspace showExport={false} secondaryActions={actions} />
         ) : (
           <div className="gft-local-loading" role="status">
             {tr(

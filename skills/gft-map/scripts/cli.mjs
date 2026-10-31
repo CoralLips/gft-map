@@ -39,7 +39,7 @@ const USAGE = [
       'connections --provider PROVIDER --session ID',
       'connect --provider PROVIDER --session ID --project TOPIC [--project TOPIC] --history now|all --confirmed',
       'read-connected --provider PROVIDER --session ID --project TOPIC [--node ID]',
-      'sources-connected --provider PROVIDER --session ID --project TOPIC [--cursor CURSOR]',
+      'write-doc-connected --provider PROVIDER --session ID --project TOPIC --base-revision N --file DOC.md',
       'update-connected --provider PROVIDER --session ID --project TOPIC',
       'disconnect --provider PROVIDER --session ID (--project TOPIC | --all) --confirmed',
       'task-status --id ID --remote',
@@ -63,13 +63,12 @@ const USAGE = [
       'create --name NAME --scope TEXT',
       'link --session ID --project ID [--project ID] [--write ID]',
       'read --session ID',
-      'task --project ID --action update|tidy|redraw [--input FILE]',
+      'task --project ID --action update|tidy [--input FILE]',
       'tasks',
       'task --id ID',
       'task-status --id ID',
       'complete --id ID --file FILE',
       'cancel --id ID',
-      'history --project ID',
       'export --project ID --file FILE',
       'import --file FILE',
       'recover',
@@ -338,18 +337,23 @@ async function connectionCommand() {
     case 'connections':
       return print(await request(`/api/connections?${query}`));
     case 'read-connected':
-    case 'sources-connected':
       return print(
-        await request(
-          command === 'read-connected' ? '/api/connections/read' : '/api/connections/sources',
-          {
-            provider,
-            sessionId,
-            topicId: need('project'),
-            ...(values('node').length ? { nodeIds: values('node') } : {}),
-            ...(arg('cursor') ? { cursor: arg('cursor') } : {}),
-          },
-        ),
+        await request('/api/connections/read', {
+          provider,
+          sessionId,
+          topicId: need('project'),
+          ...(values('node').length ? { nodeIds: values('node') } : {}),
+        }),
+      );
+    case 'write-doc-connected':
+      return print(
+        await request('/api/connections/write-doc', {
+          provider,
+          sessionId,
+          topicId: need('project'),
+          baseRevision: Number(need('base-revision')),
+          doc: await readFile(need('file'), 'utf8'),
+        }),
       );
     case 'connect': {
       if (!has('confirmed'))
@@ -487,7 +491,7 @@ const commands = {
   connect: connectionCommand,
   disconnect: connectionCommand,
   'read-connected': connectionCommand,
-  'sources-connected': connectionCommand,
+  'write-doc-connected': connectionCommand,
   'update-connected': connectionCommand,
   list: listTopics,
   async doctor() {
@@ -507,7 +511,6 @@ const commands = {
   link: async () =>
     print(await store.linkSession(need('session'), values('project'), arg('write'))),
   read: async () => print(await store.readContext(arg('session'), arg('project'))),
-  history: async () => print(await store.history(need('project'))),
   tasks: async () => print(await store.listTasks()),
   'task-status': taskStatus,
   task: runTaskCommand,

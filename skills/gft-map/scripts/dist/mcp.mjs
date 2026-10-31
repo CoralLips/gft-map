@@ -16959,7 +16959,7 @@ var tools = [
   },
   {
     name: "gft_local_read",
-    description: "Read ONE connected topic by its required topicId from gft_local_connections. Returns the current Doc once plus compact node titles, states and relations. Read several relevant topics with separate calls. Optional nodeIds reads selected node details only and does not mark the entire Doc as read. Reuse unchanged content; reread after its revision changes. No chat history or Log is included.",
+    description: "Read ONE connected topic by its required topicId from gft_local_connections. Returns the current Doc once plus compact node titles, states and relations. Read several relevant topics with separate calls. Optional nodeIds reads selected node details only and does not mark the entire Doc as read. Reuse unchanged content; reread after its revision changes. No chat history is included.",
     inputSchema: schema(
       {
         topicId: { type: "string", minLength: 1 },
@@ -16976,19 +16976,16 @@ var tools = [
     annotations: { readOnlyHint: true }
   },
   {
-    name: "gft_local_sources",
-    description: "Trace a connected topic to its received Log sources, only when evidence or provenance is needed. Requires the same original provider, sessionId and explicit topicId as a Doc read. Returns up to 12000 characters and a continuation cursor; it never scans other conversations or marks Doc as read. Legacy extracted records are labelled and are not complete originals.",
+    name: "gft_local_write_doc",
+    description: "Save an edited Doc of ONE connected topic. Edit the Doc returned by gft_local_read and send the whole Doc back, with that revision as baseRevision. A node reference block in the Doc IS the node: its first line `> \u25C6 Title ^j12` carries mark and title, the `>` lines right below are its summary. Changing them edits the node; deleting the whole block deletes the node; dropping only the summary lines clears the summary, so a bare `> ^j12` (the task-output form) clears it. Text outside reference blocks is chapter prose. Returns the new revision and what the save did (added, modified, cleared, removed nodes); check it against your intent before telling the person it is saved.",
     inputSchema: schema(
       {
         topicId: { type: "string", minLength: 1 },
-        cursor: {
-          type: "string",
-          description: "nextCursor from the previous page for this topic; omit for the first page."
-        }
+        baseRevision: { type: "integer", description: "The revision gft_local_read returned." },
+        doc: { type: "string", description: "The whole edited Doc." }
       },
-      ["topicId"]
-    ),
-    annotations: { readOnlyHint: true }
+      ["topicId", "baseRevision", "doc"]
+    )
   },
   {
     name: "gft_local_disconnect",
@@ -17103,19 +17100,28 @@ function createGftMcpServer({ request = createLocalClient() } = {}) {
       ...message ? { message } : {}
     });
   }
-  async function readTopic({ name, args, fetch: fetch2 }) {
+  async function readTopic({ args, fetch: fetch2 }) {
     if (typeof args.topicId !== "string" || !args.topicId.trim())
       throw new Error(
         "\u8BF7\u5148\u67E5\u770B gft_local_connections\uFF0C\u5E76\u660E\u786E\u8981\u8BFB\u53D6\u7684 topicId\uFF1B\u4E0D\u4F1A\u81EA\u52A8\u8BFB\u53D6\u5168\u90E8\u4E3B\u9898"
       );
-    const route = name === "gft_local_read" ? "/api/connections/read" : "/api/connections/sources";
     return result(
-      await fetch2(route, {
+      await fetch2("/api/connections/read", {
         provider: args.provider,
         sessionId: args.sessionId,
         topicId: args.topicId,
-        ...args.nodeIds !== void 0 ? { nodeIds: args.nodeIds } : {},
-        ...args.cursor !== void 0 ? { cursor: args.cursor } : {}
+        ...args.nodeIds !== void 0 ? { nodeIds: args.nodeIds } : {}
+      })
+    );
+  }
+  async function writeDoc({ args, fetch: fetch2 }) {
+    return result(
+      await fetch2("/api/connections/write-doc", {
+        provider: args.provider,
+        sessionId: args.sessionId,
+        topicId: args.topicId,
+        baseRevision: args.baseRevision,
+        doc: args.doc
       })
     );
   }
@@ -17241,7 +17247,7 @@ function createGftMcpServer({ request = createLocalClient() } = {}) {
   const handlers = {
     gft_local_connections: async (call) => result(await call.fetch(`/api/connections?${call.query}`)),
     gft_local_read: readTopic,
-    gft_local_sources: readTopic,
+    gft_local_write_doc: writeDoc,
     gft_local_connect: connect,
     gft_local_disconnect: disconnect,
     gft_local_update: update

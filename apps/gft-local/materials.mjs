@@ -492,7 +492,11 @@ export function createWorker({ run }) {
       if (saved.summary || correction) {
         const input = pageInput(job, part, saved, correction, previousSummary);
         const result = await run(
-          { ...prepareTask(base, 'update', input), materialId: job.id, stage: 'publish' },
+          {
+            ...prepareTask(base, 'update', input, false, (await store.getSettings()).nodeCap),
+            materialId: job.id,
+            stage: 'publish',
+          },
           controller.signal,
         );
         output = typeof result === 'string' ? result : result.output;

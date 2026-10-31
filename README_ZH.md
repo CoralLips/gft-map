@@ -22,7 +22,7 @@
 | 保留产品取舍与依据。 | 整理观点，明确作者立场。 | 保留技术约束与待解决的问题。 |
 | [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product) | [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=writing&view=doc) | [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=engineering) |
 
-示例使用预置材料，可直接编辑、导出；无需安装，不调用模型。AI 更新、整理和重画需安装本地版。
+示例使用预置材料，可直接编辑、导出；无需安装，不调用模型。AI 更新和整理需安装本地版。
 
 ### 一次真实材料的交接审阅
 
@@ -54,7 +54,7 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要联网准备连接组件，页面与已有内容可先打开。
+Claude Code 若尚未授权，可在“设置 → AI 处理”点击“授权登录”，也可在终端运行 `claude auth login`。首次使用需要联网准备连接组件，页面与已有内容可先打开。
 
 安装后重新打开 Agent 对话，发送：
 
@@ -84,17 +84,16 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 ## 日常使用
 
-每份脉络包含 **Doc 文稿、Map 关系图和 Log 来源材料**。主题决定 Doc／Map 收录什么，Log 保留收到的原始材料。
+每份脉络包含 **Doc 文稿和 Map 关系图**。主题决定 Doc／Map 收录什么。
 
 | 想做什么 | 操作 |
 |---|---|
 | 收录聊天里的新进展 | **更新**：接收新消息，更新 Doc／Map。 |
 | 理顺写下的想法、收拢重复内容 | **整理**：按主题整理文稿和节点，已有主题原文不变。 |
-| 调整关注方向，重新梳理已有材料 | 修改主题后点 **重画**：按当前主题从 Log 生成 Doc／Map。 |
 
 **整理的范围**：选中一个节点时，只改这个节点的标题和说明，不改 Doc；选中多个时，整理所选判断及相关正文；什么都不选，就整理整份脉络。再点一次可以停止。
 
-**直接修改**：主题、文稿和 Log 都能直接编辑，失焦或按 Ctrl+S 保存。在 Map 中点节点可以改标题和说明，点连线可以改这条关系的说明。[编辑与选择的细节](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
+**直接修改**：主题和文稿都能直接编辑，失焦或按 Ctrl+S 保存。在 Map 中点节点可以改标题和说明，点连线可以改这条关系的说明。[编辑与选择的细节](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
 **任务与撤回**：切换脉络、刷新或关闭网页，不会停掉已经开始的 AI 任务；回来后能看到进度，也能停止；处理中，按钮上会显示 AI 正在写的修改，比如合并了哪几条、正在改写哪一章。**Ctrl+Z** 按顺序撤回，刷新后依然有效；**Ctrl+Y** 重做刚撤回的修改；设置里的 **操作历史** 可以查看并撤回最近 30 次修改。撤回聊天更新时，原始材料保留，下次更新会重新读到那批消息。
 
@@ -105,7 +104,7 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 本地使用无需 GFT 账号，跨电脑搬运用下载／导入即可。云同步暂不作为推荐用法；已登录账号的同步行为见[详细说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)。
 
-**数据会去哪？** 脉络和收到的聊天原文保存在本机。点击 AI 更新、整理或重画时，任务所需材料会交给你选的 Agent 的模型服务，使用该服务的账号额度。登录 GFT 账号后，脉络（含 Log）会同步到 GFT 云端。GFT-Map 不会扫描或上传你的全部项目文件和全部聊天。
+**数据会去哪？** 脉络保存在本机。点击 AI 更新或整理时，任务所需材料会交给你选的 Agent 的模型服务，使用该服务的账号额度。登录 GFT 账号后，脉络会同步到 GFT 云端。GFT-Map 不会扫描或上传你的全部项目文件和全部聊天。
 
 ## 打开、关闭与更新
 
@@ -121,7 +120,7 @@ Claude Code 需先在终端运行一次 `claude auth login`。首次使用需要
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.16](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+当前正式版为 [v0.3.17](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
 
 同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
 

@@ -4,12 +4,12 @@
  * 2026-09-05 账模型：判断账（源）是唯一正本，文档是从账折算出来的视图。
  * 2026-09-06 用户拍：Doc 随便改，打字只进缓冲；切走视图/窗口失焦/关页/换图/AI 动作前把改动按锚算成账行写进账，
  *   每条判断最多一行（改标题/表述/档/域、删、新条目、走向段、顺序），账里原来的行一个字不动。
- * 顶栏＝本体级共享动作（更新/整理/重画/AI记忆/导出，与 Map 视图同款——MapDocActions）。
+ * 顶栏＝本体级共享动作（更新/整理/AI记忆/导出，与 Map 视图同款——MapDocActions）。
  */
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { useThinkingMapHost, useThinkingMapRuntime } from '../ThinkingMapRuntime';
-import { UpdateMapButton, RedrawButton, TidyButton, MapStats, AiMemoryToggle, ExportMenu } from '../MapDocActions';
+import { UpdateMapButton, TidyButton, MapStats, AiMemoryToggle, ExportMenu } from '../MapDocActions';
 import type { LiveEditorHandle } from '../LiveEditor';
 import { splitDocTheme, joinDocTheme } from '../../../service/ledger/docEdit';
 import styles from './WhiteboxDocPanel.module.css';
@@ -102,7 +102,6 @@ export function WhiteboxDocPanel({ showExport = true }: { showExport?: boolean }
         <span className={styles.btnGroup}>
           <UpdateMapButton />
           <TidyButton />
-          <RedrawButton />
         </span>
         <MapStats />
         <span className={styles.btnGroup}>
@@ -130,7 +129,7 @@ export function WhiteboxDocPanel({ showExport = true }: { showExport?: boolean }
           <div className={styles.themeHeading}><h2>{tr('主题')}</h2><span>{tr('收录范围')}</span></div>
           {activeTheme ?
             <textarea ref={themeInputRef} className={styles.themeInput} aria-label={tr('编辑主题范围')} rows={1}
-              title={tr('失焦或 Ctrl+S 保存；修改范围后，点重画重新筛选已保存的材料。')}
+              title={tr('失焦或 Ctrl+S 保存；修改范围后，之后的更新与整理按新范围取舍。')}
               value={activeTheme.text}
               onChange={event => {
                 const state = useThinkingMapStore.getState();

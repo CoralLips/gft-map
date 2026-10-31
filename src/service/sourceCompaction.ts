@@ -1,12 +1,6 @@
-/** A temporary, bounded model input. This summary never replaces received Log materials. */
+/** A temporary, bounded model input for long material imports. */
 export const IMPORT_SUMMARY_LIMIT = 10000;
 export const IMPORT_COMPACT_THRESHOLD = 20000;
-
-export function sourceChunks(input: string): string[] {
-  const chunks: string[] = [];
-  for (let start = 0; start < input.length; start += IMPORT_COMPACT_THRESHOLD) chunks.push(input.slice(start, start + IMPORT_COMPACT_THRESHOLD));
-  return chunks;
-}
 
 export function prepareSourceSummary(theme: string, input: string, summary = '') {
   return {
@@ -22,5 +16,3 @@ export function parseImportSummary(output: string): string {
   if (typeof result?.summary !== 'string' || result.summary.length > IMPORT_SUMMARY_LIMIT) throw new Error('历史提炼未返回限定长度的笔记，本批进度未推进，可重试。');
   return result.summary.trim();
 }
-
-export const redrawSummaryInput = (summary: string) => '# 按当前主题提炼的保存来源\n' + (summary || '没有与当前主题相关的材料；说明当前范围尚无判断，不虚构节点。');

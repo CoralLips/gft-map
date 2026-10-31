@@ -106,6 +106,12 @@
   text-align: center;
   border-radius: 6px;
 }
+.gft-local-cap {
+  min-width: 28px;
+  font-size: 12px;
+  text-align: center;
+  align-self: center;
+}
 .gft-local-appearance button[aria-pressed='true'] {
   background: var(--poe-surface);
   color: var(--poe-purple);

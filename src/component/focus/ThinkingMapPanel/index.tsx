@@ -9,8 +9,8 @@ import { useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import { ThinkingMapView } from '../ThinkingMapView';
 import styles from './ThinkingMapPanel.module.css';
 // 本体级动作（更新/AI记忆/导出）08-25 抽至共享组件——Map/Doc 两视图同款；
-// 喂图数据流（useMapFeed）一并共享，本组件的「重画」也从它取参
-import { UpdateMapButton, AiMemoryToggle, ExportMenu, RedrawButton, DeleteSelectionButton, TidyButton, MapStats } from '../MapDocActions';
+// 喂图数据流（useMapFeed）一并共享
+import { UpdateMapButton, AiMemoryToggle, ExportMenu, DeleteSelectionButton, TidyButton, MapStats } from '../MapDocActions';
 import { themeOf } from '../../../service/ledger';
 import { useT } from '../../../i18n';
 
@@ -22,8 +22,7 @@ export function ThinkingMapPanel({ showExport = true }: { showExport?: boolean }
   // 注:外部 agent 对接已改为 session 侧单向发起(/gft:* 命令),网页不再有反向触发/在线指示——
   // 信号层(broadcast/presence/耳朵)2026-08-06 整层撤除;防覆盖合并仍在数据层(saveThinkingMap)兜着。
 
-  // 重画已上共享顶栏（08-27：它现在是图文一起推倒重来的本体级动作 → MapDocActions.RedrawButton）。
-  // 导出/AI记忆/更新同样在共享组件里（08-25）——Doc 视图同款
+  // 导出/AI记忆/更新在共享组件里（08-25）——Doc 视图同款
 
   // 全局与框选整理共用图文机制；TidyButton 传选区，未选择时整理全图。
 
@@ -40,7 +39,6 @@ export function ThinkingMapPanel({ showExport = true }: { showExport?: boolean }
         <span className={styles.btnGroup}>
           <UpdateMapButton />
           <TidyButton />
-          <RedrawButton />
           <DeleteSelectionButton />
         </span>
         <MapStats />

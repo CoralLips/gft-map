@@ -4,8 +4,8 @@ import type {
   ThinkingMapHost,
   ThinkingMapRuntime,
 } from '../../../src/store/thinkingMap/runtime';
-import type { CondensationEvent, SourceBatch } from '../../../src/type/sourceSnapshot';
 import { t } from '../../../src/i18n';
+import { normalizeNodeCap } from '../../../src/service/nodeCap';
 import { createReconnectMonitor, type ServiceConnectionSnapshot } from './reconnect';
 import { createMapCache } from './runtime/mapCache';
 import { createReceipts } from './runtime/receipts';
@@ -35,7 +35,6 @@ export type {
 /** Host adapter only: all document/graph mutations are the platform's shared store. */
 export function createLocalRuntime(options: LocalRuntimeOptions) {
   const listeners = new Set<() => void>();
-  const sourceQueues = new Map<string, Promise<void>>();
   const pendingCreates = new Map<string, { name: string; promise: Promise<LocalTopic> }>();
   const pendingNames = new Map<string, string>();
   const renameQueues = new Map<string, Promise<void>>();
@@ -64,8 +63,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     chatHistory: [],
     sourceLabel: '所选会话',
     showMemoryToggle: false,
-    redrawDescription:
-      '保留当前主题，基于 Log 已接收的来源重新生成图文。不读取原聊天，更新进度不变；旧记录只使用实际保存的材料。完成后可 Ctrl+Z 撤销。',
   };
   const publish = (change: Partial<MapHostSnapshot>) => {
     snapshot = { ...snapshot, ...change };
@@ -124,10 +121,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         ),
       });
     }
-    const hasSourceMaterial = !!bundle.topic.raw.trim();
-    storage.set(`gft-local:has-sources:${id}`, String(hasSourceMaterial));
-    if (snapshot.currentProjectId === id && snapshot.hasSourceMaterial !== hasSourceMaterial)
-      publish({ hasSourceMaterial });
     return mapOf(bundle.topic);
   };
   const receipts = createReceipts({
@@ -155,6 +148,22 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     rollbackBlocked,
   });
   const { refreshConnections } = updates;
+  async function refreshSettings() {
+    const settings = await request<{ nodeCap: number }>('/api/settings');
+    if (!disposed) publish({ nodeCap: settings.nodeCap });
+  }
+  /** Shows the new cap at once; the service save follows and a refusal restores the saved value. */
+  async function setNodeCap(value: number) {
+    const previous = snapshot.nodeCap;
+    publish({ nodeCap: normalizeNodeCap(value) });
+    try {
+      const saved = await request<{ nodeCap: number }>('/api/settings', { nodeCap: value });
+      if (!disposed) publish({ nodeCap: saved.nodeCap });
+    } catch (error) {
+      if (!disposed) publish({ nodeCap: previous });
+      options.onError(messageOf(error));
+    }
+  }
   async function refreshProjects() {
     const projects =
       await request<Array<{ id: string; name: string; status?: 'active' | 'archived' }>>(
@@ -178,7 +187,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       current &&
       !projects.some(project => project.id === current) &&
       state.docDraft === null &&
-      !state.sourceDraftActive &&
       !state.editingNodeId &&
       !state.isHydrating &&
       !state.isGenerating &&
@@ -202,45 +210,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       store.getState().setDocDraft(`## 主题\n\n${store.getState().doc}`);
     store.getState().jumpToDoc('主题');
   }
-  async function sources(id: string, alive?: Set<string>): Promise<SourceBatch[]> {
-    await sourceQueues.get(id);
-    const events = await request<CondensationEvent[]>(
-      `/api/topics/${encodeURIComponent(id)}/sources`,
-    );
-    const seen = new Set<string>();
-    return events
-      .filter(event => event.layer === 'L0->L1' && Array.isArray(event.inputs))
-      .map(event => ({
-        nodeIds: event.outputs,
-        sessionTitle: event.sourceMeta?.sessionTitle || '',
-        messages: Array.isArray(event.inputs) ? event.inputs : [],
-      }))
-      .filter(batch => {
-        const key = batch.messages.map(message => message.id).join(',');
-        if (
-          !batch.messages.length ||
-          seen.has(key) ||
-          (alive && !batch.nodeIds.some(id => alive.has(id)))
-        )
-          return false;
-        seen.add(key);
-        return true;
-      });
-  }
-  function writeSource(id: string, action: 'sources' | 'clear-sources', body: unknown) {
-    const operation = (sourceQueues.get(id) || Promise.resolve()).then(async () => {
-      try {
-        await request(`/api/topics/${encodeURIComponent(id)}/${action}`, body);
-      } catch (error) {
-        options.onError(t('来源记录尚未保存：{error}', { error: messageOf(error) }));
-      }
-    });
-    sourceQueues.set(id, operation);
-    void operation.finally(() => {
-      if (sourceQueues.get(id) === operation) sourceQueues.delete(id);
-    });
-    return operation;
-  }
+
   const host: ThinkingMapHost = {
     async downloadBundle() {
       const id = snapshot.currentProjectId;
@@ -280,7 +250,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
         revision: 1,
         serial: maps.nextSerial(),
         pending: false,
-        map: mapOf({ id, name: title, scope: '', revision: 1, ledger: '走向 p1 [主题]', raw: '' }),
+        map: mapOf({ id, name: title, scope: '', revision: 1, ledger: '走向 p1 [主题]' }),
       });
       publish({ projects: [{ id, name: title, status: 'active' }, ...snapshot.projects] });
       const switched = host.switchProject(id);
@@ -319,7 +289,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       publish({
         currentProjectId: id,
         projectNameFallback: snapshot.projects.find(project => project.id === id)?.name,
-        hasSourceMaterial: storage.get(`gft-local:has-sources:${id}`) === 'true',
       });
       storage.set('gft-local:selected', id);
       if (options.onRequestSource) void refreshConnections(id).catch(() => {});
@@ -381,7 +350,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       }
     },
     ensureCanGenerate: () => true,
-    fetchSourceBatches: sources,
     requestUpdate: () => updates.requestUpdate(),
   };
   const tasks = createTasks({
@@ -391,7 +359,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     isDisposed: () => disposed,
     currentProjectId: () => snapshot.currentProjectId,
     onError: options.onError,
-    sourcesSaved: id => sourceQueues.get(id),
     refreshReceipt,
     connections: { snapshot: () => updates.snapshot(), publish: change => updates.publish(change) },
     onStopsChange: () => publishService(),
@@ -406,9 +373,6 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       history: maps.history,
     },
     persistence: {
-      // Empty raw is valid for file-backed topics. Do not manufacture a Log
-      // from generated output or autosave a fake legacy migration on reload.
-      migrateLegacySources: false,
       load,
       loadCached: id => readCache(id)?.map || null,
       save: maps.save,
@@ -416,23 +380,12 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       hasPending: maps.hasPending,
       hasRemoteChanges: maps.hasRemoteChanges,
       accept: maps.accept,
-      insertCondensation: (id, event) => writeSource(id, 'sources', { event }),
-      // An empty/filtered map is not permission to discard its saved source messages.
-      // An empty or filtered map is not permission to discard saved original sources.
-      clearCondensations: async () => {},
+      insertCondensation: async () => {},
       async fetchSourceSnapshots(id, nodeIds) {
         const fileSources = await request<{ text: string }>(
           `/api/material-evidence?${new URLSearchParams([['topicId', id], ...nodeIds.map(node => ['node', node])])}`,
         );
-        const text =
-          fileSources.text +
-          (await sources(id, new Set(nodeIds)))
-            .flatMap(batch => batch.messages)
-            .map(
-              message =>
-                `${message.role === 'user' ? message.name || '用户' : 'AI'}：${message.content}`,
-            )
-            .join('\n\n');
+        const text = fileSources.text;
         return text.length > 8000 ? `${text.slice(0, 8000)}…` : text;
       },
     },
@@ -454,6 +407,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
   const monitor = createReconnectMonitor(async () => {
     const reconnecting = monitor.getSnapshot().phase !== 'connected';
     const existingProject = snapshot.currentProjectId;
+    await refreshSettings();
     await refreshProjects();
     if (disposed) return;
     // A recovered connection must not rehydrate/remount the current editor.
@@ -511,6 +465,7 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
     store,
     host,
     refreshProjects,
+    setNodeCap,
     dispose,
     requestManualUpdate: updates.requestManualUpdate,
     editScope,

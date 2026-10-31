@@ -72,24 +72,6 @@ export const englishExamples: readonly Example[] = [
       [3, 4],
       [4, 5],
     ],
-    messages: [
-      [
-        'user',
-        'I want to build a bookkeeping app for freelancers. Their income is irregular, and some cannot tell where the money went. Is automatic bank import essential?',
-      ],
-      [
-        'assistant',
-        'Start with manual entry and a monthly review. Bank integration and permissions could delay release. First check whether the target users will keep recording.',
-      ],
-      [
-        'user',
-        'Then focus on freelancers: enter a transaction and see this month. Bank sync comes later. Let three people try independently, without me clicking for them. Check whether they return after a few days.',
-      ],
-      [
-        'user',
-        'Colors can wait; fundraising is out of scope. Base the next version on where they actually get stuck.',
-      ],
-    ],
     editTip:
       'In Doc, replace “three target users” with your own plan. Open “Continue in another chat” and check that the reading preview includes your edit.',
     nextPrompt:
@@ -165,24 +147,6 @@ export const englishExamples: readonly Example[] = [
       [3, 1],
       [4, 5],
     ],
-    messages: [
-      [
-        'user',
-        'I want to write about remote teamwork. Three meetings on Monday morning meant I only started work in the afternoon. Everyone kept filling in background information.',
-      ],
-      [
-        'assistant',
-        'You could open with that situation and ask whether all meetings should be canceled.',
-      ],
-      [
-        'user',
-        'No, I am not saying all meetings are wasteful. We still need to discuss disagreements. Write the context first and keep meetings for joint decisions.',
-      ],
-      [
-        'user',
-        'We once shared a decision document beforehand and the meeting was more focused, but I need to add the details. End with one suggestion: write a page of context and questions before the next meeting.',
-      ],
-    ],
     editTip:
       'Open Doc and add your own experience to the before-and-after details. Your edit stays in this tab and will be included in the downloaded map.',
     nextPrompt:
@@ -257,24 +221,6 @@ export const englishExamples: readonly Example[] = [
       [1, 3],
       [2, 4],
       [4, 5],
-    ],
-    messages: [
-      [
-        'user',
-        'Large uploads currently restart after an interruption. I want chunking and resume, but do not change the storage provider this round.',
-      ],
-      [
-        'assistant',
-        'Assign an upload session and record acknowledged chunks on the server. On recovery, query the session and send only the missing chunks.',
-      ],
-      [
-        'user',
-        'Yes, trust server progress. Completion requests may repeat and must be idempotent. Check file integrity after recovery, not just the progress bar.',
-      ],
-      [
-        'user',
-        'Add disconnections, repeated completion, session ownership, and expiry cleanup to the test plan. Leave page colors out of scope.',
-      ],
     ],
     editTip:
       'Open a Map node to read its reasoning, then edit the validation plan in Doc. Your next coding conversation can read the current plan.',

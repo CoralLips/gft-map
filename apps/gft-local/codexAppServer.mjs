@@ -332,6 +332,12 @@ export function createCodexAppServerRunner({
     async function session() {
       const info = await open();
       execution.version = /^[^/\s]+\/(\S+)/.exec(info.userAgent || '')?.[1] || null;
+      // A model catalog can be returned while signed out. Query the same process
+      // that will run the task; never read, copy or expose its token file.
+      const account = await server.request('account/read', { refreshToken: false });
+      if (!account.account && account.requiresOpenaiAuth !== false)
+        throw errorOf('RUNNER_AUTH', '请先登录 Codex。');
+      const authenticated = account.account ? true : null;
       // The recommended model unless one was chosen; effort is always that model's default.
       const models = await listModels(server.request);
       const recommended = models.find(item => item.isDefault);
@@ -345,6 +351,7 @@ export function createCodexAppServerRunner({
       execution.modelSource = model ? 'chosen' : 'provider-default';
       if (probe)
         return {
+          authenticated,
           version: execution.version,
           model: execution.model,
           effort: execution.effort,
@@ -418,10 +425,18 @@ export function createCodexAppServerRunner({
             ? failure.code
             : 'RUNNER_PROTOCOL';
       execution.errorCode = code;
+      if (code === 'RUNNER_AUTH')
+        readiness = {
+          ...readiness,
+          status: 'unavailable',
+          authenticated: false,
+          errorCode: code,
+          error: '请在设置中授权登录 Codex，或在终端运行 codex login。',
+        };
       throw errorOf(
         code,
         code === 'RUNNER_AUTH'
-          ? 'Codex 登录尚未完成或已过期，请先在本机重新登录 Codex，再重试任务。'
+          ? 'Codex 登录尚未完成或已过期，请先在本机重新登录 Codex（终端运行 codex login），再重试任务。'
           : code === 'RUNNER_EXIT'
             ? `Codex 执行失败：${failure.message}`
             : failure.message,
@@ -465,12 +480,18 @@ export function createCodexAppServerRunner({
             ...info,
             status: 'ready',
             checkedAt: new Date().toISOString(),
-            checkScope: 'handshake-and-models',
+            checkScope: 'account-and-models',
           };
           return snapshot();
         },
         error => {
-          readiness = { ...readiness, status: 'unavailable', error: error.message };
+          readiness = {
+            ...readiness,
+            status: 'unavailable',
+            authenticated: error.code === 'RUNNER_AUTH' ? false : null,
+            errorCode: error.code,
+            error: error.message,
+          };
           throw error;
         },
       )

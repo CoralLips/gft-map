@@ -20,11 +20,3 @@ export interface CondensationEvent {
   /** 来源弱引用：原对话还在可跳回，删了读 inputs 快照（塔内事件无此项） */
   sourceMeta: { sessionId: string; sessionTitle: string; fromId: string; toId: string; count: number } | null;
 }
-
-/** 导出用：每个 batch 的原始出处（该批产出了哪些节点 + 当时的对话原文 + 来源标题） */
-export interface SourceBatch {
-  sessionId?: string;
-  nodeIds: string[];
-  sessionTitle: string;
-  messages: SnapshotMessage[];
-}

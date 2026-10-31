@@ -177,7 +177,7 @@ export function ensureAdapter(agent) {
       }
     }
     await removeInstalls(agent, path.basename(target));
-    return { binary: process.execPath, prefixArgs: [entry] };
+    return { binary: process.execPath, prefixArgs: [entry], authArgs: ['--cli'] };
   })().finally(() => pending.delete(target));
   pending.set(target, promise);
   return promise;

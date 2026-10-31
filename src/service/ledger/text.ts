@@ -1,5 +1,5 @@
 /** 正文的账语法转义：普通文字与路径原样写，只给指令样行加一个反斜杠。 */
-const RESERVED_LINE = /^(?:\[场次\s|走向(?:\s|\[)|[◆◇？?✗⏸⊃←]\s|(?:本人|AI)\s|重画\s*$)/;
+const RESERVED_LINE = /^(?:\[场次\s|走向(?:\s|\[)|[◆◇？?✗⏸⊃←]\s|(?:本人|AI)\s)/;
 const needsEscape = (line: string) => RESERVED_LINE.test(line.replace(/^\\+/, ''));
 
 export function bodyLines(text: string): string[] {

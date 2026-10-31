@@ -583,7 +583,7 @@ export function createSourceReaders({
         return null;
       let next = Math.min(message.content.length, offset + maxChars - chars);
       // Never cut a Unicode surrogate pair. Fragment IDs include the offset so
-      // equal adjacent passages remain distinct receipts in the source Log.
+      // equal adjacent passages remain distinct receipts.
       if (next < message.content.length && /[\uD800-\uDBFF]/.test(message.content[next - 1]))
         next--;
       const content = message.content.slice(offset, next);

@@ -444,13 +444,13 @@ function ThinkingMapViewImpl(): JSX.Element {
 
   const handleContinueFrom = useCallback((id: string) => {
     const newId = addNodeAction({ afterId: id });
-    setEditingNode(newId);
+    if (newId) setEditingNode(newId); // 空＝到了节点上限，未添加
   }, [addNodeAction, setEditingNode]);
 
   // 手动添加独立判断，通过可见入口发起。
   const handleSeedNode = useCallback(() => {
     const newId = addNodeAction({});
-    setEditingNode(newId);
+    if (newId) setEditingNode(newId); // 空＝到了节点上限，未添加
   }, [addNodeAction, setEditingNode]);
 
   const handleStartLinking = useCallback((id: string) => {

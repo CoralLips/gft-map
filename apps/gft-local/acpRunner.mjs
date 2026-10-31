@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Readable, Writable, Transform } from 'node:stream';
 import { client, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import { brief, errorOf, stopTree } from './childProcess.mjs';
-import { childEnvironment } from './claudeRunner.mjs';
+import { childEnvironment, checkClaudeAuth, LOGIN_HINT } from './claudeRunner.mjs';
 
 const MAX_OUTPUT = 2 * 1024 * 1024;
 const MAX_LINE_BYTES = 4 * MAX_OUTPUT;
@@ -17,6 +17,11 @@ const optionsOf = option =>
   (option?.options || []).flatMap(item => (Array.isArray(item.options) ? item.options : [item]));
 const AUTH_FAILURE =
   /authentication required|failed to authenticate|oauth (?:session|token).*expired|not authenticated|not logged in|login required/i;
+/** Claude Code lost a token-refresh race to another of its processes; the login itself is fine. */
+const AUTH_BUSY = /failed to refresh oauth token: another claude code process/i;
+const AUTH_BUSY_HINT =
+  'Claude 登录正在被本机其他 Claude 进程续期，已自动重试一次仍未成功。请一分钟后重试；若一直失败，关闭其他 Claude Code 窗口或重新登录。';
+const AUTH_BUSY_RETRY_MS = 10000;
 /** ACP prompt-response usage fields, mapped to the names the CLI runners record. */
 const USAGE_FIELDS = {
   inputTokens: 'input_tokens',
@@ -324,6 +329,7 @@ async function runSession(
 }
 
 function failureCode(failure, exited) {
+  if (AUTH_BUSY.test(failure.message || '')) return 'RUNNER_AUTH_BUSY';
   if (failure.code === -32000 || AUTH_FAILURE.test(failure.message || '')) return 'RUNNER_AUTH';
   if (typeof failure.code === 'string' && failure.code.startsWith('RUNNER_')) return failure.code;
   return exited ? 'RUNNER_EXIT' : 'RUNNER_PROTOCOL';
@@ -361,6 +367,7 @@ export function createAcpRunner({
   providerDefaults = false,
   timeoutMs = 15 * 60 * 1000,
   checkTimeoutMs = 15000,
+  authArgs,
 } = {}) {
   if (typeof binary !== 'string' || !binary.trim() || /\.(cmd|bat|ps1)$/i.test(binary))
     throw errorOf(
@@ -551,14 +558,24 @@ export function createAcpRunner({
       const failure = live.interrupted || error;
       const exited = closed || child.exitCode !== null || connection?.signal.aborted;
       const code = failureCode(failure, exited);
+      if (code === 'RUNNER_AUTH')
+        readiness = {
+          ...readiness,
+          status: 'unavailable',
+          authenticated: false,
+          errorCode: code,
+          error: LOGIN_HINT,
+        };
       execution.errorCode = code;
       const detail =
         (code === 'RUNNER_EXIT' && brief(stderr)) || brief(failure.message) || '适配器连接已结束';
       throw errorOf(
         code,
         code === 'RUNNER_AUTH'
-          ? 'Claude 登录尚未完成或已过期，请先在本机重新登录对应 Agent，再重试任务。'
-          : `ACP 执行失败：${detail}`,
+          ? LOGIN_HINT
+          : code === 'RUNNER_AUTH_BUSY'
+            ? AUTH_BUSY_HINT
+            : `ACP 执行失败：${detail}`,
         execution,
       );
     } finally {
@@ -577,10 +594,35 @@ export function createAcpRunner({
     }
   }
 
+  /**
+   * A lost refresh race clears within seconds and happens before any model output,
+   * so one fresh attempt after a short wait spends nothing twice.
+   */
+  async function retryingAuthBusy(attempt, signal) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (error.code !== 'RUNNER_AUTH_BUSY' || error.execution?.streamedChars || signal?.aborted)
+        throw error;
+      await new Promise(resolve => {
+        const timer = setTimeout(resolve, AUTH_BUSY_RETRY_MS);
+        signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+      return attempt();
+    }
+  }
+
   function run(task, options) {
     if (activePromise)
       return Promise.reject(errorOf('RUNNER_BUSY', 'ACP 执行器仍在处理上一项任务。'));
-    activePromise = execute(task, options).finally(() => {
+    activePromise = retryingAuthBusy(() => execute(task, options), options?.signal).finally(() => {
       activePromise = null;
     });
     return activePromise;
@@ -615,7 +657,14 @@ export function createAcpRunner({
     activePromise = (async () => {
       const directory = await mkdtemp(path.join(tmpdir(), 'gft-acp-check-'));
       try {
-        const info = await execute(null, { directory }, true);
+        const auth = authArgs
+          ? await checkClaudeAuth(
+              binary,
+              [...prefixArgs, ...authArgs],
+              adapterEnvironment(providerDefaults),
+            )
+          : {};
+        const info = await retryingAuthBusy(() => execute(null, { directory }, true));
         readiness = {
           ...readiness,
           ...info,
@@ -623,10 +672,17 @@ export function createAcpRunner({
           checkedAt: new Date().toISOString(),
           checkScope: 'session-and-model',
           authenticated: null,
+          ...auth,
         };
         return snapshot();
       } catch (error) {
-        readiness = { ...readiness, status: 'unavailable', error: error.message };
+        readiness = {
+          ...readiness,
+          status: 'unavailable',
+          authenticated: error.code === 'RUNNER_AUTH' ? false : null,
+          errorCode: error.code,
+          error: error.message,
+        };
         throw error;
       } finally {
         await removeCheckDirectory(directory);

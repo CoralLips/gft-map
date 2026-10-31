@@ -60,19 +60,7 @@ export function renderGraph(st: LedgerState): { nodes: LedgerNode[]; edges: Ledg
     }
     return cur;
   };
-  // 较晚同步进来的原始连接可能还指向重画前的来源编号。
-  const rewritten = new Map<string, string | null>();
-  for (const j of st.judgments.values()) {
-    const target = resolveMerged(j.id);
-    if (alive.has(target)) for (const source of j.rawFrom ?? []) {
-      // 一份来源被拆成多个判断时，没有唯一落点；不能用最后一个覆盖前面那个。
-      rewritten.set(source, !rewritten.has(source) || rewritten.get(source) === target ? target : null);
-    }
-  }
-  const resolve = (id: string): string => {
-    const merged = resolveMerged(id);
-    return alive.has(merged) ? merged : rewritten.get(id) ?? merged;
-  };
+  const resolve = resolveMerged;
   let edges: Array<[string, string]> = st.relations.map(r => [resolve(r.from), resolve(r.to)]);
   // 删除短路：不活着的端点（删了的、旧上层判断、不存在的）用上游×下游接上
   const dead = new Set<string>();

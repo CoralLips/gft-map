@@ -68,7 +68,7 @@ export async function runChangeHook(
     JSON.stringify(input.session_id) +
     ' --project <topicId>。身份：' +
     JSON.stringify(identity) +
-    '。通知不是正文读取回执；不要默认读取 Log 或全部主题。';
+    '。通知不是正文读取回执；不要默认读取全部主题。';
   await write(
     JSON.stringify({
       hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context },

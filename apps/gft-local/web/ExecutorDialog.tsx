@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../../src/i18n';
 import { LocalDialog } from './ConnectionManager';
 import type { createLocalRuntime } from './localRuntime';
@@ -13,6 +13,8 @@ type Candidate = {
   /** Models this agent offers; empty choice means the vendor's recommended one. */
   models?: Array<{ value: string; name: string; description?: string }>;
   error?: string;
+  errorCode?: string;
+  authenticated?: boolean | null;
 };
 const names: Record<string, string> = {
   'codex-acp': 'Codex',
@@ -43,7 +45,7 @@ export function ExecutorDialog({
   // Start from what is already known; each agent's fresh answer replaces it on arrival.
   const [candidates, setCandidates] = useState<Record<string, Candidate>>(() => {
     const live = currentStatus && { ...currentStatus, agent: currentChoice };
-    return live && available(live) ? { ...remembered, [currentChoice]: live } : { ...remembered };
+    return live ? { ...remembered, [currentChoice]: live } : { ...remembered };
   });
   const [selected, setSelected] = useState(currentChoice);
   const [picks, setPicks] = useState<Record<string, string>>({});
@@ -53,6 +55,66 @@ export function ExecutorDialog({
   const [refresh, setRefresh] = useState(0);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState('');
+  const [login, setLogin] = useState<{ agent?: string; status: string }>({ status: 'idle' });
+  const lastLoginStatus = useRef('idle');
+  const loginMutation = useRef(0);
+  const changingLogin = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    let polling = false;
+    const poll = async () => {
+      if (polling || changingLogin.current) return;
+      polling = true;
+      const generation = loginMutation.current;
+      try {
+        const next = await runtime.request<{ agent?: string; status: string }>(
+          '/api/runtime/executor-login',
+        );
+        if (!alive || generation !== loginMutation.current) return;
+        if (lastLoginStatus.current === 'running' && next.status === 'completed')
+          setRefresh(value => value + 1);
+        lastLoginStatus.current = next.status;
+        setLogin(next);
+      } catch {
+        /* A temporary disconnect is handled by the normal connection state. */
+      } finally {
+        polling = false;
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [runtime]);
+  const authorize = async (agent: string) => {
+    loginMutation.current++;
+    changingLogin.current = true;
+    setLogin({ agent, status: 'running' });
+    lastLoginStatus.current = 'running';
+    setError('');
+    try {
+      setLogin(await runtime.request('/api/runtime/executor-login', { agent }));
+    } catch (error) {
+      setLogin({ agent, status: 'failed' });
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      changingLogin.current = false;
+    }
+  };
+  const cancelLogin = async () => {
+    loginMutation.current++;
+    changingLogin.current = true;
+    setLogin(value => ({ ...value, status: 'cancelled' }));
+    try {
+      setLogin(await runtime.request('/api/runtime/executor-login', { cancel: true }));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      changingLogin.current = false;
+    }
+  };
   const checking = Object.keys(names).some(agent => !candidates[agent]);
   useEffect(() => {
     const controller = new AbortController();
@@ -94,7 +156,7 @@ export function ExecutorDialog({
     <LocalDialog title={tr('AI 处理')} onClose={onClose} closeDisabled={applying}>
       <p className="gft-local-note">
         {tr(
-          '页面中的更新、整理和重画交给所选 Agent，使用它在本机登录的账号或 API 配置所对应的额度。聊天来源不会改变这个选择。',
+          '页面中的更新和整理交给所选 Agent，使用它在本机登录的账号或 API 配置所对应的额度。聊天来源不会改变这个选择。',
         )}
       </p>
       <div
@@ -122,7 +184,17 @@ export function ExecutorDialog({
                   {agent === currentChoice ? ` · ${tr('当前')}` : ''}
                 </strong>
                 <small>
-                  {!candidate ? tr('正在检查…') : ready ? tr('连接检查通过') : tr('暂不可用')}
+                  {!candidate
+                    ? tr('正在检查…')
+                    : ready
+                      ? tr(
+                          candidate.authenticated === true
+                            ? '已检测到登录'
+                            : '组件已连接，授权待确认',
+                        )
+                      : candidate.authenticated === false
+                        ? tr('需要授权登录')
+                        : tr('暂不可用')}
                   {ready && candidate?.model
                     ? ` · ${candidate.modelName || (candidate.model === 'default' ? tr('默认模型') : candidate.model)}`
                     : ''}
@@ -132,6 +204,18 @@ export function ExecutorDialog({
                 </small>
                 {candidate?.error && (
                   <small className="gft-local-error">{tr(candidate.error)}</small>
+                )}
+                {candidate?.authenticated === false && (
+                  <button
+                    type="button"
+                    disabled={busy || login.status === 'running'}
+                    onClick={event => {
+                      event.preventDefault();
+                      void authorize(agent);
+                    }}
+                  >
+                    {tr('授权登录')}
+                  </button>
                 )}
                 {agent === selected && ready && !!candidate.models?.length && (
                   <select
@@ -157,11 +241,29 @@ export function ExecutorDialog({
           );
         })}
       </div>
+      {login.status === 'running' && (
+        <p role="status" className="gft-local-note">
+          {tr('已启动 Agent 登录，请在浏览器完成授权。若浏览器没有打开，可在终端运行下方命令。')}
+          <code>{login.agent === 'claude-acp' ? 'claude auth login' : 'codex login'}</code>
+          <button onClick={() => void cancelLogin()}>{tr('取消登录')}</button>
+        </p>
+      )}
+      {['failed', 'timeout'].includes(login.status) && (
+        <p role="alert" className="gft-local-error">
+          {tr('授权未完成。请重试，或在终端运行下方命令后重新检查。')}
+          <code>{login.agent === 'claude-acp' ? 'claude auth login' : 'codex login'}</code>
+        </p>
+      )}
+      {login.status === 'completed' && (
+        <p role="status">{tr('授权流程已结束，请以重新检查的登录状态为准。')}</p>
+      )}
       <p className="gft-local-note">
         {tr(
           '默认采用厂商推荐的模型，也可以选别的；思考强度始终用该模型的默认值，不沿用个人调高的配置。',
         )}
-        {tr('只列出当前支持的执行器。连接检查不运行模型；实际调用失败会提示，不会自动换用另一家。')}
+        {tr(
+          '检查本机执行器及登录状态，不调用模型；额度、网络和模型权限仍以实际任务结果为准。失败不会自动换用另一家。',
+        )}
       </p>
       <p className="gft-local-note">
         {tr(
@@ -184,7 +286,9 @@ export function ExecutorDialog({
         </button>
         <button
           className="gft-local-primary"
-          disabled={applying || busy || !available(candidates[selected])}
+          disabled={
+            applying || busy || login.status === 'running' || !available(candidates[selected])
+          }
           onClick={() => void choose()}
         >
           {tr(applying ? '正在切换…' : '使用此 Agent')}

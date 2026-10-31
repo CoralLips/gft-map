@@ -172,6 +172,23 @@ export function createAccount({
       throw new Error('GFT 登录配置无效');
     const alive = () => epoch === generation;
     const signal = requests.signal;
+    const rest = async (query, init = {}) => {
+      if (!alive()) throw new Error('登录已变化，已停止同步');
+      const response = await fetchImpl(`${target.origin}/rest/v1/user_settings${query}`, {
+        ...init,
+        redirect: 'error',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]),
+        headers: {
+          apikey: record.config.anonKey,
+          Authorization: `Bearer ${record.accessToken}`,
+          'Content-Type': 'application/json',
+          ...init.headers,
+        },
+      });
+      if (!alive()) throw new Error('登录已变化，已停止同步');
+      if (!response.ok) throw new Error(`设置同步暂未完成（${response.status}），将自动重试。`);
+      return response;
+    };
     return {
       key: accountKey(record),
       id: record.account.id,
@@ -199,6 +216,18 @@ export function createAccount({
               : `同步暂未完成（${response.status}），本地内容已保留，将自动重试。`,
           );
         return response.json();
+      },
+      /** The person's web preferences (D66), or null before the web has saved any. */
+      async prefs() {
+        const rows = await (await rest(`?user_id=eq.${record.account.id}&select=prefs`)).json();
+        return rows[0]?.prefs ?? null;
+      },
+      async savePrefs(prefs) {
+        await rest('?on_conflict=user_id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ user_id: record.account.id, prefs }),
+        });
       },
     };
   }

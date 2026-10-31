@@ -1,4 +1,3 @@
-import { hasSourceLog } from '../../../service/sourceLog';
 import { mapToBundle } from '../../../service/topicBundle';
 /**
  * MapDocActions — Map/Doc 两视图共享的本体级动作（08-25 用户拍：动作作用于本体，
@@ -8,15 +7,14 @@ import { mapToBundle } from '../../../service/topicBundle';
  *  - UpdateMapButton  「🧭 更新」：对话→AI 抽判断→文档条目+图节点双写
  *  - AiMemoryToggle   「AI 记忆」：contextInjectEnabled 开关
  *  - ExportMenu       「⇪ 导出」：复制当前 Doc / 下载完整脉络
- *  - useMapFeed       水位切片/生成参数（ThinkingMapPanel 的「重画」也用它）
+ *  - useMapFeed       水位切片/生成参数
  *
- * 整理、重画也作用于同一份判断账；整理有选区时限定范围，无选区时处理全图。
+ * 整理也作用于同一份判断账；整理有选区时限定范围，无选区时处理全图。
  * 按钮样式复用 ThinkingMapPanel.module.css——两个面板视觉一致。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { createPortal } from 'react-dom';
-import { confirmDialog } from '../../common/ConfirmDialog';
 import { useThinkingMapHost, useThinkingMapRuntime } from '../ThinkingMapRuntime';
 import type { MapFeedMessage } from '../../../store/thinkingMap/runtime';
 import type { GenerateSource } from '../../../store/thinkingMap/createStore';
@@ -130,25 +128,24 @@ export function UpdateMapButton(): JSX.Element {
   const isRefining = useThinkingMapStore(s => s.isRefining);
   const hasMap = useThinkingMapStore(s => s.nodes.length > 0);
   const cancelGeneration = useThinkingMapStore(s => s.cancelGeneration);
-  const generateMode = useThinkingMapStore(s => s.generateMode);
   const { freshCount, hasChat, noFresh, handleGenerate } = useMapFeed();
   const tr = useT();
-  const running = isGenerating && generateMode === 'update'; // 重画在跑时中止在重画钮上
+  const running = isGenerating;
 
   return (
     <button
       className={`${styles.generateBtn} ${running ? styles.stopOnHover : ''}`}
       onClick={() => { if (running) { cancelGeneration(); } else if (!isGenerating) { void handleGenerate(); } }}
-      disabled={!running && (isGenerating || isHydrating || (!host.requestUpdate && (!hasChat || noFresh)) || isTidying || isRefining)}
+      disabled={!running && (isHydrating || (!host.requestUpdate && (!hasChat || noFresh)) || isTidying || isRefining)}
       title={running
         ? tr('点击中止本次生成——图会回到生成前的样子')
         : host.requestUpdate
-          ? tr('读取已连接会话的新材料，保存到 Log 并更新图文')
+          ? tr('读取已连接会话的新材料，按主题更新图文')
           : !hasChat
           ? tr('左边还没有对话内容')
           : noFresh
             ? tr('没有新对话——聊几句再来更新')
-            : (hasMap ? tr('把新讨论记进 Log，按主题更新节点和正文') : tr('把左边对话里的想法记进 Log，长成 Map 和 Doc'))}
+            : (hasMap ? tr('把新讨论按主题更新到节点和正文') : tr('把左边对话里的想法长成 Map 和 Doc'))}
     >
       {running
         ? <>
@@ -181,70 +178,6 @@ export function DeleteSelectionButton(): JSX.Element | null {
 }
 
 /**
- * 「↺ 重画」——本体级（2026-09-06 用户拍：重画不读对话）。
- * 原料＝Log 里现有的判断、走向、承接；AI 重写图文，系统按来源保留已有承接与先后顺序，
- * 不发明、不丢判断；手改的内容在账里，自然带过去；条目记「改写自」。破坏面大 → 弹窗确认；可 Ctrl+Z 退回。
- */
-export function RedrawButton(): JSX.Element | null {
-  const progressLabel = useProgressLabel();
-  const { store: useThinkingMapStore } = useThinkingMapRuntime();
-  const pendingTaskLabel = useThinkingMapHost(s => s.pendingTaskLabel);
-  const hasSourceMaterial = useThinkingMapHost(s => s.hasSourceMaterial);
-  const redrawDescription = useThinkingMapHost(s => s.redrawDescription);
-  const hasRaw = useThinkingMapStore(s => hasSourceLog(s.raw)); // Log 里有原料就能重画，Doc 删空了也能
-  const isGenerating = useThinkingMapStore(s => s.isGenerating);
-  const isTidying = useThinkingMapStore(s => s.isTidying);
-  const redrawFromLedger = useThinkingMapStore(s => s.redrawFromLedger);
-  const isRefining = useThinkingMapStore(s => s.isRefining);
-  const generateMode = useThinkingMapStore(s => s.generateMode);
-  const cancelGeneration = useThinkingMapStore(s => s.cancelGeneration);
-  const streamingCount = useThinkingMapStore(s => s.streamingCount);
-  const running = isGenerating && generateMode === 'redraw';
-  const [note, setNote] = useState<string | null>(null);
-  useEffect(() => {
-    if (!note) return;
-    const timer = setTimeout(() => setNote(null), 8000);
-    return () => clearTimeout(timer);
-  }, [note]);
-
-  const handleRedraw = useCallback(async () => {
-    const ok = await confirmDialog({
-      title: t('重画'),
-      message: t(redrawDescription ?? '保留当前主题，基于 Log 中已接收的来源重新生成图文。不读取原聊天，更新进度不变；完成后可 Ctrl+Z 撤销。'),
-      confirmText: t('重画'),
-      danger: true,
-    });
-    if (!ok) return;
-    setNote(null);
-    const result = await redrawFromLedger();
-    if (result) setNote(result.sourceIncomplete ? '✓ 已重画 · 部分来源未对应' : '✓ 已重画');
-  }, [redrawFromLedger, redrawDescription]);
-
-  const tr = useT();
-  if (!hasRaw && !hasSourceMaterial && !running) return null;
-  if (running) {
-    return (
-      <button
-        className={`${styles.freshBtn} ${styles.stopOnHover}`}
-        onClick={cancelGeneration}
-        title={tr('点击中止重画——图和文档回到重画前的样子')}
-      >
-        <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? (pendingTaskLabel ? tr(pendingTaskLabel) : (streamingCount ? tr('重写中…已长出 {count} 条', {count:streamingCount}) : tr('通读账中…')))}</span>
-        <span className={styles.stopLabel}>■ {tr('中止')}</span>
-      </button>
-    );
-  }
-  return (
-    <button
-      className={styles.freshBtn}
-      onClick={() => void handleRedraw()}
-      disabled={isGenerating || isTidying || isRefining}
-      title={tr(note ? '原始记录保留在 Log；可 Ctrl+Z 撤销。来源未对应不影响查看和继续整理。' : '根据 Log 重写文档和图；可 Ctrl+Z 撤销')}
-    >{note ? tr(note) : `↺ ${tr('重画')}`}</button>
-  );
-}
-
-/**
  * 「🧹 整理」——本体级：图文一起整理（2026-08-28 定案）。
  * AI 重组白盒文档并给出配套的边，图靠锚跟随（节点不重建、合并的并入主锚）。
  * 只动组织不新增判断；做完出回执；Ctrl+Z 整体退回。
@@ -274,7 +207,6 @@ export function TidyButton(): JSX.Element | null {
     if (noteTimer.current) clearTimeout(noteTimer.current);
   }, []);
 
-  const tidyRound = useThinkingMapStore(s => s.tidyRound);
   const handleTidy = useCallback(async () => {
     if (isTidying) return;
     const selection = [...selectedNodeIds];
@@ -303,7 +235,7 @@ export function TidyButton(): JSX.Element | null {
         onClick={cancelTidy}
         title={tr('点击中止整理：这次整理全部作废，不保存任何改动')}
       >
-        <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? (pendingTaskLabel ? tr(pendingTaskLabel) : tr(tidyRound && tidyRound > 1 ? '整理中…再核对一遍收拢' : '整理中…'))}</span>
+        <span className={styles.runLabel}><span className={styles.spinner} aria-hidden="true" />{progressLabel ?? (pendingTaskLabel ? tr(pendingTaskLabel) : tr('整理中…'))}</span>
         <span className={styles.stopLabel}>■ {tr('中止')}</span>
       </button>
     );
@@ -316,7 +248,7 @@ export function TidyButton(): JSX.Element | null {
         onClick={() => { if (singleNode) { setNote(null); void refineNode(singleNode); } else void handleTidy(); }}
         disabled={isGenerating || (isRefining && !singleNode)}
         aria-label={singleRunning ? tr('停止整理') : selectedNodeIds.size > 0 ? `${tr('整理选中')} ${tr('{count} 个节点', {count:selectedNodeIds.size})}` : undefined}
-        title={tr(singleNode ? '只整理这个 Map 节点的标题和说明，不改 Doc 正文；再次点击可停止' : selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。来源保留在 Log；Ctrl+Z 整次退回')}
+        title={tr(singleNode ? '只整理这个 Map 节点的标题和说明，不改 Doc 正文；再次点击可停止' : selectedNodeIds.size > 0 ? '整理选中判断与关联正文；不改选区外内容。中止整次不保存，Ctrl+Z 整次退回' : '按主题整理文稿和节点：已有主题原文不变，归并重复，提炼范围内的新判断。Ctrl+Z 整次退回')}
       >{singleRunning ? `■ ${tr('停止整理')}` : selectedNodeIds.size > 0 ? `🧹 ${tr('整理选中')} · ${selectedNodeIds.size}` : `🧹 ${tr('整理')}`}</button>
       {note && noteProject.current === projectId && noticeRoot.current && createPortal(<div className={ownStyles.statusNote} role="status" data-gft-tidy-feedback>
         <span>{note}</span><button aria-label={tr('关闭整理提示')} onClick={() => setNote(null)}>×</button>
@@ -437,7 +369,7 @@ export function ExportMenu({ className = '', icon = '⇪', disableWhenUnavailabl
   const exportBundle = () => run(async () => {
     const { current, name } = capture();
     if(host.downloadBundle){await host.downloadBundle();return t('已开始下载');}
-    const data = mapToBundle(name, { nodes: current.nodes, edges: current.edges, doc: current.doc, ledger: current.ledger, raw: current.raw, watermarks: {} });
+    const data = mapToBundle(name, { nodes: current.nodes, edges: current.edges, doc: current.doc, ledger: current.ledger, watermarks: {} });
     download(name, JSON.stringify(data, null, 2));
     return t('✓ 已下载');
   });
@@ -457,7 +389,7 @@ export function ExportMenu({ className = '', icon = '⇪', disableWhenUnavailabl
       {open && (
         <span className={ownStyles.menu}>
           <button className={ownStyles.menuItem} disabled={disabled || !hasDoc} title={tr('复制当前 Doc，包含主题和正文')} onClick={() => void copyDoc()}>{tr('复制')}</button>
-          <button className={ownStyles.menuItem} disabled={disabled || !currentProjectId} title={tr('包含当前脉络的主题、Doc／Map 和 Log，可导入另一端继续使用')} onClick={() => void exportBundle()}>{tr('下载')}</button>
+          <button className={ownStyles.menuItem} disabled={disabled || !currentProjectId} title={tr('包含当前脉络的主题和 Doc／Map，可导入另一端继续使用')} onClick={() => void exportBundle()}>{tr('下载')}</button>
         </span>
       )}
     </span>

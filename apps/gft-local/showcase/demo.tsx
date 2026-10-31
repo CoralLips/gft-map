@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { ThinkingMapRuntimeProvider } from '../../../src/component/focus/ThinkingMapRuntime';
 import { ThinkingMapWorkspace } from '../../../src/component/focus/ThinkingMapWorkspace';
 import { ConfirmDialog, confirmDialog } from '../../../src/component/common/ConfirmDialog';
-import { renderSourceLog } from '../../../src/service/sourceLog';
 import { themeOf } from '../../../src/service/ledger';
 import { createTopicBundle, topicSummary } from '../../../src/service/topicBundle';
 import { initTheme, setThemePref } from '../../../src/util/theme';
@@ -32,7 +31,7 @@ const runtime = createShowcaseRuntime(
   message => window.dispatchEvent(new CustomEvent('showcase-notice', { detail: message })),
   lang,
 );
-type Panel = 'sources' | 'handoff' | 'transfer' | null;
+type Panel = 'handoff' | 'transfer' | null;
 
 function Modal({ title, children, close }: { title: string; children: ReactNode; close(): void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -82,7 +81,6 @@ function App() {
   const host = useSyncExternalStore(runtime.host.subscribe, runtime.host.getSnapshot);
   const activeExample = examples.find(e => e.id === host.currentProjectId) || selected;
   const ledger = runtime.store(s => s.ledger);
-  const raw = runtime.store(s => s.raw);
   const doc = runtime.store(s => s.doc);
   const state = runtime.store(s => s.ledgerState);
   const view = runtime.store(s => s.rightView);
@@ -108,7 +106,6 @@ function App() {
   };
   const controls = (
     <div className="demo-workspace-actions">
-      <button onClick={() => open('sources')}>{tx('Log · 来源')}</button>
       <button
         aria-label={dark ? tx('切换浅色') : tx('切换深色')}
         onClick={() => {
@@ -205,7 +202,7 @@ function App() {
             </p>
             <p>
               {tx(
-                '编辑仅保存在此浏览器标签页；在线示例不连接你的聊天或模型。更新、整理、重画请在本地版使用。',
+                '编辑仅保存在此浏览器标签页；在线示例不连接你的聊天或模型。更新、整理请在本地版使用。',
               )}
             </p>
             <button
@@ -243,7 +240,7 @@ function App() {
           </div>
           <ThinkingMapRuntimeProvider store={runtime.store} host={runtime.host}>
             <div className="gft-local-shell">
-              <ThinkingMapWorkspace showLogTab={false} secondaryActions={controls} />
+              <ThinkingMapWorkspace secondaryActions={controls} />
             </div>
           </ThinkingMapRuntimeProvider>
         </section>
@@ -255,14 +252,6 @@ function App() {
             ×
           </button>
         </div>
-      )}
-      {panel === 'sources' && (
-        <Modal title={tx('Log · 收到的来源材料')} close={() => setPanel(null)}>
-          <p>
-            {tx('这份示例的原始讨论保留在这里。主题筛选影响 Doc／Map，来源不会随主题改变而删掉。')}
-          </p>
-          <pre>{renderSourceLog(raw) || tx('尚无来源材料。')}</pre>
-        </Modal>
       )}
       {panel === 'handoff' && (
         <Modal title={tx('下一场聊天，能读到什么？')} close={() => setPanel(null)}>
@@ -305,7 +294,7 @@ function App() {
       )}
       {panel === 'transfer' && (
         <Modal title={tx('把这份上下文带走')} close={() => setPanel(null)}>
-          <p>{tx('导出的是当前版本，包含你刚才的修改，以及主题、Doc、Map 和已接收的 Log。')}</p>
+          <p>{tx('导出的是当前版本，包含你刚才的修改，以及主题、Doc 和 Map。')}</p>
           <ol>
             <li>
               <button className="demo-primary" onClick={downloadCurrent}>

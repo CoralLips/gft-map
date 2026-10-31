@@ -10,26 +10,6 @@ import type { LedgerMark, LedgerProse, LedgerState } from './types';
 import { renderDoc, liveJudgments, liveProse } from './render';
 import { judgmentLines, proseLines, decision, sessionLine } from './write';
 import { markdownLines } from './text';
-import { appendSourceLog, type SourceRecord } from '../sourceLog';
-
-/** Called only for a committed human edit, never for model output or polling. */
-export function recordDocumentInput(raw: string, before: LedgerState, after: LedgerState, at = Date.now()): string {
-  const records: SourceRecord[] = [];
-  const add = (id: string, content: string, changed: boolean) => {
-    if (changed && content.trim()) records.push({v:1,provider:'human',sessionId:'document',id:`${at}:${id}`,role:'user',title:'文稿中的人工输入',content,ts:at});
-  };
-  for (const p of liveProse(after)) {
-    if (p.domain === '主题') continue; // Changing a filter is not changing its source materials.
-    const text = p.lines.filter(line => !/^>\s*\^j\d+\s*$/.test(line)).join('\n').trim();
-    const old = liveProse(before).find(old => old.id === p.id)?.lines.filter(line => !/^>\s*\^j\d+\s*$/.test(line)).join('\n').trim();
-    add(p.id, `人工输入／修订 · ${p.domain || '正文'}\n${text}`, !!text && old !== text);
-  }
-  for (const j of liveJudgments(after)) {
-    const old = before.judgments.get(j.id);
-    add(j.id, `${j.mark} ${j.title}\n${j.content}`, !old || old.title !== j.title || old.content !== j.content || old.mark !== j.mark);
-  }
-  return appendSourceLog(raw, records);
-}
 
 /** The theme has its own editor, while remaining one record in the same ledger. */
 export function splitDocTheme(doc: string): { theme: string; body: string } {

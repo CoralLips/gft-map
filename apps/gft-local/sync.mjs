@@ -1,36 +1,52 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as store from './store.mjs';
-import {
-  mapToBundle,
-  bundleToMap,
-  appendSourceLog,
-  sourceRecordsFromEvents,
-  isEditedSourceLog,
-} from './dist/core.mjs';
+import { mapToBundle, bundleToMap, normalizeNodeCap } from './dist/core.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const contentOf = value => ({ name: value.name, ledger: value.ledger, raw: value.raw });
+const contentOf = value => ({ name: value.name, ledger: value.ledger });
 const fingerprint = value => digest(contentOf(value));
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const copyId = store.syncConflictId;
 function remoteContent(remote) {
   if (remote.deleted) return null;
-  const map = { ...remote.map, watermarks: {} };
-  if (!isEditedSourceLog(map.raw))
-    map.raw = appendSourceLog(map.raw, sourceRecordsFromEvents(remote.sources || []));
-  return mapToBundle(remote.name, map).topic;
+  return mapToBundle(remote.name, { ...remote.map, watermarks: {} }).topic;
 }
-function payload(topic, id) {
+/**
+ * The cloud still has a raw (Log) column the write requires. The Log is gone
+ * (D63); whatever the cloud holds there is sent back unchanged.
+ */
+function payload(topic, id, cloudRaw = '') {
   const bundle = mapToBundle(topic.name, {
     ...topic.panel,
     ledger: topic.ledger,
-    raw: topic.raw,
     watermarks: {},
     nodes: topic.panel?.nodes || [],
     edges: topic.panel?.edges || [],
   });
   const map = bundleToMap(bundle, id);
-  return { ...bundle.topic, doc: map.doc, nodes: map.nodes, edges: map.edges };
+  return { ...bundle.topic, raw: cloudRaw, doc: map.doc, nodes: map.nodes, edges: map.edges };
+}
+
+/**
+ * The node cap follows the person (D66): signed in, the cloud value wins; a cloud
+ * without one takes this device's.
+ */
+async function syncSettings(session, backend) {
+  const prefs = (await session.prefs()) || {};
+  const local = await backend.getSettings();
+  if (typeof prefs.nodeCap !== 'number') await session.savePrefs({ ...prefs, nodeCap: local.nodeCap });
+  else if (prefs.nodeCap !== local.nodeCap) await backend.saveSettings({ nodeCap: prefs.nodeCap });
+}
+
+/** Saves the cap here and, signed in, in the cloud first, so the next pull keeps it. */
+export async function saveNodeCap(account, backend, nodeCap) {
+  const session = await account.session();
+  if (session) {
+    const prefs = (await session.prefs()) || {};
+    const next = normalizeNodeCap(nodeCap);
+    if (prefs.nodeCap !== next) await session.savePrefs({ ...prefs, nodeCap: next });
+  }
+  return backend.saveSettings({ nodeCap });
 }
 
 /** Durable local revisions + remote CAS. No model calls and no chat-file reads. */
@@ -67,11 +83,11 @@ export function createCloudSync({ account, backend = store, intervalMs = 10000 }
   }
 
   /** Uploads the local topic over the cloud version it was compared with. */
-  async function push(session, check, topic, cloud, expectedVersion, localHash) {
+  async function push(session, check, topic, cloud, remote, localHash) {
     const result = await session.rpc('gft_sync_write', {
       topic_id: cloud.id,
-      expected_version: expectedVersion,
-      payload: payload(topic, cloud.id),
+      expected_version: remote?.version ?? null,
+      payload: payload(topic, cloud.id, remote?.map?.raw),
     });
     check();
     if (result?.conflict) return; // the cloud moved meanwhile; the next run compares again
@@ -134,7 +150,7 @@ export function createCloudSync({ account, backend = store, intervalMs = 10000 }
       );
     } else if (change.localChanged) {
       // Remote metadata changed but its content is still our last baseline.
-      return push(session, check, topic, cloud, remote.version, localHash);
+      return push(session, check, topic, cloud, remote, localHash);
     }
     check();
     await backend.commitCloudState(
@@ -189,7 +205,7 @@ export function createCloudSync({ account, backend = store, intervalMs = 10000 }
     if (content && (topic.archived || remoteNewer))
       return pullRemote(session, check, topic, cloud, change);
     if (!remote || change.localHash !== change.remoteHash)
-      return push(session, check, topic, cloud, remote?.version ?? null, change.localHash);
+      return push(session, check, topic, cloud, remote, change.localHash);
     await backend.commitCloudState(topic.id, topic.revision, {
       ...cloud,
       version: remote.version,
@@ -278,6 +294,8 @@ export function createCloudSync({ account, backend = store, intervalMs = 10000 }
           return;
         }
         state = { ...state, status: 'syncing', error: '' };
+        // A settings hiccup must not hold back the topics; the next run retries it.
+        await syncSettings(session, backend).catch(() => {});
         const pending = await backend.withCloudSync(() => reconcile(session));
         if (!closed && session.alive())
           state = {

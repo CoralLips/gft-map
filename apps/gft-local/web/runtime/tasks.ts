@@ -27,8 +27,6 @@ export type TaskState = {
   status: string;
   error?: string;
   report?: Record<string, number | boolean>;
-  /** The round a running tidy is on. */
-  round?: number;
   /** Edits the running call has written so far. */
   progress?: OperationProgress[];
 };
@@ -60,7 +58,6 @@ export function createTasks({
   isDisposed,
   currentProjectId,
   onError,
-  sourcesSaved,
   refreshReceipt,
   connections,
   onStopsChange,
@@ -71,8 +68,6 @@ export function createTasks({
   isDisposed(): boolean;
   currentProjectId(): string | null;
   onError(message: string): void;
-  /** Resolves once this topic's queued source writes are saved. */
-  sourcesSaved(id: string): Promise<void> | undefined;
   refreshReceipt(id: string): Promise<unknown>;
   /** The chat update notice, which a stop may need to settle. */
   connections: {
@@ -187,7 +182,6 @@ export function createTasks({
     context: Pick<MapComputeContext, 'signal'>,
     options: {
       onStatus?: (status: string) => void;
-      onRound?: (round: number) => void;
       onProgress?: (actions: OperationProgress[]) => void;
       failure?: string;
     } = {},
@@ -207,12 +201,10 @@ export function createTasks({
     context: Pick<MapComputeContext, 'signal'>,
     {
       onStatus,
-      onRound,
       onProgress,
       failure = '本地模型执行失败。',
     }: {
       onStatus?: (status: string) => void;
-      onRound?: (round: number) => void;
       onProgress?: (actions: OperationProgress[]) => void;
       failure?: string;
     } = {},
@@ -266,7 +258,6 @@ export function createTasks({
         if (state.status === 'failed') throw new Error(t(state.error || failure));
         if (state.status === 'cancelled') throw abortError();
         onStatus?.(state.status);
-        if (state.round) onRound?.(state.round);
         if (state.progress?.length) onProgress?.(state.progress);
         await pause(context.signal);
       }
@@ -293,12 +284,11 @@ export function createTasks({
   }
 
   /** Saves pending edits so a model task starts from what the person sees. */
-  async function settleBeforeTask(id: string | null, context: MapComputeContext, redraw = false) {
+  async function settleBeforeTask(id: string | null, context: MapComputeContext) {
     if (!id) throw new Error(t('请先选择脉络。'));
     if (context.signal.aborted || isDisposed()) throw abortError();
     store().getState().flushDoc(); // Drain the shared debounce before pinning a model task to a revision.
     await maps.flushPending(id);
-    if (redraw) await sourcesSaved(id);
     if (context.signal.aborted || isDisposed()) throw abortError();
     return id;
   }
@@ -306,9 +296,7 @@ export function createTasks({
   function operationTask(operation: MapOperationRequest) {
     switch (operation.kind) {
       case 'update':
-        return { action: 'update', input: operation.input, origin: 'manual' };
-      case 'redraw':
-        return { action: 'redraw' };
+        return { action: 'update', input: operation.input };
       case 'tidy':
         return {
           action: 'tidy',
@@ -329,19 +317,17 @@ export function createTasks({
   ): Promise<MapOperationOutcome> {
     if (context.taskId) {
       const state = await followTask(context.taskId, context, {
-        onRound: context.onRound,
         onProgress: context.onProgress,
       });
       void refreshReceipt(projectId);
       return { taskId: context.taskId, ...(state.report ? { report: state.report } : {}) };
     }
-    const id = await settleBeforeTask(projectId, context, operation.kind === 'redraw');
+    const id = await settleBeforeTask(projectId, context);
     const task = await request<{ id: string }>(
       `/api/topics/${encodeURIComponent(id)}/tasks`,
       operationTask(operation),
     );
     const state = await followTask(task.id, context, {
-      onRound: context.onRound,
       onProgress: context.onProgress,
     });
     void refreshReceipt(id);
@@ -401,7 +387,7 @@ export function createTasks({
           if (latest)
             maps.write(projectId, {
               ...latest,
-              base: { ledger: remote.ledger, raw: remote.raw },
+              base: { ledger: remote.ledger },
               revision: remote.revision,
             });
           void refreshReceipt(projectId);
@@ -420,11 +406,9 @@ export function createTasks({
         ? { kind: 'relation', from: p.from, to: p.to }
         : task.action === 'tidy'
           ? { kind: 'tidy', scopeIds: p?.scopeIds }
-          : task.action === 'redraw'
-            ? { kind: 'redraw' }
-            : task.action === 'update'
-              ? { kind: 'update', input: '' }
-              : null;
+          : task.action === 'update'
+            ? { kind: 'update', input: '' }
+            : null;
   }
 
   return {

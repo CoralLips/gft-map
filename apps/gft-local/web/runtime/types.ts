@@ -7,7 +7,6 @@ export interface LocalTopic {
   scope: string;
   revision: number;
   ledger: string;
-  raw: string;
   panel?: PersistedThinkingMap;
   /** Revision of the latest commit that only appended a background writer's lines. */
   appendRevision?: number;
@@ -20,7 +19,7 @@ export interface CachedMap {
   serial: number;
   pending: boolean;
   map: PersistedThinkingMap;
-  base?: { ledger: string; raw: string };
+  base?: { ledger: string };
 }
 export type ChatProvider = 'codex' | 'claude';
 export interface ChatSession {

@@ -1,5 +1,4 @@
 import { appendLines, judgmentLines, proseLines, relationLine } from '../../../src/service/ledger';
-import { appendSourceLog } from '../../../src/service/sourceLog';
 import { createTopicBundle } from '../../../src/service/topicBundle';
 import { englishExamples } from './examples-en';
 import type { ShowcaseLanguage } from './locale';
@@ -15,7 +14,6 @@ export interface Example {
   sections: readonly (readonly [string, string])[];
   nodes: readonly (readonly [Parameters<typeof judgmentLines>[1], string, string, string])[];
   edges: readonly (readonly [number, number])[];
-  messages: readonly (readonly ['user' | 'assistant', string])[];
   editTip: string;
   nextPrompt: string;
 }
@@ -90,21 +88,6 @@ export const examples = [
       [3, 4],
       [4, 5],
     ],
-    messages: [
-      [
-        'user',
-        '想给自由职业者做一个记账工具。大家收入不固定，有的人月底都不知道钱去了哪。自动导入银行账单是不是必须有？',
-      ],
-      [
-        'assistant',
-        '可以先把手工记录到月度回顾做通。自动导入需要接入和权限，可能拉长首版；应先验证目标用户是否愿意持续记录。',
-      ],
-      [
-        'user',
-        '那就先服务自由职业者，只做记一笔和看本月。银行同步放后面。找三个人独立用，别我替他点。还要看过几天会不会回来。',
-      ],
-      ['user', '配色以后再选，融资也不是现在要讨论的。下一版按他们真正卡住的地方改。'],
-    ],
     editTip:
       '在 Doc 里，把“三位目标用户”改成你自己的计划。再打开“交给下一场聊天”，看读取预览是否已经改变。',
     nextPrompt:
@@ -163,21 +146,6 @@ export const examples = [
       [1, 5],
       [3, 1],
       [4, 5],
-    ],
-    messages: [
-      [
-        'user',
-        '我想写远程协作，周一上午连续三场会，真正开始工作都下午了。最想说的是大家一直在补背景。',
-      ],
-      ['assistant', '可以用这个场景开头，再讨论会议是不是都应该取消。'],
-      [
-        'user',
-        '不对，我不是说会议都是浪费。有分歧还是得聊。我的观点是会前先把背景写清楚，把会议留给需要共同判断的部分。',
-      ],
-      [
-        'user',
-        '有一次我们先发决策文档，会上确实更聚焦，但细节我还要补。最后给读者一个小尝试：下次开会前写一页背景和问题。',
-      ],
     ],
     editTip:
       '打开 Doc，为“决策会前后细节”补一段自己的经历。修改会留在这个浏览器标签页，也会进入导出的脉络包。',
@@ -248,18 +216,6 @@ export const examples = [
       [2, 4],
       [4, 5],
     ],
-    messages: [
-      ['user', '大文件上传中断之后现在只能重来。想做分片和续传，但这一轮别顺便换存储供应商。'],
-      [
-        'assistant',
-        '可以给每次上传分配会话，服务端记录确认的分片。客户端恢复时先查会话状态，再补传缺失分片。',
-      ],
-      [
-        'user',
-        '对，进度以服务端为准。另外完成请求可能重复，必须幂等。恢复后要检查文件一致性，不能只看进度条。',
-      ],
-      ['user', '再把断网、重复完成、会话归属和过期清理加到验证计划。页面配色暂时不讨论。'],
-    ],
     editTip: '点开 Map 节点查看理由，再到 Doc 修改验证计划。下一场编码对话可按需读取这份方案。',
     nextPrompt:
       '读取「技术方案：让上传失败后能继续」，按照当前约束拆分实现任务。先验证断点恢复和幂等完成，本轮不迁移存储服务。',
@@ -287,18 +243,5 @@ export function exampleBundle(example: Example, lang: ShowcaseLanguage = 'zh') {
     ),
     ...example.edges.map(([from, to]) => relationLine(nodeId(to), nodeId(from))),
   ]);
-  const raw = appendSourceLog(
-    '',
-    example.messages.map(([role, content], i) => ({
-      v: 1 as const,
-      provider: 'example',
-      sessionId: `example-${example.id}`,
-      id: `m${i + 1}`,
-      role,
-      content,
-      title: `${example.category} · ${lang === 'en' ? 'Authored example discussion' : '人工编写的示例讨论'}`,
-      ts: Date.UTC(2026, 8, 18, 8, i),
-    })),
-  );
-  return createTopicBundle(example.name, { ledger, raw });
+  return createTopicBundle(example.name, { ledger });
 }

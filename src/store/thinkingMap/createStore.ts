@@ -1,6 +1,4 @@
 import {checkedRelationReason} from '../../service/relationReason';
-import { recordDocumentInput } from '../../service/ledger/docEdit';
-import { appendSourceLog, renderSourceLog, hasSourceLog, sourceRecordsFromEvents } from '../../service/sourceLog';
 /**
  * 思维导航 demo 的内存态 store（阶段1 不入库）
  * 编辑是根本：用户改完即定，AI 不自动重算（自动重算 = 阶段2）。
@@ -12,12 +10,13 @@ import { MAP_VIEW_DETACHED, MAP_OPERATION_SUPERSEDED } from './runtime';
 import type { MapOperationOutcome, MapOperationRequest, OperationProgress, ThinkingMapRuntime, ThinkingMapStore } from './runtime';
 import type { FocusCard } from '../../type/focusCard';
 import { THINKING_MAP_PROJECT_ID, DEFAULT_PROJECT_NAME } from '../../service/thinkingMapCore';
-import { runTidyRounds } from '../../service/tidyRounds';
-import { parseLedger, emptyLedgerState, appendLines, judgmentLines, relationLine, sessionLine, decision, aiDecision, liveJudgments, docChars, themeOf, stripToRaw, renderSourceDoc, type LedgerState } from '../../service/ledger';
-import { foldLedger, linesFromGenerate, absorbLegacyRow } from '../../service/ledger/bridge';
+import { runTidy, linesFromGenerateCapped } from '../../service/tidyRun';
+import { NODE_CAP_DEFAULT, nodeCapViolation } from '../../service/nodeCap';
+import { parseLedger, emptyLedgerState, appendLines, judgmentLines, relationLine, sessionLine, decision, aiDecision, liveJudgments, docChars, themeOf, renderSourceDoc, type LedgerState } from '../../service/ledger';
+import { foldLedger } from '../../service/ledger/bridge';
 import { docEditLines } from '../../service/ledger/docEdit';
 import { buildChatText } from '../../util/chatHistory';
-import { mergeLedgerPair } from '../../service/ledger/merge';
+import { mergeLedgers, rebaseSession } from '../../service/ledger/merge';
 import type { PersistedThinkingMap } from '../../type/thinkingMap';
 import type { SnapshotMessage } from '../../type/sourceSnapshot';
 import { wouldCycle, type ThinkingEdge } from '../../type/thinkingMap';
@@ -75,27 +74,18 @@ export interface ThinkingMapState {
   /** 白盒文档（源码层：文档为源码、图为投影/目录）——每次更新双写追加（08-25 全模式）；
    *  AI 只追加不改写（appendToWhiteboxDoc 窄门）；人有全权直改（updateDoc） */
   doc: string;
-  /** 右侧看哪个视图（2026-09-06 用户拍：Map／Doc／源 三个并列；源＝判断账本身） */
-  rightView: 'map' | 'doc' | 'source';
-  /** 「到 Log 看这一行」要定位的账 id（Log 面板消费后清空） */
-  sourceJumpId: string | null;
+  /** 右侧看哪个视图：Map／Doc */
+  rightView: 'map' | 'doc';
   /** 从文档 ^id 跳到图上：要打开/居中的节点 id（画布消费后清空） */
   focusNodeId: string | null;
   /** 从图上跳到文档：要定位的条目 id（Doc 面板消费后清空） */
   docJumpId: string | null;
   /** Doc 编辑缓冲：null＝没有未落账的改动；切走视图/失焦/关页/换图/AI 动作前 flushDocEdits 算一遍写进账 */
   docDraft: string | null;
-  sourceDraftActive: boolean;
-  /** 整理进行到第几轮（按钮文案用）；非整理期 null */
-  tidyRound: number | null;
   /** Edits the running model call has written so far; shown, never applied. */
   progressActions: OperationProgress[] | null;
-  /** 正在跑的生成是「更新」还是「重画」：各自的按钮显示自己的中止 */
-  generateMode: 'update' | 'redraw' | null;
-  /** 工作账：Doc/Map 从它算；人改、整理、重画都写这里（按时间只追加）；nodes/edges/doc/groupMap 全是它的折算缓存 */
+  /** 工作账：Doc/Map 从它算；人改、更新、整理都写这里（按时间只追加）；nodes/edges/doc/groupMap 全是它的折算缓存 */
   ledger: string;
-  /** 当前来源（Log）：更新追加新材料，用户可整篇编辑；整理/重画不反写来源。 */
-  raw: string;
   ledgerState: LedgerState;
   /** 未读红点集合（视图态，不进账；随 nodes 缓存落库） */
   unreadIds: Set<string>;
@@ -129,10 +119,9 @@ export interface TidyReport {
   /** 整理前后范围内的判断条数；局部按选区计，全局按全图计 */
   before?: number;
   after?: number;
-  /** 全图文档字数与轮数；局部整理不展示全图字数降幅 */
+  /** 全图文档字数；局部整理不展示全图字数降幅 */
   textBefore?: number;
   textAfter?: number;
-  rounds?: number;
 }
 
 export interface ThinkingMapActions {
@@ -158,13 +147,11 @@ export interface ThinkingMapActions {
   flushDoc: () => void;
   /** 统一图文整理；省略选区=全图，显式空选区不执行。整次提交、整次撤销。 */
   tidyWhitebox: (selectionIds?: string[]) => Promise<TidyReport | null>;
-  /** 生成/更新。有图默认走更新模式（防跳变）；fresh=true 推倒重画；live=现场模式（口语流+白盒双写）。
+  /** 生成/更新。有图走更新模式（防跳变）；live=现场模式（口语流+白盒双写）。
    *  live 模式下若产出纪要稿，随返回值带回（调用方插进 chat history） */
-  generate: (input: string, opts?: { fresh?: boolean; source?: GenerateSource; userMsgCount?: number; live?: boolean; rewrite?: boolean }) => Promise<{ digest?: string; sourceIncomplete?: boolean } | undefined | void>;
-  /** 重画（2026-09-06 用户拍）：不读对话，按 Log 里现有的判断、走向、承接整份重写文档与图；条目记「改写自」 */
-  redrawFromLedger: () => Promise<{ sourceIncomplete?: boolean } | undefined | void>;
+  generate: (input: string, opts?: { source?: GenerateSource; userMsgCount?: number; live?: boolean }) => Promise<{ digest?: string } | undefined | void>;
   updateNode: (id: string, updates: { title?: string; body?: string }) => void;
-  /** 手动种一个判断；afterId 传入时新节点承接它（「↳ 接一条」）；返回新节点 id */
+  /** 手动种一个判断；afterId 传入时新节点承接它（「↳ 接一条」）；返回新节点 id，到了节点上限时不添加、返回空串 */
   addNode: (opts?: { title?: string; afterId?: string }) => string;
   setEditingNode: (id: string | null) => void;
   setEditingNodeBody: (id: string | null) => void;
@@ -218,13 +205,8 @@ export interface ThinkingMapActions {
   clear: () => void;
   /** 直接编辑工作账全文（折算后视图立刻跟随）——打字即存（防抖落库） */
   updateLedger: (text: string) => void;
-  /** 直接编辑原始记录（Log 页签）——只影响下次重画，不动视图 */
-  updateRaw: (text: string) => void;
   // ===== 视图与收拢（2026-09-05/06 GFT-fix 线）=====
-  setRightView: (view: 'map' | 'doc' | 'source') => void;
-  /** 到 Log 看这一行：切到 Log 视图并定位到该 id 的行 */
-  jumpToSource: (id: string) => void;
-  clearSourceJump: () => void;
+  setRightView: (view: 'map' | 'doc') => void;
   /** 文档 ^id → 图上：切到 Map、打开并居中该节点 */
   focusOnMap: (id: string) => void;
   clearMapFocus: () => void;
@@ -245,7 +227,6 @@ function toPersisted(s: ThinkingMapState): PersistedThinkingMap {
     watermarks: Object.fromEntries(s.sourceWatermarks),
     doc: s.doc,
     ledger: s.ledger,
-    raw: s.raw,
   };
 }
 
@@ -279,6 +260,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
   const refineAborts = new Map<string, AbortController>();
   const refinementState = () => ({ isRefining: refineAborts.size > 0, refiningNodeId: refineAborts.keys().next().value ?? null, refiningNodeIds: new Set(refineAborts.keys()) });
   const cancelRefinements = () => { for (const controller of refineAborts.values()) controller.abort(); refineAborts.clear(); };
+  const nodeCapOf = () => runtime.host.getSnapshot().nodeCap ?? NODE_CAP_DEFAULT;
   const relationAborts=new Map<string,AbortController>();
   let relationQueue:Promise<void>=Promise.resolve();
   async function applySuggestedName(projectId: string | null, name?: string): Promise<void> {
@@ -318,36 +300,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
   function clearUndo(): void {
     undoStack = [];
     redoStack = [];
-    manualUnnotarized.clear();
-  }
-
-  // ===== 手动节点出生存证（2026-07-12 用户拍）=====
-  // 手打节点=全系统唯一无备份的人类手笔（「你的话不可再生」——重画冲掉/整理覆盖后无处找回），
-  // 与 AI 节点同等待遇：首次实质提交 title 时写一行 L0->L1 记账（inputs=你打的原文）。
-  // 集合=内存态，跟踪"已创建但还没提交 title"的手动节点；刷新丢集合的边缘场景（加空节点
-  // 就刷新、回来再补字→漏记一次）接受——比零备份强一个量级。
-  const manualUnnotarized = new Set<string>();
-
-  function notarizeManualNode(get: () => ThinkingMapState, id: string): void {
-    const s = get();
-    const node = s.nodes.find(n => n.id === id);
-    const bound = s.boundProjectId;
-    if (!node || !bound || !node.title.trim()) return;
-    const content = node.body?.trim() ? `${node.title.trim()}\n${node.body.trim()}` : node.title.trim();
-    store.setState({raw:appendSourceLog(s.raw,[{v:1,provider:'human',sessionId:'manual',id:`manual_${id}`,role:'user',content,title:'手动添加',ts:Date.now()}])});
-    schedulePersist(get);
-    void insertCondensation(bound, {
-      layer: 'L0->L1',
-      inputs: [{
-        id: `manual_${id}`,
-        role: 'user',
-        name: null,
-        content: node.body?.trim() ? `${node.title.trim()}\n${node.body.trim()}` : node.title.trim(),
-        ts: Date.now(),
-      }],
-      outputs: [id],
-      sourceMeta: { sessionId: 'manual', sessionTitle: '手动添加', fromId: `manual_${id}`, toId: `manual_${id}`, count: 1 },
-    });
   }
 
   // ===== 软中断（2026-07-12 用户要求：进行中的按钮 hover 出提示、点击即中止）=====
@@ -435,41 +387,47 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
   }
 
   /** 追加账行 → 折算 → 落库；默认一次提交＝一帧撤销 */
-  function commitLines(lines: string[], opts: { undo?: boolean; extra?: Partial<ThinkingMapState> } = {}): void {
-    if (lines.length === 0) { if (opts.extra) store.setState(opts.extra); return; }
-    const s = store.getState();
-    if (opts.undo !== false) pushUndoSnapshot({ ledger: s.ledger, unreadIds: new Set(s.unreadIds) });
-    applyLedgerText(appendLines(s.ledger, lines), opts.extra);
-    schedulePersist(() => store.getState());
+  /** 节点上限（D63）：写入后会超过上限时给出说明，调用方据此不写。 */
+  function nodeCapRefusal(ledger: string): string | undefined {
+    return nodeCapViolation(liveJudgments(store.getState().ledgerState).length, liveJudgments(parseLedger(ledger)).length, nodeCapOf());
   }
 
-  /** 远端来的一份图并入本地：账按只追加合并；远端仍走旧路写的节点/文档条目（MCP 服务端过渡期）转成账行并入。返回是否变了 */
+  /** 提交一批账行；超过节点上限时不写并提示，返回 false。 */
+  function commitLines(lines: string[], opts: { undo?: boolean; extra?: Partial<ThinkingMapState> } = {}): boolean {
+    if (lines.length === 0) { if (opts.extra) store.setState(opts.extra); return true; }
+    const s = store.getState();
+    const next = appendLines(s.ledger, lines);
+    const refused = nodeCapRefusal(next);
+    if (refused) { store.setState({ error: refused }); return false; }
+    if (opts.undo !== false) pushUndoSnapshot({ ledger: s.ledger, unreadIds: new Set(s.unreadIds) });
+    applyLedgerText(next, opts.extra);
+    schedulePersist(() => store.getState());
+    return true;
+  }
+
+  /** 远端来的一份图并入本地：账按只追加合并。返回是否变了 */
   function ingestRemoteMap(remote: PersistedThinkingMap, replaceClean = false): boolean | null {
     const s = store.getState();
     // Remote refresh/save echoes must never submit or normalize an active draft.
     // The next refresh merges it after an explicit editing boundary.
-    if (s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null) return null;
-    let absorbed: ReturnType<typeof absorbLegacyRow>;
-    let raw: string;
+    if (s.docDraft !== null || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null) return null;
+    let ledger: string;
     try {
-      // A clean replica follows the current cloud document, including undo and
-      // redraw. Unioning old blocks here would resurrect discarded content.
-      const merged = replaceClean ? {ledger:remote.ledger ?? '',raw:remote.raw ?? ''} : mergeLedgerPair(s, remote);
-      absorbed = absorbLegacyRow(merged.ledger, remote);
-      raw = merged.raw;
+      // A clean replica follows the current cloud document, including undo.
+      // Unioning old blocks here would resurrect discarded content.
+      ledger = replaceClean ? remote.ledger ?? '' : mergeLedgers(s.ledger, remote.ledger ?? '');
     } catch (err) {
       store.setState({ error: err instanceof Error ? err.message : '同步发生冲突，已保留本地内容。' });
       return null;
     }
     // 远端（MCP 端点）新写的判断带未读：并进本地红点集合（端点把 unread 记在 nodes 缓存上，账本身不记视图态）
     const unreadIds = new Set(s.unreadIds);
-    absorbed.newIds.forEach(id => unreadIds.add(id));
     for (const n of remote.nodes ?? []) if (n.unread) unreadIds.add(n.anchor ?? n.id);
     const sourceWatermarks = new Map(Object.entries(remote.watermarks));
     for (const [key, value] of s.sourceWatermarks) if (!key.startsWith('ext:')) sourceWatermarks.set(key, value);
     const watermarkChanged = sourceWatermarks.size !== s.sourceWatermarks.size || [...sourceWatermarks].some(([key, value]) => s.sourceWatermarks.get(key) !== value);
-    const changed = absorbed.ledger !== s.ledger || raw !== s.raw || watermarkChanged || unreadIds.size !== s.unreadIds.size;
-    if (changed) applyLedgerText(absorbed.ledger, { raw, sourceWatermarks, unreadIds });
+    const changed = ledger !== s.ledger || watermarkChanged || unreadIds.size !== s.unreadIds.size;
+    if (changed) applyLedgerText(ledger, { sourceWatermarks, unreadIds });
     if (s.boundProjectId) acceptThinkingMap(s.boundProjectId, remote, toPersisted(store.getState()));
     return changed;
   }
@@ -506,9 +464,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     // A run left on another map may have stopped reporting; start this one clean.
     store.setState({ ...busy, progressActions: null, error: null });
     try {
-      const onRound = request.kind === 'tidy' ? (round: number) => { if (current()) store.setState({ tidyRound: round }); } : undefined;
       const onProgress = (actions: OperationProgress[]) => { if (current()) store.setState({ progressActions: actions }); };
-      const outcome = await operations.run(bound, request, { projectId: bound, signal: controller.signal, taskId, onRound, onProgress });
+      const outcome = await operations.run(bound, request, { projectId: bound, signal: controller.signal, taskId, onProgress });
       if (!current()) return null;
       store.setState({ ...idle, progressActions: null });
       await store.getState().syncFromRemote({ undoGroup: outcome.taskId, receiptId: outcome.taskId });
@@ -549,13 +506,13 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       } else if (request.kind === 'tidy') {
         if (get().isTidying) return null;
         tidyAbort = controller;
-        busy = { isTidying: true, tidyRound: 1, tidyScopeIds: request.scopeIds ? new Set(request.scopeIds) : null };
-        idle = { isTidying: false, tidyRound: null, tidyScopeIds: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() };
+        busy = { isTidying: true, tidyScopeIds: request.scopeIds ? new Set(request.scopeIds) : null };
+        idle = { isTidying: false, tidyScopeIds: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() };
         cleanup = () => { if (tidyAbort === controller) tidyAbort = null; };
       } else {
         if (get().isGenerating) return null;
         generationAbort = controller;
-        busy = { isGenerating: true, generateMode: request.kind === 'redraw' ? 'redraw' : 'update', streamingCount: 0 };
+        busy = { isGenerating: true, streamingCount: 0 };
         idle = { isGenerating: false, streamingCount: null };
         cleanup = () => { if (generationAbort === controller) generationAbort = null; };
       }
@@ -593,16 +550,11 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     contextInjectEnabled: loadInjectEnabled(),
     doc: '',
     rightView: 'map',
-    sourceJumpId: null,
     focusNodeId: null,
     docJumpId: null,
     docDraft: null,
-    sourceDraftActive: false,
-    tidyRound: null,
     progressActions: null,
-    generateMode: null,
     ledger: '',
-    raw: '',
     ledgerState: emptyLedgerState(),
     unreadIds: new Set<string>(),
     error: null,
@@ -621,7 +573,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       // 在途保存和待上传修改均算脏；保存时会检查远端版本并合入这次通知。
       // 服务端操作不在本地留待写内容，进行中也照常同步（并行的节点整理各自先到先显示）。
       const computingLocally = (s: ThinkingMapState) => !runtime.operations && (s.explainingEdgeIds.size>0 || s.isRefining || s.isGenerating || s.isTidying);
-      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.sourceDraftActive || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null || computingLocally(s) || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
+      const busy = (s: ThinkingMapState) => s.docDraft !== null || s.editingNodeId !== null || s.editingNodeBodyId !== null || s.editingEdgeId !== null || computingLocally(s) || s.isHydrating || saveTimer !== null || hasPendingThinkingMap(pid);
       if (busy(get())) return false;
       const remote = await loadThinkingMap(pid); // 读取不确认版本，实际接受之后才记。
       if (!remote) return false;
@@ -666,22 +618,13 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       flushPersist(get()); // 旧图的最后一笔先落盘
       const epoch = ++projectEpoch;
 
-      // 加载一份图：有账读账；没账但有旧数据（迁移前的行）→ 当场一次性转成账并回写；两者皆无＝空图
+      // 加载一份图：有账读账；没账＝空图
       const applyLoaded = (m: PersistedThinkingMap | null, hydrating: boolean) => {
         clearUndo(); // 换图清撤销栈（跨图撤销=灾难）
         const unreadIds = new Set((m?.nodes ?? []).filter(n => n.unread).map(n => n.anchor ?? n.id));
-        const absorbed = absorbLegacyRow(m?.ledger ?? '', m ?? {});
-        const { ledger, newIds: absorbedIds, warnings } = absorbed;
-        let migrated = absorbed.migrated;
-        if (warnings.length) console.warn('🧭 旧图转账告警：', warnings);
-        absorbedIds.forEach(id => unreadIds.add(id));
-        // 原始记录为空（070 之前的行）→ 从工作账剥出一次并回写
-        let raw = m?.raw ?? '';
-        if (!raw && ledger && runtime.persistence.migrateLegacySources !== false) { raw = stripToRaw(ledger); migrated = true; }
-        applyLedgerText(ledger, {
+        applyLedgerText(m?.ledger ?? '', {
           boundProjectId: projectId,
           unreadIds,
-          raw,
           sourceWatermarks: new Map(Object.entries(m?.watermarks ?? {})),
           newIds: [],
           userEditedIds: new Set<string>(),
@@ -694,8 +637,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           lastDeleted: null,
           lastCondensedL2Ids: null,
           docDraft: null,
-          sourceDraftActive: false,
-          sourceJumpId: null,
           focusNodeId: null,
           docJumpId: null,
           isRefining: false,
@@ -706,10 +647,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           isHydrating: hydrating,
           generation: get().generation + 1, // 换图 → remount + fitView
         });
-        if (migrated && !hydrating) {
-          console.info(`🧭 旧图已转成判断账（${ledger.split('\n').length} 行），回写落库`);
-          schedulePersist(get);
-        }
       };
 
       // SWR：本地镜像先瞬间上屏（刷新无空窗），网络真相回来再校正
@@ -717,16 +654,15 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const recovering = hasPendingThinkingMap(projectId);
       applyLoaded(cached, true); // 无镜像也是确定的空态，绝不把旧项目内容绑定到新 ID。
       const initialLedger = get().ledger;
-      const initialRaw = get().raw;
       try {
         const loaded = await loadThinkingMap(projectId);
         if (epoch !== projectEpoch) return;
-        const edited = recovering || get().ledger !== initialLedger || get().raw !== initialRaw || get().docDraft !== null || get().editingNodeBodyId !== null || get().editingEdgeId !== null;
+        const edited = recovering || get().ledger !== initialLedger || get().docDraft !== null || get().editingNodeBodyId !== null || get().editingEdgeId !== null;
         if (edited) {
           get().flushDocEdits();
           if (loaded) {
             if (hasRemoteThinkingMapChanges(projectId, loaded)) ingestRemoteMap(loaded);
-            else acceptThinkingMap(projectId, loaded, toPersisted(get())); // 基准未变，本地撤销/Log 改字直接保留。
+            else acceptThinkingMap(projectId, loaded, toPersisted(get())); // 基准未变，本地撤销与改字直接保留。
           }
           set({ isHydrating: false });
           schedulePersist(get);
@@ -751,12 +687,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       console.warn('🧭 updateDoc 已退役：白盒文档由判断账折算，请编辑账（updateLedger）');
     },
 
-    updateRaw: (text: string) => {
-      if (!get().boundProjectId || get().raw === text) return;
-      set({ raw: text, error: null });
-      schedulePersist(get);
-    },
-
     updateLedger: (text: string) => {
       if (!get().boundProjectId) return;
       applyLedgerText(text);
@@ -769,14 +699,13 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
     },
 
     tidyWhitebox: async (selectionIds) => {
-      // 整理含收拢：参考 tidyTarget，承接与转折优先；有安全的进展才继续，最多 TIDY_MAX_ROUNDS 轮；
+      // 整理：一次模型调用（D65）；未超节点上限只理关联与正文，超出就合并，仍超由系统合并到上限以内；
       // 合并＝新判断「合并自」成员（成员退休、边自动改接），去掉、改锐利、走向重写；全部一次提交＝一帧撤销
       get().flushDocEdits();
       const s = get();
       if (!s.boundProjectId || s.isTidying || s.isGenerating || s.isRefining) return null;
       const bound = s.boundProjectId;
       const base = s.ledger;
-      const rawBase = s.raw;
       const scope = selectionIds === undefined ? undefined : new Set(selectionIds);
       const inScope = liveJudgments(s.ledgerState).filter(j => !scope || scope.has(j.id)).length;
       if (inScope === 0 && (scope || !s.doc.trim())) return null;
@@ -786,40 +715,48 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         const report = outcome?.report;
         if (!report) return null;
         const after = get();
-        return { changed: !!report.changed, entries: liveJudgments(after.ledgerState).length, mergedGroups: Number(report.merged), dropped: Number(report.dropped), added: Number(report.added), edges: after.edges.length, before: Number(report.before), after: Number(report.after), textBefore, textAfter: docChars(after.ledgerState), rounds: Number(report.rounds) };
+        return { changed: !!report.changed, entries: liveJudgments(after.ledgerState).length, mergedGroups: Number(report.merged), dropped: Number(report.dropped), added: Number(report.added), edges: after.edges.length, before: Number(report.before), after: Number(report.after), textBefore, textAfter: docChars(after.ledgerState) };
       }
       const run = ++tidyRun;
       const controller = new AbortController();
       tidyAbort = controller;
       const context = { projectId: bound, signal: controller.signal };
-      set({ isTidying: true, tidyScopeIds: scope ? new Set(scope) : null, tidyRound: 0, error: null });
+      set({ isTidying: true, tidyScopeIds: scope ? new Set(scope) : null, error: null });
       try {
         const modelId = runtime.host.getSnapshot().currentSession?.modelId;
-        const result = await runTidyRounds({
-          ledger: base,
-          raw: rawBase,
+        const tidyFrom = (ledger: string) => runTidy({
+          ledger,
           unreadIds: get().unreadIds,
+          cap: nodeCapOf(),
           scopeIds: scope,
           header: sessionLine(Date.now(), '本地', scope ? '整理选中' : '整理'),
           tidy: input => browserAi().tidy(input, modelId ? { modelId } : undefined, context),
           // 取消、切图或重新开始后，旧结果不再有权落账
           stillCurrent: () => run === tidyRun && get().boundProjectId === bound,
-          onRound: round => set({ tidyRound: round }),
         });
+        // 整理期间账被改了：两边碰的不是同一批判断和章节就接到最新账后，碰了就按最新内容重跑一次（D63）
+        let from = base, result = await tidyFrom(from), lines: string[] | null = result?.lines ?? null;
+        for (let attempt = 0; result; attempt++) {
+          get().flushDocEdits(); // 正在输入、尚未失焦的 Doc 草稿也先纳入并发检查
+          const current = get().ledger;
+          lines = current === from ? result.lines : rebaseSession(from, current, result.lines);
+          if (lines || attempt > 0) break;
+          from = current;
+          result = await tidyFrom(from);
+        }
         if (!result) {
-          if (run === tidyRun) set({ isTidying: false, tidyScopeIds: null, tidyRound: null }); // 期间切图 → 丢弃
+          if (run === tidyRun) set({ isTidying: false, tidyScopeIds: null }); // 期间切图 → 丢弃
           return null;
         }
-        const { lines, newIds, merged, dropped, applied, rounds, before, state: cur } = result;
-        get().flushDocEdits(); // 正在输入、尚未失焦的 Doc 草稿也先纳入并发检查
-        if (get().ledger !== base || get().raw !== rawBase) {
-          set({ isTidying: false, tidyScopeIds: null, tidyRound: null, error: '整理期间账被改动，这次作废——再点一次「整理」' });
+        if (!lines) {
+          set({ isTidying: false, tidyScopeIds: null, error: '整理期间内容又被修改，这次没有保存。请再点一次整理。' });
           return null;
         }
+        const { newIds, merged, dropped, applied, before, state: cur } = result;
         const edgesNow = get().edges.length;
         if (applied === 0) {
-          set({ isTidying: false, tidyScopeIds: null, tidyRound: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
-          return { changed: false, entries: liveJudgments(s.ledgerState).length, mergedGroups: 0, dropped: 0, added: 0, edges: edgesNow, before, after: before, textBefore, textAfter: textBefore, rounds };
+          set({ isTidying: false, tidyScopeIds: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
+          return { changed: false, entries: liveJudgments(s.ledgerState).length, mergedGroups: 0, dropped: 0, added: 0, edges: edgesNow, before, after: before, textBefore, textAfter: textBefore };
         }
         // 合出来的判断：成员有未读的就带红点；退休的成员不再算未读
         const unreadIds = new Set(get().unreadIds);
@@ -828,16 +765,16 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           if (j?.mergedFrom.some(m => unreadIds.has(m))) unreadIds.add(id);
           j?.mergedFrom.forEach(m => unreadIds.delete(m));
         }
-        commitLines(lines, { extra: { isTidying: false, tidyScopeIds: null, tidyRound: null, unreadIds, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
+        commitLines(lines, { extra: { isTidying: false, tidyScopeIds: null, unreadIds, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() } });
         // The selection grows by judgments merged from it; retired members are no longer live.
         const after = liveJudgments(get().ledgerState).filter(j => !scope || scope.has(j.id) || newIds.includes(j.id)).length;
         const textAfter = docChars(get().ledgerState);
-        console.debug(`🧹 整理完成: ${before}→${after} 条，${textBefore}→${textAfter} 字，${rounds} 轮`);
-        return { changed: true, entries: liveJudgments(cur).length, mergedGroups: merged, dropped, added: newIds.length, edges: get().edges.length, before, after, textBefore, textAfter, rounds };
+        console.debug(`🧹 整理完成: ${before}→${after} 条，${textBefore}→${textAfter} 字`);
+        return { changed: true, entries: liveJudgments(cur).length, mergedGroups: merged, dropped, added: newIds.length, edges: get().edges.length, before, after, textBefore, textAfter };
       } catch (err) {
         if (run !== tidyRun) return null; // 旧任务的报错也不能清掉新任务的状态
         console.error('❌ 整理失败:', err);
-        set({ isTidying: false, tidyScopeIds: null, tidyRound: null, error: err instanceof Error ? err.message : '整理失败' });
+        set({ isTidying: false, tidyScopeIds: null, error: err instanceof Error ? err.message : '整理失败' });
         return null;
       } finally {
         if (tidyAbort === controller) tidyAbort = null;
@@ -854,7 +791,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       set({explainingEdgeIds:new Set<string>()});
       projectEpoch++;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } // 丢弃挂起的落库（项目已删/已退出）
-      set({ docDraft: null, sourceDraftActive: false, raw: '' });
+      set({ docDraft: null });
       clearUndo();
       set(s => ({
         nodes: [],
@@ -880,7 +817,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           refiningNodeId: null,
           refiningNodeIds: new Set<string>(),
           isCondensing: false,
-          sourceJumpId: null,
           focusNodeId: null,
           docJumpId: null,
         error: null,
@@ -888,20 +824,20 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       }));
     },
 
-    generate: async (input: string, opts?: { fresh?: boolean; source?: GenerateSource; userMsgCount?: number; live?: boolean; rewrite?: boolean }) => {
+    generate: async (input: string, opts?: { source?: GenerateSource; userMsgCount?: number; live?: boolean }) => {
       const trimmed = input.trim();
       // 互斥补齐(2026-07-18 猎捕确认项):tidy/refine 的入口都拦 isGenerating,唯独 generate
       // 不拦它们——整理流式进行中仍可点「更新脉络」,两路 AI 交错写图,节点/边/撤销栈错乱。
       const st0 = get();
       if (!trimmed || st0.isGenerating || st0.isTidying || st0.isRefining || st0.isCondensing) return;
       if (runtime.operations && !opts?.source && !opts?.live) {
-        const outcome = await runOwnedServerOperation(opts?.rewrite ? { kind: 'redraw' } : { kind: 'update', input: trimmed });
+        const outcome = await runOwnedServerOperation({ kind: 'update', input: trimmed });
         return outcome ? {} : undefined;
       }
       get().flushDocEdits();
       const state = get();
-      const isUpdate = !opts?.fresh && state.nodes.length > 0;
-      set({ isGenerating: true, generateMode: opts?.rewrite ? 'redraw' : 'update', error: null, streamingCount: 0 });
+      const isUpdate = state.nodes.length > 0;
+      set({ isGenerating: true, error: null, streamingCount: 0 });
       // 生成前快照：流式预览会实时改图，失败恢复/成功入撤销栈/用户中止回滚都以它为准
       const prevSnapshot: UndoSnapshot = { ledger: state.ledger, unreadIds: new Set(state.unreadIds) };
       const run = ++generationRun;
@@ -912,7 +848,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const boundAtStart = state.boundProjectId;
       activeGenBoundId = boundAtStart;
       let previewedFirstFrame = false;
-      // 重画=推倒重来，无锚（2026-07-12 用户拍：重画就是重画；保守改进用「整理」）
       try {
         // 模型跟随当前 session（dogfood 时可 @ 换模型对比蒸馏质量）
         const modelId = runtime.host.getSnapshot().currentSession?.modelId;
@@ -922,13 +857,13 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
             ? { previousMap: { nodes: state.nodes, edges: state.edges } }
             : {}),
           ...(modelId ? { modelId } : {}),
+          nodeCap: nodeCapOf(),
           ...(opts?.userMsgCount ? { userMsgCount: opts.userMsgCount } : {}),
           ...(opts?.live ? { live: true } : {}),
-          ...(opts?.rewrite ? { rewrite: true } : {}),
           ...(themeOf(state.ledgerState) ? { theme: themeOf(state.ledgerState) } : {}),
           // 白盒文档全文进 AI 上下文（08-27 用户拍：文档+图都参考，信息量越多越好；
-          // 手写内容进视野、已有判断不重复产；文档侧输出以它为操作对象）。按 Log 重画时文档就是 input 本身，不再重复喂
-          ...(state.doc.trim() && !opts?.rewrite ? { whiteboxDoc: renderSourceDoc(state.ledgerState) } : {}),
+          // 手写内容进视野、已有判断不重复产；文档侧输出以它为操作对象）
+          ...(state.doc.trim() ? { whiteboxDoc: renderSourceDoc(state.ledgerState) } : {}),
         }, (preview) => {
           // 流式预览上图（纯视觉：不 persist、不动水位；权威收尾同 ctx 同 id，无缝接管）
           if (run !== generationRun) return;
@@ -936,13 +871,11 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
           const newCount = isUpdate
             ? Math.max(0, preview.nodes.length - state.nodes.length)
             : preview.nodes.length;
-          // 重画整份图文完成后一次替换，避免半成品先闪到画布再回滚。
-          if (opts?.rewrite) { set({ streamingCount: newCount }); return; }
           set(s => ({
             nodes: preview.nodes,
             edges: preview.edges,
             streamingCount: newCount,
-            // 重画/首次的第一帧 remount+fitView 一次（旧图已被新图预览替换，视口对到新图）；后续帧不动视口
+            // 首次生成的第一帧 remount+fitView 一次（旧图已被新图预览替换，视口对到新图）；后续帧不动视口
             generation: !isUpdate && !previewedFirstFrame ? s.generation + 1 : s.generation,
           }));
           previewedFirstFrame = true;
@@ -957,36 +890,28 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         }
         activeGenSnapshot = null;
         activeGenBoundId = null;
-        let sourceIncomplete = false;
-        // ===== 账为正本：AI 产出 → 账行（场次头 / 走向 / 判断 / 承接 / 改标；重画先写「重画」行）→ 折算成图与文档 =====
+        // ===== 账为正本：AI 产出 → 账行（场次头 / 走向 / 判断 / 承接 / 改标）→ 折算成图与文档 =====
         {
           const st = get();
           const at = Date.now();
           const sourceTag = opts?.source ? `chat:${opts.source.sessionId}` : '本地';
-          const note = opts?.live ? '现场' : isUpdate ? '更新' : opts?.rewrite ? '重画（按 Log 重写）' : '重画';
-          if (st.ledger !== state.ledger || (opts?.rewrite && st.raw !== state.raw)) throw new Error('生成期间内容已变化，已保留当前图，请重新生成。');
-          const generated = linesFromGenerate(st.ledgerState, result, { isUpdate: !opts?.rewrite, source: sourceTag, note, at, requireChapterDoc: true, ...(opts?.rewrite ? { provenanceSource: parseLedger(state.raw) } : {}) });
+          const note = opts?.live ? '现场' : isUpdate ? '更新' : '首次生成';
+          if (st.ledger !== state.ledger) throw new Error('生成期间内容已变化，已保留当前图，请重新生成。');
+          const generated = linesFromGenerateCapped(st.ledger, result, { source: sourceTag, note, at, requireChapterDoc: true, cap: nodeCapOf() });
           const { lines } = generated;
           const newIds = isUpdate ? generated.newIds : [];
-          sourceIncomplete = generated.sourceIncomplete;
-          // 未读红点：只标增量更新新长出来的（首次/重画整图皆新，标了=满屏红点无意义）
+          // 未读红点：增量更新新长出来的与被改动的旧判断（首次整图皆新，标了=满屏红点无意义）
           const unreadIds = new Set(isUpdate ? st.unreadIds : []);
-          newIds.forEach(id => unreadIds.add(id));
-          // 水位只推进本批来源；空图不重置其他来源，重画不碰水位。
+          if (isUpdate) [...newIds, ...generated.touchedIds].forEach(id => unreadIds.add(id));
+          // 水位只推进本批来源；空图不重置其他来源。
           const sourceWatermarks = new Map(st.sourceWatermarks);
           if (opts?.source) sourceWatermarks.set(opts.source.sessionId, opts.source.lastMessageId);
           set({ unreadIds });
-          // 原文独立保存，不受模型是否输出判断或主题过滤影响；重画只写工作账。
-          const raw = opts?.rewrite ? st.raw : appendSourceLog(st.raw, opts?.source?.snapshot?.length
-            ? sourceRecordsFromEvents([{layer:'L0->L1', inputs:opts.source.snapshot, sourceMeta:opts.source}])
-            : [{v:1,provider:'manual',sessionId:'submitted',id:`input:${at}`,role:'user',content:input,title:'导入材料',ts:at}]);
           pushUndoSnapshot(prevSnapshot);
           applyLedgerText(appendLines(st.ledger, lines), {
-            raw,
             sourceWatermarks,
             sourceText: trimmed,
             newIds,
-            generation: opts?.rewrite ? st.generation + 1 : st.generation,
             ...(isUpdate ? {} : { userEditedIds: new Set<string>(), savedIds: new Set<string>() }),
             isGenerating: false,
             streamingCount: null,
@@ -999,9 +924,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         const bound = get().boundProjectId;
         const src = opts?.source;
         const outputs = isUpdate ? get().newIds : get().nodes.map(n => n.id);
-        // 来源存证只追加；重画不删除或再次导入来源。
         if (bound) {
-          const ev = src?.snapshot?.length && !opts?.rewrite ? {
+          const ev = src?.snapshot?.length ? {
             layer: 'L0->L1' as const,
             inputs: src.snapshot,
             outputs,
@@ -1019,7 +943,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         }
         console.debug(`🧭 ${isUpdate ? '增量更新' : '生成'}: ${result.nodes.length} 节点 / ${result.edges.length} 边 / 新 ${result.newIds.length}`);
             // 建议不再自动跑（2026-07-10 用户拍板：效果未稳定，改手动按钮 requestSuggestions 触发；稳定后再回异步）
-        return { ...(result.digest ? { digest: result.digest } : {}), ...(opts?.rewrite ? { sourceIncomplete } : {}) };
+        return result.digest ? { digest: result.digest } : {};
       } catch (err) {
         if (run !== generationRun) return;
         console.error('❌ 思维导航生成失败:', err);
@@ -1067,7 +991,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       tidyRun++;
       tidyAbort?.abort();
       tidyAbort = null;
-      set({ isTidying: false, tidyScopeIds: null, tidyRound: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
+      set({ isTidying: false, tidyScopeIds: null, selectedNodeIds: new Set<string>(), selectedEdgeIds: new Set<string>() });
     },
 
     updateNode: (id, updates) => {
@@ -1079,13 +1003,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (updates.body !== undefined && updates.body.trim() !== j.content.trim()) lines.push(...decision.rewrite(id, updates.body));
       // 人亲手改了正在服务端整理的节点：以人的为准，停掉那次整理。
       if (lines.length && runtime.operations && refineAborts.has(id)) get().cancelNodeRefinement(id, MAP_OPERATION_SUPERSEDED);
-      const raw = manualUnnotarized.has(id) ? before.raw : recordDocumentInput(before.raw, before.ledgerState, parseLedger(appendLines(before.ledger, lines)));
-      commitLines(lines, { extra: { raw, userEditedIds: new Set(get().userEditedIds).add(id) } }); // 提交级入栈
-      // 手动节点的首次实质提交 → 补出生存证
-      if (manualUnnotarized.has(id) && get().nodes.find(n => n.id === id)?.title.trim()) {
-        manualUnnotarized.delete(id);
-        notarizeManualNode(get, id);
-      }
+      commitLines(lines, { extra: { userEditedIds: new Set(get().userEditedIds).add(id) } }); // 提交级入栈
     },
 
     addNode: (opts?: { title?: string; afterId?: string }) => {
@@ -1098,10 +1016,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         ...judgmentLines(id, '◇', domain, opts?.title?.trim() || '未命名', ''),
         ...(after ? [relationLine(id, after)] : []), // 「↳ 接一条」：新节点承接指定节点
       ];
-      commitLines(lines, { extra: { userEditedIds: new Set(get().userEditedIds).add(id) } }); // 手动种的天然算"我的"
-      // 带 title 创建=当场记账；空 title（图上就地编辑）=挂账，首次提交时补（updateNode 钩子）
-      if (opts?.title?.trim()) notarizeManualNode(get, id);
-      else manualUnnotarized.add(id);
+      if (!commitLines(lines, { extra: { userEditedIds: new Set(get().userEditedIds).add(id) } })) return ''; // 手动种的天然算"我的"
       return id;
     },
 
@@ -1393,7 +1308,7 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       const initialJudgment = JSON.stringify(state.ledgerState.judgments.get(id));
       const assertTarget = () => {
         if (JSON.stringify(get().ledgerState.judgments.get(id)) !== initialJudgment || themeOf(get().ledgerState) !== themeOf(state.ledgerState)) throw new Error('这个节点或主题已修改，旧整理结果未覆盖当前内容。');
-        if (get().editingNodeId === id || get().editingNodeBodyId === id || get().editingEdgeId || get().sourceDraftActive) throw new Error('正在编辑，旧整理结果未覆盖当前内容。');
+        if (get().editingNodeId === id || get().editingNodeBodyId === id || get().editingEdgeId) throw new Error('正在编辑，旧整理结果未覆盖当前内容。');
       };
       set({ ...refinementState(), error: null });
       try {
@@ -1479,16 +1394,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       commitLines([j.mark === '？' ? decision.remark(nodeId, '◇') : decision.remove(nodeId)]);
     },
 
-    redrawFromLedger: async () => {
-      get().flushDocEdits();
-      const s = get();
-      if (!s.boundProjectId || s.isGenerating || s.isTidying || s.isRefining) return;
-      // 原料＝原始记录（Log），不是工作账：Doc 删空了也能重画
-      if (!hasSourceLog(s.raw)) return;
-      const input = renderSourceLog(s.raw);
-      return get().generate(input, { fresh: true, rewrite: true });
-    },
-
     setDocDraft: (text) => { if (get().boundProjectId && get().docDraft !== text) set({ docDraft: text }); },
 
     flushDocEdits: () => {
@@ -1499,8 +1404,8 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (!s.boundProjectId) return;
       const { lines, newIds } = docEditLines(s.ledgerState, draft);
       if (lines.length === 0) return;
-      const raw = recordDocumentInput(s.raw, s.ledgerState, parseLedger(appendLines(s.ledger, lines)));
-      commitLines(lines, {extra:{raw}}); // Only committed human input enters Log.
+      // Over the node cap the draft stays for the person to adjust.
+      if (!commitLines(lines)) { set({ docDraft: draft }); return; }
       console.debug(`📝 文档编辑落账：${lines.length} 行，新条目 ${newIds.length}`);
     },
 
@@ -1510,13 +1415,6 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
       if (s.rightView === 'doc') s.flushDocEdits(); // 切走 Doc＝这一段编辑落账
       set({ rightView: view });
     },
-
-    jumpToSource: (id) => {
-      if (get().rightView === 'doc') get().flushDocEdits();
-      set({ rightView: 'source', sourceJumpId: id });
-    },
-
-    clearSourceJump: () => { if (get().sourceJumpId) set({ sourceJumpId: null }); },
 
     focusOnMap: (id) => {
       if (get().rightView === 'doc') get().flushDocEdits();

@@ -5,21 +5,19 @@
 import type { LedgerMark, LedgerProse, LedgerState } from './types';
 import { LEDGER_MARKS } from './types';
 import { literalLine } from './text';
-import { isSourceLogControlLine } from '../sourceLog';
 
 const SESSION_RE = /^\[场次\s+(\S+)(?:\s*·\s*([^\]·]*?))?(?:\s*·\s*([^\]]*?))?\s*\]\s*$/;
 const PROSE_RE = /^走向(?:\s+(p\d+))?\s*\[([^\]]*)\]\s*$/;
-const JUDGMENT_RE = /^(◆|◇|？|\?|✗|⏸)\s+(j\d+)\s+\[([^\]]*)\]\s+(.+?)(?:\s+=\s+((?:j\d+\s*)+?))?((?:\s+\^j\d+)+)?(?:\s+@(\S+))?\s*$/;
+const JUDGMENT_RE = /^(◆|◇|？|\?|✗|⏸)\s+(j\d+)\s+\[([^\]]*)\]\s+(.+?)(?:\s+=\s+((?:j\d+\s*)+?))?(?:\s+@(\S+))?\s*$/;
 const COVER_RE = /^⊃\s+(c\d+)\s+\[([^\]]*)\]\s+(.+?)\s+=\s+((?:[jc]\d+\s*)+)(?:@(\S+))?\s*$/;
 const REL_RE = /^←\s+([jc]\d+)\s+([jc]\d+)\s*$/;
 const DECISION_RE = /^(本人|AI)\s+(改|删|接|断|序|拍|否|标|域|拆|并)\s+(.*)$/;
-const REDRAW_RE = /^重画\s*$/;
 const ID_RE = /^([jcp]\d+)\b/;
 
 /** 与折算器一致的正文边界；转义行不是操作，非法语法仍按原规则作为自由文字。 */
 export function isLedgerBoundary(line: string): boolean {
-  return isSourceLogControlLine(line) || SESSION_RE.test(line) || PROSE_RE.test(line) || JUDGMENT_RE.test(line) || COVER_RE.test(line)
-    || REL_RE.test(line) || DECISION_RE.test(line) || REDRAW_RE.test(line);
+  return SESSION_RE.test(line) || PROSE_RE.test(line) || JUDGMENT_RE.test(line) || COVER_RE.test(line)
+    || REL_RE.test(line) || DECISION_RE.test(line);
 }
 
 const parseTime = (s: string | undefined, fallback: number): number => {
@@ -84,7 +82,6 @@ export function parseLedger(text: string): LedgerState {
     seq++;
     const literal = literalLine(line);
     if (literal !== undefined) { appendBody(literal, i); continue; }
-    if (isSourceLogControlLine(line)) { flushRewrite(); sink = null; continue; }
 
     const note=/^(?:本人|AI) 改 ([jc]\d+) 承接 ([jc]\d+)：(.+)$/.exec(line);
     if (note) {
@@ -120,8 +117,7 @@ export function parseLedger(text: string): LedgerState {
       flushRewrite();
       const id = jm[2];
       if (st.judgments.has(id)) { st.warnings.push(`第 ${i + 1} 行：重复 id ${id}，后者忽略`); sink = null; continue; }
-      const t = parseTime(jm[7], at);
-      const rawFrom = [...(jm[6] ?? '').matchAll(/\^(j\d+)/g)].map(m => m[1]);
+      const t = parseTime(jm[6], at);
       const mergedFrom = (jm[5] ?? '').trim().split(/\s+/).filter(Boolean);
       // 一条判断的时间＝它第一次出现的时间：合并出的判断取最早成员的时间，排在最早成员的位置（图是时间线，2026-09-06 用户拍）
       let createdAt = t;
@@ -133,7 +129,7 @@ export function parseLedger(text: string): LedgerState {
         const k = st.order.indexOf(m);
         if (k !== -1 && (slot === -1 || k < slot)) slot = k;
       }
-      st.judgments.set(id, { id, mark: normMark(jm[1]), domain: jm[3].trim(), title: jm[4].trim(), content: '', createdAt, updatedAt: t, source, mergedFrom, ...(rawFrom.length ? { rawFrom } : {}), deleted: false, seq });
+      st.judgments.set(id, { id, mark: normMark(jm[1]), domain: jm[3].trim(), title: jm[4].trim(), content: '', createdAt, updatedAt: t, source, mergedFrom, deleted: false, seq });
       touchDomain(jm[3].trim());
       bumpNum(id);
       if (slot === -1) st.order.push(id); else st.order.splice(slot, 0, id);
@@ -168,16 +164,6 @@ export function parseLedger(text: string): LedgerState {
       flushRewrite();
       st.relations.push({ to: rm[1], from: rm[2], seq });
       sink = null;
-      continue;
-    }
-    if (REDRAW_RE.test(line)) {
-      // 重画＝世代更替：此前判断与走向全部作废、关系清空；账里仍在（删掉这一行就回到旧世界）
-      flushRewrite();
-      sink = null;
-      for (const j of st.judgments.values()) { j.deleted = true; j.updatedAt = at; }
-      for (const p of st.prose) p.deleted = true;
-      st.relations = [];
-      st.cuts.clear();
       continue;
     }
     const dm = DECISION_RE.exec(line);
@@ -250,39 +236,4 @@ export function projectTitle(mark: LedgerMark, title: string): string {
 
 export function isMark(s: string): s is LedgerMark {
   return (LEDGER_MARKS as readonly string[]).includes(s);
-}
-
-/** 旧账升级（一次性、就地）：没编号的走向段补上 pN。文档渲染结果一字不变 */
-export function upgradeLedger(text: string): { text: string; changed: boolean } {
-  if (!/^走向\s*\[/m.test(text)) return { text, changed: false };
-  let n = parseLedger(text).nextNum;
-  const out = text.split('\n').map(line => {
-    const m = /^走向\s*\[([^\]]*)\]\s*$/.exec(line);
-    return m ? `走向 p${n++} [${m[1]}]` : line;
-  });
-  return { text: out.join('\n'), changed: true };
-}
-
-/**
- * 从工作账里剥出原始记录（一次性迁移用；今后 raw 只由「更新」写）：
- * 只留提取场次（来源 chat:/mcp:/迁移）里的判断、走向、承接与 AI 改档/改主线；本地场次（整理/编辑/重画/收拢）整段丢，
- * 本人的行为行、⊃ 上层判断、重画标记一律丢。
- */
-export function stripToRaw(ledger: string): string {
-  const out: string[] = [];
-  let keepSession = false;
-  for (const line of ledger.split('\n')) {
-    const sm = SESSION_RE.exec(line);
-    if (sm) {
-      const source = (sm[2] ?? '').trim();
-      keepSession = source !== '本地' && source !== '';
-      if (keepSession) out.push(line);
-      continue;
-    }
-    if (!keepSession) continue;
-    if (/^本人\s/.test(line) || /^⊃\s/.test(line) || REDRAW_RE.test(line)) continue;
-    if (/^AI\s+(并|拆|拍|否|标|域|删|接|断|序)\s/.test(line)) continue;
-    out.push(line);
-  }
-  return out.join('\n').replace(/\n+$/, '');
 }

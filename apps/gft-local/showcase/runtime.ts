@@ -51,10 +51,6 @@ export function createShowcaseRuntime(
     chatHistory: [],
     sourceLabel: tx('示例材料'),
     showMemoryToggle: false,
-    hasSourceMaterial: true,
-    redrawDescription: tx(
-      '在线示例不连接模型。安装本地版后，重画会按当前主题重新筛选 Log，生成新的 Doc 和 Map。',
-    ),
   };
   const publish = (change: Partial<MapHostSnapshot>) => {
     snapshot = { ...snapshot, ...change };
@@ -85,7 +81,7 @@ export function createShowcaseRuntime(
   };
   const modelNotice = () =>
     notify(
-      tx('这是可编辑的浏览器示例，不连接模型或本机聊天。安装本地版后，可执行更新、整理和重画。'),
+      tx('这是可编辑的浏览器示例，不连接模型或本机聊天。安装本地版后，可执行更新和整理。'),
     );
   const host: ThinkingMapHost = {
     getSnapshot: () => snapshot,
@@ -98,13 +94,13 @@ export function createShowcaseRuntime(
     async switchProject(id) {
       if (!maps.has(id)) return;
       flush();
-      publish({ currentProjectId: id, hasSourceMaterial: Boolean(maps.get(id)?.raw) });
+      publish({ currentProjectId: id });
       await store.getState().hydrateForProject(id);
     },
     async createProject(name) {
       flush();
       const id = crypto.randomUUID();
-      maps.set(id, bundleToMap(createTopicBundle(name, { ledger: '', raw: '' }), id));
+      maps.set(id, bundleToMap(createTopicBundle(name, { ledger: '' }), id));
       publish({ projects: [...snapshot.projects, { id, name, status: 'active' }] });
       await host.switchProject(id);
       persist();
@@ -132,7 +128,6 @@ export function createShowcaseRuntime(
     requestUpdate: async () => {
       modelNotice();
     },
-    fetchSourceBatches: async () => [],
     async importBundle(input) {
       const bundle = parseTopicBundle(input);
       flush();
@@ -170,7 +165,6 @@ export function createShowcaseRuntime(
     hasRemoteChanges: () => false,
     accept: () => {},
     insertCondensation: async () => {},
-    clearCondensations: async () => {},
     fetchSourceSnapshots: async () => '',
   };
   const store = createThinkingMapStore({
@@ -183,9 +177,6 @@ export function createShowcaseRuntime(
     tidyWhitebox: async () => {
       modelNotice();
       return null;
-    },
-    redrawFromLedger: async () => {
-      modelNotice();
     },
     refineNode: async () => {
       modelNotice();

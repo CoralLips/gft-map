@@ -10,18 +10,16 @@ import * as materials from './materials.mjs';
 import { archiveStream, restore as restoreMaterialArchive } from './materialArchive.mjs';
 import * as store from './store.mjs';
 import { createAccount } from './account.mjs';
-import { createCloudSync } from './sync.mjs';
+import { createCloudSync, saveNodeCap } from './sync.mjs';
 import { pendingNotices, acknowledgeNotices } from './notifications.mjs';
 import { createCodexRunner } from './runner.mjs';
 import { createClaudeRunner } from './claudeRunner.mjs';
-import { createCodexAppServerRunner } from './codexAppServer.mjs';
+import { createCodexAppServerRunner, appCodex } from './codexAppServer.mjs';
+import { createExecutorLogin } from './executorLogin.mjs';
 import { ensureAdapter, removeRetiredAdapters } from './acpAdapters.mjs';
 import { programVersion, installationId } from './version.mjs';
 import { progressOf } from './progress.mjs';
 import {
-  prepareImport,
-  parseImportSummary,
-  redrawSummaryInput,
   tidyOperation,
   refineOperation,
   relationOperation,
@@ -71,10 +69,8 @@ const TOPIC_READS = new Map([
   ['local-file', store.localFileLocation],
   ['operations', store.getOperations],
   ['update-receipt', store.getUpdateReceipt],
-  ['history', store.history],
   ['export', store.exportTopic],
   ['snapshot', store.getSnapshot],
-  ['sources', store.sourceEvents],
 ]);
 /** Server-run model operations; tasks carrying `params` use these instead of a single prompt. */
 const OPERATIONS = { tidy: tidyOperation, refine: refineOperation, relation: relationOperation };
@@ -96,17 +92,22 @@ async function revealSavedFile(filename) {
   }
 }
 
+async function executorCommand(agent, options) {
+  const configured = { binary: acpBinary(agent), prefixArgs: acpArguments(agent), ...options };
+  if (agent === 'codex-acp')
+    configured.binary ||= process.env.GFT_CODEX_BIN || appCodex() || 'codex';
+  else if (!configured.binary) Object.assign(configured, await ensureAdapter(agent));
+  return configured;
+}
+
 export async function createRunner(agent = 'codex', options) {
   if (agent === 'codex') return createCodexRunner(options);
   if (agent === 'claude') return createClaudeRunner(options);
   if (!agents.includes(agent)) throw store.fail(`执行器应为 ${agents.join('、')}`);
-  const configured = { binary: acpBinary(agent), prefixArgs: acpArguments(agent), ...options };
+  const configured = await executorCommand(agent, options);
   // The vendor's recommended model unless one was chosen in "AI 处理"; effort stays the default.
   if (agent === 'codex-acp') return createCodexAppServerRunner(configured);
   const { createAcpRunner } = await import('./dist/acp.mjs');
-  if (!configured.binary) {
-    Object.assign(configured, await ensureAdapter(agent));
-  }
   return createAcpRunner({ ...configured, providerDefaults: true });
 }
 
@@ -221,21 +222,6 @@ function combinedExecution(runs) {
   };
 }
 
-/** Long histories are condensed chunk by chunk; the final call works from that summary. */
-async function runPrompt(task, prompt, callModel) {
-  let summary = '';
-  for (const chunk of prompt.historyChunks || []) {
-    const request = prepareImport(await store.getTopic(task.topicId), chunk, summary);
-    const part = await callModel({ ...prompt, ...request, historyChunks: undefined });
-    summary = parseImportSummary(outputOf(part));
-  }
-  const final = await callModel({
-    ...prompt,
-    ...(prompt.historyChunks ? { user: redrawSummaryInput(summary) } : {}),
-    historyChunks: undefined,
-  });
-  return outputOf(final);
-}
 
 export async function startServer(options = {}) {
   if (options.agent && !agents.includes(options.agent))
@@ -450,7 +436,13 @@ async function createService(
       return { agent: agentName, ...candidate.snapshot() };
     } catch (error) {
       candidate = error.candidate;
-      return { agent: agentName, status: 'unavailable', error: error.message };
+      return {
+        agent: agentName,
+        status: 'unavailable',
+        authenticated: error.code === 'RUNNER_AUTH' ? false : null,
+        errorCode: error.code,
+        error: error.message,
+      };
     } finally {
       await candidate?.waitForIdle();
     }
@@ -459,9 +451,18 @@ async function createService(
   // The last check of each agent, so reopening the dialog shows results at once.
   // A switch checks again before it takes effect, so an old result is never trusted.
   const checkedExecutors = new Map();
+  const executorLogin = createExecutorLogin(async agentName => {
+    const command = await executorCommand(agentName, await optionsFor(agentName));
+    if (agentName === 'claude-acp' && !command.authArgs)
+      throw store.fail(
+        '自定义连接组件没有提供网页授权入口，请在终端运行 claude auth login 后重新检查。',
+      );
+    return command;
+  });
   const pendingChecks = new Map();
   function candidateStatus(agentName, refresh) {
     const live = agentName === activeAgent && runner?.snapshot();
+    if (!refresh && live?.authenticated === false) return { agent: agentName, ...live };
     if (!refresh && ['ready', 'running'].includes(live?.status))
       return { agent: agentName, ...live };
     if (!refresh && checkedExecutors.has(agentName)) return checkedExecutors.get(agentName);
@@ -485,6 +486,8 @@ async function createService(
 
   /** `model`: undefined keeps the saved choice, null returns to the recommended one. */
   async function switchExecutor(requested, model) {
+    if (executorLogin.snapshot().status === 'running')
+      throw store.fail('请完成或取消授权后再切换 Agent。', 409);
     if (!agents.includes(requested)) throw store.fail(`执行器应为 ${agents.join('、')}`);
     if (model !== undefined && model !== null && (typeof model !== 'string' || !model.trim()))
       throw store.fail('模型名称无效');
@@ -575,6 +578,7 @@ async function createService(
   });
 
   async function handleGet({ res, url, group, id, action }) {
+    if (group === 'runtime' && id === 'executor-login') return executorLogin.snapshot();
     const query = name => url.searchParams.get(name);
     switch (group) {
       case 'topics':
@@ -598,6 +602,8 @@ async function createService(
           : materials.get(id);
       case 'account':
         return { ...(await account.status()), sync: sync.snapshot() };
+      case 'settings':
+        return store.getSettings();
       case 'chat-sessions':
         return listChatSessions(url);
       case 'chat-session':
@@ -625,12 +631,35 @@ async function createService(
   }
 
   async function handlePost({ res, group, id, action }, data) {
+    if (
+      executorLogin.snapshot().status === 'running' &&
+      executorLogin.snapshot().agent === activeAgent &&
+      TASK_STARTING_ACTIONS.has(action)
+    )
+      throw store.fail('正在授权登录，请完成或取消授权后再开始任务。', 409);
     if (executorCheckPromise && TASK_STARTING_ACTIONS.has(action))
       throw store.fail('正在切换处理 Agent，请稍后再开始任务。', 409);
     switch (group) {
       case 'runtime':
+        if (id === 'executor-login') {
+          if (data.cancel) {
+            await executorLogin.close();
+            return executorLogin.snapshot();
+          }
+          if (
+            hasActiveWork() ||
+            executorCheckPromise ||
+            (await hasQueuedTasks()) ||
+            (await hasMaterialsIn(['queued', 'running']))
+          )
+            throw store.fail('请等待正在运行的任务结束后再授权。', 409);
+          return executorLogin.begin(data.agent);
+        }
         if (id === 'executor') return switchExecutor(data?.agent, data?.model);
         break;
+      case 'settings':
+        if (!data || typeof data.nodeCap !== 'number') throw store.fail('节点上限必须是数字');
+        return saveNodeCap(account, store, data.nodeCap);
       case 'service':
         if (id === 'stop') {
           await stopOnRequest(res, data);
@@ -719,8 +748,8 @@ async function createService(
         return connections.disconnectSource(data);
       case 'read':
         return connections.readConnectedContext(data);
-      case 'sources':
-        return connections.readConnectedSources(data);
+      case 'write-doc':
+        return connections.writeConnectedDoc(data);
       default:
         throw store.fail('接口不存在', 404);
     }
@@ -746,12 +775,6 @@ async function createService(
         return store.renameTopic(id, data.baseRevision, data.name);
       case 'archive':
         return store.archiveTopic(id, data.baseRevision);
-      case 'sources':
-        await store.saveSourceEvent(id, data.event);
-        return { saved: true };
-      case 'clear-sources':
-        await store.clearSourceEvents(id);
-        return { saved: true };
       case 'tasks':
         // Page operations (tidy, node tidy, relation captions) only run on the
         // service's own executor; an Agent reading queued tasks cannot finish them.
@@ -759,10 +782,7 @@ async function createService(
           requireExecutor(
             `本地执行器尚未启用，请选择 ${agents.join('、')}，并用 serve --agent 启动服务。`,
           );
-        return store.createTask(id, data.action, data.input, {
-          params: data.params,
-          origin: data.origin,
-        });
+        return store.createTask(id, data.action, data.input, { params: data.params });
       case 'update-from-chat':
         requireExecutor('本地执行器尚未启用，请用 serve --agent 启动服务后再更新。');
         return connections.createSourceUpdate(id, {
@@ -880,26 +900,38 @@ async function createService(
       if (task.params) {
         // A server-run operation: the shared core calls the model and returns lines to write.
         const callModel = modelCaller(task, controller, taskRunner, () => store.getTask(task.id));
-        const topic = await store.getTopic(task.topicId);
         // The executor reads only system/user; task fields identify the call for logs and tests.
-        const result = await OPERATIONS[task.action](
-          topic,
-          task.params,
-          async request => outputOf(await callModel({ ...task, ...request })),
-          // Progress only: a missed write just leaves the previous round showing.
-          { onRound: round => store.setTaskRound(task.id, round).catch(() => {}) },
-        );
-        if (!closed) await store.completeOperation(task.id, result);
+        const compute = async () =>
+          OPERATIONS[task.action](
+            await store.getTopic(task.topicId),
+            { ...task.params, cap: (await store.getSettings()).nodeCap },
+            async request => outputOf(await callModel({ ...task, ...request })),
+          );
+        const result = await compute();
+        if (closed) return;
+        try {
+          await store.completeOperation(task.id, result);
+        } catch (error) {
+          if (!error.stale) throw error;
+          // Someone changed the same judgments meanwhile: compute once more from the latest topic (D63).
+          const again = await compute();
+          if (!closed) await store.completeOperation(task.id, again);
+        }
         return;
       }
       const prompt = await store.taskPrompt(task.id);
-      const output = await runPrompt(task, prompt, modelCaller(task, controller, taskRunner));
+      const output = outputOf(await modelCaller(task, controller, taskRunner)(prompt));
       if (!closed) await store.completeTask(task.id, output);
     } catch (error) {
       if (!controller.signal.aborted) lastError = errorRecord(error);
+      // Concurrent node jobs use separate runners, but an expired account applies
+      // to the selected executor too. Do not keep displaying its old ready state.
+      if (independent && error.code === 'RUNNER_AUTH' && taskRunner) runner = taskRunner;
       if (claimed) {
         if (error.execution) await saveExecution(task.id, error.execution).catch(() => {});
-        await store.setTaskStatus(task.id, 'failed', error.message).catch(() => {});
+        await store
+          .setTaskStatus(task.id, 'failed', error.message, error.cause?.message)
+          .catch(() => {});
       }
     } finally {
       clearInterval(cancellation);
@@ -1033,6 +1065,7 @@ async function createService(
   async function shutdown(reason) {
     closed = true;
     const steps = [
+      () => executorLogin.close(),
       () => stopExecution(),
       () => recordStop?.(reason),
       () =>

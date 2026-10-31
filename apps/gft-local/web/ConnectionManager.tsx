@@ -234,7 +234,9 @@ export function ConnectionManager({
     >
       <p className="gft-local-note">
         {projects.find(project => project.id === topicId)?.name || tr('当前脉络')} ·{' '}
-        {tr('连接不会自动把脉络送进聊天。读取记录表示最近通过 Skill 或 MCP 取回的版本。')}
+        {tr(
+          '这里连接的是聊天材料，不代表 AI 已授权。AI 处理在设置中选择。连接不会自动把脉络送进聊天。',
+        )}
       </p>
       {!browse && (
         <>
@@ -421,7 +423,7 @@ export function ConnectionManager({
                   />
                   <span>
                     {tr('全部历史对话')}{' '}
-                    <small>{tr('已有会话进入 Log，再按主题生成图文；较长时分批处理')}</small>
+                    <small>{tr('读取已有会话，按主题生成图文；较长时分批处理')}</small>
                   </span>
                 </label>
               </fieldset>
@@ -670,7 +672,7 @@ export function ReceiptDetails({
       )}
       <p className="gft-local-receipt-source">
         {tr(
-          '撤回恢复本次操作前的图文；已接收的材料留在 Log，撤回聊天更新时读取进度一并退回，下次更新会重新读到这批消息。',
+          '撤回恢复本次操作前的图文；撤回聊天更新时读取进度一并退回，下次更新会重新读到这批消息。',
         )}
       </p>
     </div>

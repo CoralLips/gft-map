@@ -22,7 +22,7 @@ Your work is saved locally. Export it to share with someone else, or let an agen
 | Keep the tradeoffs and their reasons. | Organize ideas and clarify your position. | Keep track of constraints and open questions. |
 | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=product) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering) |
 
-The examples use prewritten material, with English and Chinese versions. Edit and export them without installing anything or calling a model. AI-powered Update, Tidy, and Redraw require the local app.
+The examples use prewritten material, with English and Chinese versions. Edit and export them without installing anything or calling a model. AI-powered Update and Tidy require the local app.
 
 ### A real handoff review
 
@@ -55,7 +55,7 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-With Claude Code, run `claude auth login` once in a terminal first. First use needs internet access to prepare connection components; the page and saved content can open while preparation runs.
+If Claude Code is not authorized, choose **Sign in** under **Settings → AI processing**, or run `claude auth login` in a terminal. First use needs internet access to prepare connection components; the page and saved content can open while preparation runs.
 
 After installing, reopen your agent conversation and ask:
 
@@ -87,17 +87,16 @@ Replace the name and task with your own. The agent first checks a brief index of
 
 ## Everyday use
 
-Each map includes **Doc for writing, Map for relationships, and Log for source material**. The topic decides what belongs in Doc and Map; Log keeps the original material you received.
+Each map includes **Doc for writing and Map for relationships**. The topic decides what belongs in them.
 
 | What you want to do | Action |
 |---|---|
 | Bring in new progress from a conversation | **Update**: receive new messages and update Doc / Map. |
 | Clarify your notes and combine repeated ideas | **Tidy**: organize the document and nodes within the topic; keep the existing topic text unchanged. |
-| Change the focus and revisit existing material | Edit the topic, then **Redraw**: generate Doc / Map from Log using the current topic. |
 
 **What Tidy changes:** with one node selected, only that node's title and explanation change, not Doc. With several selected, it revises those ideas and their related text. With nothing selected, it tidies the whole map. Click again to stop.
 
-**Edit directly:** the topic, document, and Log are all editable; click outside the editor or press Ctrl+S to save. In Map, click a node to edit its title and explanation, or click a line to edit how one idea leads to the next. [Editing and selection details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
+**Edit directly:** the topic and document are editable; click outside the editor or press Ctrl+S to save. In Map, click a node to edit its title and explanation, or click a line to edit how one idea leads to the next. [Editing and selection details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
 **Tasks and undo:** switching maps, refreshing, or closing the page does not stop an AI task that has started; come back to see its progress or stop it. While it runs, the button shows the edit the AI is writing, such as which items it merges or which chapter it rewrites. **Ctrl+Z** undoes changes in order, even after a refresh; **Ctrl+Y** redoes what you just undid; and **Operation history** in Settings shows and undoes the latest 30 changes. Undoing a chat update keeps the original material, and the next update reads those messages again.
 
@@ -108,7 +107,7 @@ Each map includes **Doc for writing, Map for relationships, and Log for source m
 
 No GFT account is needed for local use; use Download and Import to move between computers. Cloud sync is not currently a recommended workflow; existing account users can check its behavior in the [detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account).
 
-**Where does your data go?** Maps and received chat text stay on your computer. AI-powered Update, Tidy, and Redraw send the materials needed for the task to your selected agent's model service, using its account quota. If you sign in to GFT, your maps, including Log, sync to GFT's cloud. GFT-Map does not scan or upload all your project files or conversations.
+**Where does your data go?** Maps stay on your computer. AI-powered Update and Tidy send the materials needed for the task to your selected agent's model service, using its account quota. If you sign in to GFT, your maps sync to GFT's cloud. GFT-Map does not scan or upload all your project files or conversations.
 
 ## Open, close, and update
 
@@ -124,7 +123,7 @@ Pause file processing and finish or cancel other running tasks before updating. 
 
 ## Project status and feedback
 
-The current stable release is [v0.3.16](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
+The current stable release is [v0.3.17](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
 
 Sibling tool: [GFT-Merge](https://github.com/CoralLips/gft-merge) combines several Claude Code and Codex sessions and starts a new session that carries their context.
 

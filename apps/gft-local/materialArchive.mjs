@@ -24,7 +24,7 @@ export async function* archive(topicId) {
   yield line({
     format: 'gft-materials',
     version: 1,
-    topic: { name: topic.name, ledger: topic.ledger, raw: topic.raw },
+    topic: { name: topic.name, ledger: topic.ledger },
     materials: jobs.map(j => ({
       id: j.id,
       name: j.name,
@@ -98,7 +98,6 @@ function checkHeader(item) {
     !topic.name.trim() ||
     topic.name.length > 200 ||
     typeof topic.ledger !== 'string' ||
-    typeof topic.raw !== 'string' ||
     !Array.isArray(item.materials)
   )
     throw store.fail('不支持的迁移文件');
@@ -260,7 +259,7 @@ export async function restore(archiveId) {
       view = await store.createTopic(
         header.topic.name,
         '',
-        { ledger: header.topic.ledger, raw: header.topic.raw, materialCheckpoints: checkpoints },
+        { ledger: header.topic.ledger, materialCheckpoints: checkpoints },
         topicId,
       );
     } catch (error) {

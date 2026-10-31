@@ -56,6 +56,4 @@ export interface PersistedThinkingMap {
   doc?: string;
   /** 判断账（2026-09-05 起的唯一正本）：按时间只追加的纯文本；nodes/edges/doc 是它的缓存。旧行为空串 */
   ledger?: string;
-  /** 原始记录：更新时追加，也允许在 Log 页签人工编辑；重画从它重建工作账。 */
-  raw?: string;
 }

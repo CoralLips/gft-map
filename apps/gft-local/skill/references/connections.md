@@ -18,6 +18,6 @@ MCP 启动入口是 `node scripts/cli.mjs mcp`，stdout 仅用于协议。无依
 
 页面一次更新固定到操作开始时的会话末尾，内部有输入大小边界并自动继续下一批，可随时取消。已成功批次保存水位，失败批次不推进。CLI／MCP 的单批调用仍按返回的 hasMore 决定是否继续。失败、取消、历史被重写或原会话不可读时，保留现有 Doc／Map 并说明原因，不能默默全量重读。
 
-读取必须传 `provider` 与当前真实 `sessionId`，不能沿用其他会话的编号。`gft_local_connections` 返回轻索引；`gft_local_read` 必须指定其中一个 `topicId`，默认返回 Doc 与不含重复正文的图结构。可另带 `nodeIds` 回查所选节点。`gft_local_sources` 以同样身份和主题按页回查 Log，使用返回的 `nextCursor` 继续。节点详情和来源回查均不点亮整份 Doc 的已读灯。
+读取必须传 `provider` 与当前真实 `sessionId`，不能沿用其他会话的编号。`gft_local_connections` 返回轻索引；`gft_local_read` 必须指定其中一个 `topicId`，默认返回 Doc 与不含重复正文的图结构。可另带 `nodeIds` 回查所选节点。节点详情回查不点亮整份 Doc 的已读灯。
 
-安装验收：重新加载宿主工具后确认能发现 `gft_local_connections`、`gft_local_read` 和 `gft_local_sources`；索引为空就报告未连接。连接并读取测试主题后，在页面修改它，再次读取应返回新版本。不要用别场会话的绑定冒充本场验收，也不要把包已生成当成宿主已发现 Skill。
+安装验收：重新加载宿主工具后确认能发现 `gft_local_connections` 和 `gft_local_read`；索引为空就报告未连接。连接并读取测试主题后，在页面修改它，再次读取应返回新版本。不要用别场会话的绑定冒充本场验收，也不要把包已生成当成宿主已发现 Skill。

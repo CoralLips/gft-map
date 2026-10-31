@@ -69,7 +69,6 @@ export function createReceipts({
     if (!id || state.boundProjectId !== id || state.isHydrating) return t('请等当前脉络读取完成。');
     if (
       state.docDraft !== null ||
-      state.sourceDraftActive ||
       state.editingNodeId !== null ||
       state.editingNodeBodyId !== null ||
       state.editingEdgeId !== null

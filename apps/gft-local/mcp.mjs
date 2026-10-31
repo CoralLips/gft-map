@@ -44,7 +44,7 @@ const tools = [
   {
     name: 'gft_local_read',
     description:
-      'Read ONE connected topic by its required topicId from gft_local_connections. Returns the current Doc once plus compact node titles, states and relations. Read several relevant topics with separate calls. Optional nodeIds reads selected node details only and does not mark the entire Doc as read. Reuse unchanged content; reread after its revision changes. No chat history or Log is included.',
+      'Read ONE connected topic by its required topicId from gft_local_connections. Returns the current Doc once plus compact node titles, states and relations. Read several relevant topics with separate calls. Optional nodeIds reads selected node details only and does not mark the entire Doc as read. Reuse unchanged content; reread after its revision changes. No chat history is included.',
     inputSchema: schema(
       {
         topicId: { type: 'string', minLength: 1 },
@@ -61,20 +61,17 @@ const tools = [
     annotations: { readOnlyHint: true },
   },
   {
-    name: 'gft_local_sources',
+    name: 'gft_local_write_doc',
     description:
-      'Trace a connected topic to its received Log sources, only when evidence or provenance is needed. Requires the same original provider, sessionId and explicit topicId as a Doc read. Returns up to 12000 characters and a continuation cursor; it never scans other conversations or marks Doc as read. Legacy extracted records are labelled and are not complete originals.',
+      'Save an edited Doc of ONE connected topic. Edit the Doc returned by gft_local_read and send the whole Doc back, with that revision as baseRevision. A node reference block in the Doc IS the node: its first line `> ◆ Title ^j12` carries mark and title, the `>` lines right below are its summary. Changing them edits the node; deleting the whole block deletes the node; dropping only the summary lines clears the summary, so a bare `> ^j12` (the task-output form) clears it. Text outside reference blocks is chapter prose. Returns the new revision and what the save did (added, modified, cleared, removed nodes); check it against your intent before telling the person it is saved.',
     inputSchema: schema(
       {
         topicId: { type: 'string', minLength: 1 },
-        cursor: {
-          type: 'string',
-          description: 'nextCursor from the previous page for this topic; omit for the first page.',
-        },
+        baseRevision: { type: 'integer', description: 'The revision gft_local_read returned.' },
+        doc: { type: 'string', description: 'The whole edited Doc.' },
       },
-      ['topicId'],
+      ['topicId', 'baseRevision', 'doc'],
     ),
-    annotations: { readOnlyHint: true },
   },
   {
     name: 'gft_local_disconnect',
@@ -221,19 +218,29 @@ export function createGftMcpServer({ request = createLocalClient() } = {}) {
     });
   }
 
-  async function readTopic({ name, args, fetch }) {
+  async function readTopic({ args, fetch }) {
     if (typeof args.topicId !== 'string' || !args.topicId.trim())
       throw new Error(
         '请先查看 gft_local_connections，并明确要读取的 topicId；不会自动读取全部主题',
       );
-    const route = name === 'gft_local_read' ? '/api/connections/read' : '/api/connections/sources';
     return result(
-      await fetch(route, {
+      await fetch('/api/connections/read', {
         provider: args.provider,
         sessionId: args.sessionId,
         topicId: args.topicId,
         ...(args.nodeIds !== undefined ? { nodeIds: args.nodeIds } : {}),
-        ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+      }),
+    );
+  }
+
+  async function writeDoc({ args, fetch }) {
+    return result(
+      await fetch('/api/connections/write-doc', {
+        provider: args.provider,
+        sessionId: args.sessionId,
+        topicId: args.topicId,
+        baseRevision: args.baseRevision,
+        doc: args.doc,
       }),
     );
   }
@@ -372,7 +379,7 @@ export function createGftMcpServer({ request = createLocalClient() } = {}) {
   const handlers = {
     gft_local_connections: async call => result(await call.fetch(`/api/connections?${call.query}`)),
     gft_local_read: readTopic,
-    gft_local_sources: readTopic,
+    gft_local_write_doc: writeDoc,
     gft_local_connect: connect,
     gft_local_disconnect: disconnect,
     gft_local_update: update,

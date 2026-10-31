@@ -23429,10 +23429,76 @@ async function stopTree(child) {
     });
   });
 }
+function launch(cli, binary, args, { cwd, env } = {}) {
+  if (/\.(?:cmd|bat|ps1)$/i.test(binary))
+    throw errorOf(
+      "RUNNER_START",
+      `\u8BF7\u628A ${cli.binaryEnv} \u6307\u5411 ${cli.name} \u7684\u539F\u751F\u53EF\u6267\u884C\u6587\u4EF6\uFF08Windows \u4F7F\u7528 ${cli.executable}\uFF09\uFF0C\u4E0D\u8981\u4F7F\u7528 shell \u811A\u672C\u3002`
+    );
+  return spawn(binary, args, {
+    cwd,
+    env,
+    windowsHide: true,
+    detached: process.platform !== "win32",
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+}
+async function inspect(cli, binary, args, { env, timeoutMs = 1e4 } = {}) {
+  const child = launch(cli, binary, args, { env });
+  let stdout = "";
+  let stderr = "";
+  let stopping;
+  const timer = setTimeout(() => {
+    stopping = stopTree(child);
+  }, timeoutMs);
+  child.stdout.on("data", (chunk) => {
+    stdout = (stdout + chunk).slice(-2e5);
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr = (stderr + chunk).slice(-4e3);
+  });
+  child.stdin.on("error", () => {
+  });
+  child.stdin.end();
+  try {
+    const code = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    if (stopping) {
+      await stopping;
+      throw errorOf("RUNNER_CHECK", `${cli.name} \u542F\u52A8\u68C0\u67E5\u8D85\u65F6\uFF0C\u8BF7\u786E\u8BA4\u547D\u4EE4\u53EF\u4EE5\u6B63\u5E38\u8FD0\u884C\u3002`);
+    }
+    return { code, stdout, stderr };
+  } catch (error62) {
+    if (error62.code?.startsWith("RUNNER_")) throw error62;
+    throw errorOf(
+      "RUNNER_START",
+      `\u65E0\u6CD5\u542F\u52A8 ${cli.name}\uFF08${error62.code || "\u672A\u77E5\u9519\u8BEF"}\uFF09\u3002\u8BF7\u5B89\u88C5 CLI\uFF0C\u6216\u8BBE\u7F6E ${cli.binaryEnv} \u6307\u5411 ${cli.executable}\u3002`
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // apps/gft-local/claudeRunner.mjs
 var MAX_OUTPUT = 2 * 1024 * 1024;
 var MAX_TRANSCRIPT = 8 * MAX_OUTPUT;
+var CLI = { name: "Claude Code", binaryEnv: "GFT_CLAUDE_BIN", executable: "claude.exe" };
+var LOGIN_HINT = "\u672C\u673A Claude Code \u5C1A\u672A\u767B\u5F55\u6216\u767B\u5F55\u5DF2\u8FC7\u671F\u3002\u8BF7\u5728\u8BBE\u7F6E \u2192 AI \u5904\u7406\u4E2D\u70B9\u51FB\u201C\u6388\u6743\u767B\u5F55\u201D\uFF1B\u4E5F\u53EF\u5728\u7EC8\u7AEF\u8FD0\u884C claude auth login\uFF0C\u7136\u540E\u91CD\u65B0\u68C0\u67E5\u3002";
+async function checkClaudeAuth(binary, prefixArgs = [], env = childEnvironment()) {
+  const auth = await inspect(CLI, binary, [...prefixArgs, "auth", "status"], { env });
+  let status;
+  try {
+    status = JSON.parse(auth.stdout);
+  } catch {
+    throw errorOf("RUNNER_CHECK", "Claude \u767B\u5F55\u72B6\u6001\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u91CD\u65B0\u68C0\u67E5\u8FDE\u63A5\u7EC4\u4EF6\u3002");
+  }
+  if (status.loggedIn === false) throw errorOf("RUNNER_AUTH", LOGIN_HINT);
+  if (auth.code !== 0 || status.loggedIn !== true)
+    throw errorOf("RUNNER_CHECK", "Claude \u767B\u5F55\u72B6\u6001\u65E0\u6CD5\u786E\u8BA4\uFF0C\u8BF7\u91CD\u65B0\u68C0\u67E5\u3002");
+  return { authenticated: true, authMethod: status.authMethod || null };
+}
 var PARENT_SESSION_VARIABLES = /^(?:CLAUDECODE|CLAUDE_PID|CLAUDE_AGENT_SDK_\w+|CLAUDE_CODE_(?:ENTRYPOINT|SIMPLE|CHILD_SESSION|SESSION_ID|HOST_SESSION_ID|SESSION_ATTENDED|SDK_HAS_HOST_AUTH_REFRESH|MESSAGING_SOCKET|MESSAGING_TOKEN|EXECPATH))$/;
 function childEnvironment(env = process.env) {
   const hostAuth = !!env.CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH;
@@ -23452,6 +23518,9 @@ var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var number4 = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
 var optionsOf = (option) => (option?.options || []).flatMap((item) => Array.isArray(item.options) ? item.options : [item]);
 var AUTH_FAILURE = /authentication required|failed to authenticate|oauth (?:session|token).*expired|not authenticated|not logged in|login required/i;
+var AUTH_BUSY = /failed to refresh oauth token: another claude code process/i;
+var AUTH_BUSY_HINT = "Claude \u767B\u5F55\u6B63\u5728\u88AB\u672C\u673A\u5176\u4ED6 Claude \u8FDB\u7A0B\u7EED\u671F\uFF0C\u5DF2\u81EA\u52A8\u91CD\u8BD5\u4E00\u6B21\u4ECD\u672A\u6210\u529F\u3002\u8BF7\u4E00\u5206\u949F\u540E\u91CD\u8BD5\uFF1B\u82E5\u4E00\u76F4\u5931\u8D25\uFF0C\u5173\u95ED\u5176\u4ED6 Claude Code \u7A97\u53E3\u6216\u91CD\u65B0\u767B\u5F55\u3002";
+var AUTH_BUSY_RETRY_MS = 1e4;
 var USAGE_FIELDS = {
   inputTokens: "input_tokens",
   outputTokens: "output_tokens",
@@ -23714,6 +23783,7 @@ ${task.user}` }]
   return { output: live.output, execution };
 }
 function failureCode(failure2, exited) {
+  if (AUTH_BUSY.test(failure2.message || "")) return "RUNNER_AUTH_BUSY";
   if (failure2.code === -32e3 || AUTH_FAILURE.test(failure2.message || "")) return "RUNNER_AUTH";
   if (typeof failure2.code === "string" && failure2.code.startsWith("RUNNER_")) return failure2.code;
   return exited ? "RUNNER_EXIT" : "RUNNER_PROTOCOL";
@@ -23740,7 +23810,8 @@ function createAcpRunner({
   model,
   providerDefaults = false,
   timeoutMs = 15 * 60 * 1e3,
-  checkTimeoutMs = 15e3
+  checkTimeoutMs = 15e3,
+  authArgs
 } = {}) {
   if (typeof binary !== "string" || !binary.trim() || /\.(cmd|bat|ps1)$/i.test(binary))
     throw errorOf(
@@ -23901,11 +23972,19 @@ function createAcpRunner({
       const failure2 = live.interrupted || error62;
       const exited = closed || child.exitCode !== null || connection?.signal.aborted;
       const code = failureCode(failure2, exited);
+      if (code === "RUNNER_AUTH")
+        readiness = {
+          ...readiness,
+          status: "unavailable",
+          authenticated: false,
+          errorCode: code,
+          error: LOGIN_HINT
+        };
       execution.errorCode = code;
       const detail = code === "RUNNER_EXIT" && brief(stderr) || brief(failure2.message) || "\u9002\u914D\u5668\u8FDE\u63A5\u5DF2\u7ED3\u675F";
       throw errorOf(
         code,
-        code === "RUNNER_AUTH" ? "Claude \u767B\u5F55\u5C1A\u672A\u5B8C\u6210\u6216\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u5148\u5728\u672C\u673A\u91CD\u65B0\u767B\u5F55\u5BF9\u5E94 Agent\uFF0C\u518D\u91CD\u8BD5\u4EFB\u52A1\u3002" : `ACP \u6267\u884C\u5931\u8D25\uFF1A${detail}`,
+        code === "RUNNER_AUTH" ? LOGIN_HINT : code === "RUNNER_AUTH_BUSY" ? AUTH_BUSY_HINT : `ACP \u6267\u884C\u5931\u8D25\uFF1A${detail}`,
         execution
       );
     } finally {
@@ -23923,10 +24002,30 @@ function createAcpRunner({
       active = null;
     }
   }
+  async function retryingAuthBusy(attempt, signal) {
+    try {
+      return await attempt();
+    } catch (error62) {
+      if (error62.code !== "RUNNER_AUTH_BUSY" || error62.execution?.streamedChars || signal?.aborted)
+        throw error62;
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, AUTH_BUSY_RETRY_MS);
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true }
+        );
+      });
+      return attempt();
+    }
+  }
   function run(task, options) {
     if (activePromise)
       return Promise.reject(errorOf("RUNNER_BUSY", "ACP \u6267\u884C\u5668\u4ECD\u5728\u5904\u7406\u4E0A\u4E00\u9879\u4EFB\u52A1\u3002"));
-    activePromise = execute(task, options).finally(() => {
+    activePromise = retryingAuthBusy(() => execute(task, options), options?.signal).finally(() => {
       activePromise = null;
     });
     return activePromise;
@@ -23951,18 +24050,30 @@ function createAcpRunner({
     activePromise = (async () => {
       const directory = await mkdtemp(path2.join(tmpdir(), "gft-acp-check-"));
       try {
-        const info = await execute(null, { directory }, true);
+        const auth = authArgs ? await checkClaudeAuth(
+          binary,
+          [...prefixArgs, ...authArgs],
+          adapterEnvironment(providerDefaults)
+        ) : {};
+        const info = await retryingAuthBusy(() => execute(null, { directory }, true));
         readiness = {
           ...readiness,
           ...info,
           status: "ready",
           checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
           checkScope: "session-and-model",
-          authenticated: null
+          authenticated: null,
+          ...auth
         };
         return snapshot();
       } catch (error62) {
-        readiness = { ...readiness, status: "unavailable", error: error62.message };
+        readiness = {
+          ...readiness,
+          status: "unavailable",
+          authenticated: error62.code === "RUNNER_AUTH" ? false : null,
+          errorCode: error62.code,
+          error: error62.message
+        };
         throw error62;
       } finally {
         await removeCheckDirectory(directory);

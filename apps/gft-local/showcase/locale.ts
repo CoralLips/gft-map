@@ -15,7 +15,6 @@ export function initialLanguage(): ShowcaseLanguage {
 export const english: Record<string, string> = {
   关闭: 'Close',
   关闭提示: 'Dismiss',
-  'Log · 来源': 'Log',
   切换浅色: 'Switch to light mode',
   切换深色: 'Switch to dark mode',
   选择样例: 'Choose an example',
@@ -32,8 +31,8 @@ export const english: Record<string, string> = {
   '下载、导入，继续使用': 'Download, import, and keep working',
   '这里使用本地版同一套图文组件。案例为人工编写的示例，不是真实用户聊天，也不是模型效果评测。':
     'This uses the same document and map components as the local app. The examples are authored material, not real user chats or model evaluations.',
-  '编辑仅保存在此浏览器标签页；在线示例不连接你的聊天或模型。更新、整理、重画请在本地版使用。':
-    'Edits stay in this browser tab. The demo does not access your chats or call a model. Use the local app for Update, Tidy, and Redraw.',
+  '编辑仅保存在此浏览器标签页；在线示例不连接你的聊天或模型。更新、整理请在本地版使用。':
+    'Edits stay in this browser tab. The demo does not access your chats or call a model. Use the local app for Update and Tidy.',
   '中英文示例分别保留试改；切换语言不会翻译或覆盖你的编辑。':
     'Each language keeps its own edits. Switching languages does not translate or overwrite your work.',
   恢复本例: 'Reset example',
@@ -45,10 +44,6 @@ export const english: Record<string, string> = {
   'GFT-Map 可交互面板': 'Interactive GFT-Map panel',
   示例: ' example',
   浏览器内试用: 'Browser demo',
-  'Log · 收到的来源材料': 'Log · Received sources',
-  '这份示例的原始讨论保留在这里。主题筛选影响 Doc／Map，来源不会随主题改变而删掉。':
-    'The original example discussion is kept here. The topic filters Doc and Map, without removing sources from Log.',
-  '尚无来源材料。': 'No sources yet.',
   '下一场聊天，能读到什么？': 'What can the next chat read?',
   'Agent 先取得已连接主题的简短索引，再按当前任务选择正文。这里展示读取内容，不启动模型或代替 Agent 作答。':
     'The agent checks a brief index of connected maps, then chooses what to read for its task. This is a content preview, not a live agent response.',
@@ -63,8 +58,8 @@ export const english: Record<string, string> = {
   '先把这份脉络包导入本地版，再在那场聊天连接它。右侧更新不会自动唤醒聊天；再次读取时会得到当前内容。':
     'Import this map into the local app, then connect it in your chat. Updates do not automatically wake the chat; reading again returns the current content.',
   把这份上下文带走: 'Take this context with you',
-  '导出的是当前版本，包含你刚才的修改，以及主题、Doc、Map 和已接收的 Log。':
-    'The download includes the current topic, Doc, Map, and Log, including your edits.',
+  '导出的是当前版本，包含你刚才的修改，以及主题、Doc 和 Map。':
+    'The download includes the current topic, Doc, and Map, including your edits.',
   '下载当前脉络包 .json': 'Download this map (.json)',
   '打开本地 GFT-Map。在设置里选择「导入脉络」。':
     'Open your local GFT-Map. Choose Import maps in Settings.',
@@ -78,12 +73,10 @@ export const english: Record<string, string> = {
     'Chat connections, reading progress, and credentials are not included. Files in this demo are read locally in your browser, not uploaded.',
   '还没安装？查看本地使用步骤': 'Not installed yet? See the setup steps',
   示例材料: 'Example material',
-  '在线示例不连接模型。安装本地版后，重画会按当前主题重新筛选 Log，生成新的 Doc 和 Map。':
-    'This demo does not call a model. In the local app, Redraw rebuilds Doc and Map from Log using the current topic.',
   '浏览器暂时无法保存这份试改。当前页面仍可使用，请导出脉络包保留修改。':
     'Browser storage is unavailable. You can keep working, but download the map to keep your edits.',
-  '这是可编辑的浏览器示例，不连接模型或本机聊天。安装本地版后，可执行更新、整理和重画。':
-    'This editable demo does not access a model or local chats. Install the local app to use Update, Tidy, and Redraw.',
+  '这是可编辑的浏览器示例，不连接模型或本机聊天。安装本地版后，可执行更新和整理。':
+    'This editable demo does not access a model or local chats. Install the local app to use Update and Tidy.',
   '至少保留一份示例；可以用“恢复本例”重新开始。':
     'Keep at least one map. Use Reset example to start again.',
   '已导入为一份新脉络，原来的示例仍保留。文件只在此浏览器中读取。':

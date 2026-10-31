@@ -28,10 +28,9 @@ export function proseLines(id: string, domain: string, text: string): string[] {
 }
 
 /** 判断行＋表述；mergedFrom＝合并自哪些（它们退休、边改接）；at 只在迁移时写（保住旧创建时间） */
-export function judgmentLines(id: string, mark: LedgerMark, domain: string, title: string, content = '', opts: { mergedFrom?: string[]; rawFrom?: string[]; at?: number } = {}): string[] {
+export function judgmentLines(id: string, mark: LedgerMark, domain: string, title: string, content = '', opts: { mergedFrom?: string[]; at?: number } = {}): string[] {
   const merged = opts.mergedFrom?.length ? ` = ${opts.mergedFrom.join(' ')}` : '';
-  const rawFrom = opts.rawFrom?.length ? ` ${opts.rawFrom.map(id => `^${id}`).join(' ')}` : '';
-  const head = `${mark} ${id} [${domain}] ${title.trim()}${merged}${rawFrom}${opts.at ? ` @${isoLocal(opts.at, true)}` : ''}`;
+  const head = `${mark} ${id} [${domain}] ${title.trim()}${merged}${opts.at ? ` @${isoLocal(opts.at, true)}` : ''}`;
   const body = content.replace(/\n+$/, '');
   return body ? [head, ...bodyLines(body)] : [head];
 }
