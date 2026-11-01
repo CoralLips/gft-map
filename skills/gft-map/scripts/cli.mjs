@@ -14,7 +14,10 @@ import {
   saveExecutorConfig,
   defaultExecutor,
 } from './executor-config.mjs';
+import { useProxy } from './dist/net.mjs';
 
+// Account sign-in, cloud sync and updates go through the VPN's proxy like a browser would.
+useProxy();
 const SERVICE_URL = process.env.GFT_LOCAL_URL || 'http://127.0.0.1:4317';
 const UPLOAD_BLOCK_BYTES = 512 * 1024;
 const AGENT_CHOICES = 'codex|claude|codex-acp|claude-acp';

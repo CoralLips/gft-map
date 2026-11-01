@@ -60,7 +60,8 @@ export function validateMapDocOutput(raw: string): void {
       || /<\/?prose\b/.test(body)) {
       throw new Error('模型返回的章节正文格式不完整或无效，已保留原图文。');
     }
-    if (body.trim() && !['主题', '主线', 'Main thread'].includes(attributes.domain.trim()) && attributes.refs === undefined) {
+    // 没有节点的章节正文里不引用节点，自然不带 refs；引用了节点才必须列出。
+    if (/^>\s*\^/m.test(body) && !['主题', '主线', 'Main thread'].includes(attributes.domain.trim()) && attributes.refs === undefined) {
       throw new Error('模型返回的章节正文缺少判断引用 refs，已保留原图文。');
     }
     return '';

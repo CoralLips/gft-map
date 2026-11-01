@@ -49,6 +49,7 @@ for (const file of [
   'acp-inputs.json',
   'mcp-inputs.json',
   'sources-inputs.json',
+  'net-inputs.json',
 ])
   await rm(path.join(release, 'gft-map/scripts/dist', file), { force: true });
 // Source checkouts can use CRLF. Keep the distributed text consistent on all

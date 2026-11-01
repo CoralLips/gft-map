@@ -25,6 +25,7 @@
     "apps/gft-local/materialArchive.mjs",
     "apps/gft-local/materials.mjs",
     "apps/gft-local/mcp.mjs",
+    "apps/gft-local/netProxy.mjs",
     "apps/gft-local/memory.mjs",
     "apps/gft-local/notifications.mjs",
     "apps/gft-local/package-lock.json",

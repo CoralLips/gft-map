@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 export async function writeNotices({ output = path.join(root, 'THIRD_PARTY_NOTICES.txt') } = {}) {
   const inputs = (
     await Promise.all(
-      ['browser-inputs.json', 'acp-inputs.json', 'mcp-inputs.json', 'sources-inputs.json'].map(
+      ['browser-inputs.json', 'acp-inputs.json', 'mcp-inputs.json', 'sources-inputs.json', 'net-inputs.json'].map(
         file => readFile(path.join(root, 'apps/gft-local/dist', file), 'utf8').then(JSON.parse),
       ),
     )

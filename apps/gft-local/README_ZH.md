@@ -120,7 +120,7 @@ Claude Code 若尚未授权，可在“设置 → AI 处理”点击“授权登
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.17](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+当前正式版为 [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
 
 同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
 

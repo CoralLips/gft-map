@@ -88,7 +88,7 @@ function validateMapDocOutput(raw) {
     if (malformed || !attributes.domain?.trim() || /[[\]\r\n]/.test(attributes.domain) || /<\/?prose\b/.test(body)) {
       throw new Error("\u6A21\u578B\u8FD4\u56DE\u7684\u7AE0\u8282\u6B63\u6587\u683C\u5F0F\u4E0D\u5B8C\u6574\u6216\u65E0\u6548\uFF0C\u5DF2\u4FDD\u7559\u539F\u56FE\u6587\u3002");
     }
-    if (body.trim() && !["\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].includes(attributes.domain.trim()) && attributes.refs === void 0) {
+    if (/^>\s*\^/m.test(body) && !["\u4E3B\u9898", "\u4E3B\u7EBF", "Main thread"].includes(attributes.domain.trim()) && attributes.refs === void 0) {
       throw new Error("\u6A21\u578B\u8FD4\u56DE\u7684\u7AE0\u8282\u6B63\u6587\u7F3A\u5C11\u5224\u65AD\u5F15\u7528 refs\uFF0C\u5DF2\u4FDD\u7559\u539F\u56FE\u6587\u3002");
     }
     return "";

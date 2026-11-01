@@ -73,6 +73,7 @@ await writeFile(
 for (const [entry, name] of [
   ['mcp.mjs', 'mcp'],
   ['sourceReaders.mjs', 'sources'],
+  ['netProxy.mjs', 'net'],
 ]) {
   const bundle = await build({
     entryPoints: [path.join(root, entry)],
@@ -157,6 +158,7 @@ if (process.argv.includes('--skill')) {
     'serviceLaunch.mjs',
     'limits.mjs',
     'executor-config.mjs',
+    'executorLogin.mjs',
     'acpAdapters.mjs',
     'materials.mjs',
     'materialArchive.mjs',
@@ -182,6 +184,7 @@ if (process.argv.includes('--skill')) {
     'acp-inputs.json',
     'mcp-inputs.json',
     'sources-inputs.json',
+    'net-inputs.json',
   ]) {
     // Metadata is retained for source packaging, not needed by an installed Skill.
     await rm(path.join(target, 'scripts/dist', file), { force: true });
