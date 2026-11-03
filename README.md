@@ -14,10 +14,6 @@ Open **Postpone bank sync** to read the reasoning. You can edit a decision and p
 
 More examples · [Why cut the claim that all meetings are a waste?](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) · [Which parts of an interrupted upload need to be sent again?](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering)
 
-### A handoff for a game
-
-The Turnfeed Kingdoms author reviewed our AI-assisted handoff and clarified that players who choose the map-only view must agree before the council controls reappear. We haven't tested the handoff in the game or a fresh chat, or compared the map with plain Markdown containing the same information. [Original excerpt](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) · [Handoff and importable map](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea) · [Author's review](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)
-
 <a id="第一次使用"></a>
 <a id="开始使用"></a>
 

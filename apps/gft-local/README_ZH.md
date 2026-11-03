@@ -14,10 +14,6 @@
 
 其他示例 · [写文章时，为什么删去“会议都是浪费”？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=writing&view=doc) · [上传中断后，哪些分片需要重传？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=engineering)
 
-### 一份游戏交接稿
-
-Turnfeed Kingdoms 作者审阅了我们用 AI 协助整理的游戏交接稿，指出玩家如果选了只看王国地图，就得先征得同意才能切回议事界面。我们还没拿这份稿子实际续玩游戏或接入新聊天，也没验证导图是否比写有同样内容的普通 Markdown 更有帮助。[原始片段](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) · [交接稿和可导入的脉络](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea) · [原作者的审阅](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)
-
 <a id="第一次使用"></a>
 
 ## 开始使用
