@@ -19,7 +19,7 @@
     {
       "path": ".github/workflows/pages.yml",
       "source": "apps/gft-local/release/public-pages.yml",
-      "sha256": "473cc61992b916d92fa799be920f3b54fa4fbbd541fcc444295652e26d0c2250"
+      "sha256": "887ddb63995327cdb78ddd74a06ce129b15f3293bbdd0ec614138ec48307a2d2"
     },
     {
       "path": ".gitignore",
@@ -189,12 +189,12 @@
     {
       "path": "apps/gft-local/README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "8997d0bee0a9be030bf09c04db8663cb79b377b847235ff3cdb2abe53557a2f3"
+      "sha256": "07e6adb43af28bf46a762b48afaead86a744278036ba9926408bb968d2a7d214"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "a33a2c70e24e5a467951771b32362083e9c338c82b50b430194c9e799cad6fdb"
+      "sha256": "59ea8a51495f6a67bf22c4b58112d073f9d277423723b82366d364e5378bb2a3"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -219,7 +219,7 @@
     {
       "path": "apps/gft-local/release/public-pages.yml",
       "source": "apps/gft-local/release/public-pages.yml",
-      "sha256": "473cc61992b916d92fa799be920f3b54fa4fbbd541fcc444295652e26d0c2250"
+      "sha256": "887ddb63995327cdb78ddd74a06ce129b15f3293bbdd0ec614138ec48307a2d2"
     },
     {
       "path": "apps/gft-local/release/public.gitattributes",
@@ -239,7 +239,7 @@
     {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "4f919214473a3e2dcf243c659c95f47b1b2d130e4bec86c92791c2179b345c77"
+      "sha256": "1ac98b57051c2c26c0fdad6f99416d09a290ee3b57ee7cf3cead608d1822aac0"
     },
     {
       "path": "apps/gft-local/runner.mjs",
@@ -265,6 +265,16 @@
       "path": "apps/gft-local/serviceSupervisor.mjs",
       "source": "apps/gft-local/serviceSupervisor.mjs",
       "sha256": "ee1de41b07fd71332513ff1933931cd5410eea44e928e9e76b2c6fcfe4f78f08"
+    },
+    {
+      "path": "apps/gft-local/showcase/assets/bookkeeping-decision.en.jpg",
+      "source": "apps/gft-local/showcase/assets/bookkeeping-decision.en.jpg",
+      "sha256": "111b13ba0ae5ab93c554c82cba6b8454fd925a1270b1142f484f58661b34b62c"
+    },
+    {
+      "path": "apps/gft-local/showcase/assets/bookkeeping-decision.zh.jpg",
+      "source": "apps/gft-local/showcase/assets/bookkeeping-decision.zh.jpg",
+      "sha256": "d8bfb2f83fe144b64cfda8ca7f612d951c20bba07d1339bf0eddc05f0ec305fa"
     },
     {
       "path": "apps/gft-local/showcase/assets/engineering.en.png",
@@ -309,7 +319,7 @@
     {
       "path": "apps/gft-local/showcase/build.mjs",
       "source": "apps/gft-local/showcase/build.mjs",
-      "sha256": "3c2035831c632a8b12549579e6939700bb9e9a4d7bdb1b73f4388cf2587154d3"
+      "sha256": "02a3b1fd62a9a3b59742c38d0ba082ba9244b3723b946641e6cf4d46c5e0e182"
     },
     {
       "path": "apps/gft-local/showcase/demo.css",
@@ -324,27 +334,27 @@
     {
       "path": "apps/gft-local/showcase/demo.tsx",
       "source": "apps/gft-local/showcase/demo.tsx",
-      "sha256": "c36c752b00c2f4260c3397377ad19d304e5972385b989cfc25a655ffb5225891"
+      "sha256": "6b9e95137e4e4b766e8faee3e6fda971c0ecf1287a88c75e12f8b16c8e657894"
     },
     {
       "path": "apps/gft-local/showcase/examples-en.ts",
       "source": "apps/gft-local/showcase/examples-en.ts",
-      "sha256": "482b1e0d55187b4f7d8f670e6f8ab8a323c3c7269a2e9d416b03d0192519a117"
+      "sha256": "9948c5df8ed90b4f64d117b01ca2c724430df74affe3b80af9065060712fa545"
     },
     {
       "path": "apps/gft-local/showcase/examples.ts",
       "source": "apps/gft-local/showcase/examples.ts",
-      "sha256": "c8fbb1d404691e57d3e604ae3621cb5a40a8e63911415e53d741d3f40b209a29"
+      "sha256": "97829bfa4e1e55bb6f0de62291a22ad4a7d5f15891fa49ea52cde91f41e416a7"
     },
     {
       "path": "apps/gft-local/showcase/index.en.html",
       "source": "apps/gft-local/showcase/index.en.html",
-      "sha256": "6f3ee5b823fc8b0943d076c469cca0fd2e397d29492f24d2a1a1e927627d117c"
+      "sha256": "b6a2bac29b1343fcbfeeb43b63d3af86acbc10cd4058a53f90e5a2929ad173b2"
     },
     {
       "path": "apps/gft-local/showcase/index.html",
       "source": "apps/gft-local/showcase/index.html",
-      "sha256": "83797f65ebd18bde131b24582714f51b0545e95bbe92bff9568738ae5c6b47a3"
+      "sha256": "e1332b0e274bb069a6909893c020fb48bc31aa62aa82f251e9911bbf6b6ff3dd"
     },
     {
       "path": "apps/gft-local/showcase/locale.ts",
@@ -534,12 +544,12 @@
     {
       "path": "README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "8997d0bee0a9be030bf09c04db8663cb79b377b847235ff3cdb2abe53557a2f3"
+      "sha256": "07e6adb43af28bf46a762b48afaead86a744278036ba9926408bb968d2a7d214"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "a33a2c70e24e5a467951771b32362083e9c338c82b50b430194c9e799cad6fdb"
+      "sha256": "59ea8a51495f6a67bf22c4b58112d073f9d277423723b82366d364e5378bb2a3"
     },
     {
       "path": "skills/gft-map/LICENSE",

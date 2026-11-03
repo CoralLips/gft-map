@@ -162,7 +162,7 @@ function App() {
         <aside className="demo-guide">
           <span className="demo-caption">{tx('可编辑的产品示例')}</span>
           <h1>{activeExample.headline}</h1>
-          <p className="demo-situation">{activeExample.situation}</p>
+          <p className="demo-situation">{activeExample.situation ?? topicSummary(ledger)}</p>
           <div className="demo-steps" aria-label={tx('体验步骤')}>
             <button aria-pressed={view === 'map' && !panel} onClick={() => switchView('map')}>
               <b>1</b>

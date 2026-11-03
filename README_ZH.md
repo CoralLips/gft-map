@@ -2,45 +2,27 @@
 
 # GFT-Map
 
-## 和 AI 想清楚的事，别再找不回
+隔几天回到一个项目，往往得翻聊天记录，才知道上次定了什么、为什么这么定、下一步要做什么。GFT-Map 把同一主题下的 AI 讨论整理成一张导图和一份说明。你可以纠正其中的判断，再让下一场聊天读取这份脉络，接着做。
 
-**把和 AI 聊出来的判断，变成你能看、能改、能带走的工作稿。**
+### [为什么首版暂缓银行同步？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
 
-讨论越长，越难找回当时定了什么、为什么这样定、还有什么没想清楚。GFT-Map 将这些内容放进一份可编辑的文稿和关系图：你可以查看理由、纠正判断，再接着想。
+在这个虚构的记账项目里，接银行接口要花开发时间，也要用户授权读取流水。团队想先看看自由职业者能否自己记完一笔，过几天还愿不愿意回来查账。
 
-工作稿保存在本机，可以导出交给别人，也可以让下一场 Agent 对话读取。
+[![记账工具首版的导图，显示手工记账、暂缓银行同步和试用安排](/apps/gft-local/showcase/assets/bookkeeping-decision.zh.jpg)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
 
-[体验示例](https://corallips.github.io/gft-map/) · [开始使用](#开始使用) · [日常使用](#日常使用)
+打开示例，点「银行自动同步暂缓」看理由。你可以改一条判断，再预览下一场聊天能读到什么。示例用的是预置材料，无需安装，也不调用模型。
 
-[![GFT-Map：查看地图、编辑文稿、预览上下文、导出带走](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/walkthrough.gif)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
+其他示例 · [写文章时，为什么删去“会议都是浪费”？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=writing&view=doc) · [上传中断后，哪些分片需要重传？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=engineering)
 
-### 看看它怎么用
+### 一份游戏交接稿
 
-| 产品决策 | 文章写作 | 技术方案 |
-|---|---|---|
-| [![产品决策的思维脉络](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.png)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product) | [![文章写作的可编辑文稿](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/writing.png)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=writing&view=doc) | [![技术方案的约束与验证计划](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/engineering.png)](https://corallips.github.io/gft-map/demo.html?lang=zh&case=engineering) |
-| 保留产品取舍与依据。 | 整理观点，明确作者立场。 | 保留技术约束与待解决的问题。 |
-| [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product) | [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=writing&view=doc) | [打开案例 →](https://corallips.github.io/gft-map/demo.html?lang=zh&case=engineering) |
-
-示例使用预置材料，可直接编辑、导出；无需安装，不调用模型。AI 更新和整理需安装本地版。
-
-### 一次真实材料的交接审阅
-
-在[这场公开讨论](https://github.com/openai/codex/discussions/55901)中，Turnfeed Kingdoms 作者想让新会话接着玩游戏：玩家在聊天里下令，原有王国地图保持可见。我们用 AI 协助手工把他[公开的一小段材料](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382)整理成[文稿和可导入的 GFT 档案](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea)。
-
-作者[读后补充](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)：要求只看地图的会话，不能未经玩家同意就退回可见的议事控制界面。文稿与 GFT 节点已补上这条，并把“命令执行成功”和“保持原来的游戏体验”分开判断。
-
-**仍待验证：** 这份交接尚未用于实际游戏或新会话接续；GFT 图是否比包含同样信息的 Markdown 更有帮助，仍未验证。手动修改 Doc 不会自动更新图中节点，反之亦然。[初版 GFT 决策图](https://raw.githubusercontent.com/CoralLips/gft-map/b8021c47d3daa92a4da31d37771d911e23a9e27e/apps/gft-local/showcase/assets/walkthrough-20261022/turnfeed-map.png)不是游戏中的王国地图。
-
-如果你也要交接一段讨论，可以在 [Issues](https://github.com/CoralLips/gft-map/issues) 提供一小段不敏感材料和下一步要做的事，先看整理后的内容，再决定是否安装。
+Turnfeed Kingdoms 作者审阅了我们用 AI 协助整理的游戏交接稿，指出玩家如果选了只看王国地图，就得先征得同意才能切回议事界面。我们还没拿这份稿子实际续玩游戏或接入新聊天，也没验证导图是否比写有同样内容的普通 Markdown 更有帮助。[原始片段](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) · [交接稿和可导入的脉络](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea) · [原作者的审阅](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)
 
 <a id="第一次使用"></a>
 
 ## 开始使用
 
-### 1. 安装 Skill，打开面板
-
-准备 **Node.js 22.20+**，并安装、登录所用 Agent 的 CLI。选择对应的安装命令：
+准备 **Node.js 22.20+**，安装并登录你使用的 Codex 或 Claude Code 命令行工具，然后运行对应的安装命令。
 
 **Codex**
 
@@ -54,80 +36,37 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-Claude Code 若尚未授权，可在“设置 → AI 处理”点击“授权登录”，也可在终端运行 `claude auth login`。首次使用需要联网准备连接组件，页面与已有内容可先打开。
+安装后重新打开聊天，说「打开 gft-map」。首次使用需要联网准备连接组件。按 Agent 返回的地址打开本地面板，通常是 `http://127.0.0.1:4317/`。[安装与授权说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)
 
-安装后重新打开 Agent 对话，发送：
+<a id="日常使用"></a>
 
-> 打开 gft-map。
+### 整理自己的讨论
 
-面板通常在 `http://127.0.0.1:4317/`，以 Agent 返回的地址为准。
+1. 在面板新建脉络，点 **更新**，选择要收录的聊天。要从之前聊过的内容开始，就选 **包含已有内容**。以后点 **更新** 会接着收录新增消息。手头已有文本或 Markdown 文件，也可以点 **导入**。
+2. 在 **Map** 看判断之间的关系，点一个判断可以改标题和说明。在 **Doc** 读写完整的文字说明。要收拢重复内容，可以选中相关判断再点 **整理**。
+3. 在另一场聊天里说出脉络名称和下一项任务。例如，如果你的脉络叫「记账工具首版」，可以说「使用 gft-map，连接并读取『记账工具首版』，帮我准备一次手工记账的用户试用」。Agent 会先看已连接主题的简短索引，再按任务读取当前内容。面板里的修改在下次读取时生效。
 
-在 **设置 → AI 处理** 选择 Codex 或 Claude Code。页面的 AI 操作使用所选 Agent 的账号额度，默认用厂商推荐的模型，也可以在这里换别的模型；思考强度始终用所选模型的默认值。收录的聊天来自哪家都可以，比如用 Claude Code 处理 Codex 的聊天。[Agent 与额度说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)
+想把结果交给别人，可以复制 Doc，也可以下载完整脉络，在另一台电脑导入。[编辑与导出说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
-### 2. 连接讨论，生成脉络
+### 数据和 AI 额度
 
-1. 在面板新建脉络，点击 **更新**。
-2. 选择要收录的 Codex 或 Claude Code 聊天，用 **包含已有内容** 导入该聊天的历史消息。
-3. 在 **Doc** 阅读和修改，在 **Map** 查看判断与关系。
+脉络保存在本机，本地使用无需 GFT 账号。在 **设置 → AI 处理** 选择 Codex 或 Claude Code。点击 **更新** 或 **整理** 时，任务所需材料会发送给所选 Agent 的模型服务，占用该账号的额度。GFT-Map 只收录你选择的聊天和材料。
 
-以后直接点击 **更新**，会依次读取这份脉络已连接的全部会话，只收录新增消息。长聊天和超长单条消息会分批处理；可随时停止，再次更新时接着已完成的批次继续。
+如果登录 GFT 账号，已有脉络也会自动同步到 GFT 云端。已同步脉络的删除会传到另一端，网络失败时保留本机修改并重试。[账号与同步说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
 
-**已有文件？** 点击右上角 **导入**，放入 UTF-8 文本、Markdown 或聊天记录。材料会按主题分批整理，每批结果出现在 Doc／Map；可随时 **暂停／继续**。[大文件说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
-
-### 3. 接着想，也让 Agent 用上这份工作稿
-
-在当前或新的 Agent 对话中，告诉它要读取哪份脉络、接下来做什么。例如：
-
-> 使用 gft-map，连接并读取「产品发布计划」，根据当前进展帮我安排下周的工作。
-
-把名称和任务换成自己的。Agent 先查看所连主题的简短索引，再按当前任务读取正文。面板修改不会自动唤醒聊天，需要时让 Agent 重新读取。
-
-## 日常使用
-
-每份脉络包含 **Doc 文稿和 Map 关系图**。主题决定 Doc／Map 收录什么。
-
-| 想做什么 | 操作 |
-|---|---|
-| 收录聊天里的新进展 | **更新**：接收新消息，更新 Doc／Map。 |
-| 理顺写下的想法、收拢重复内容 | **整理**：按主题整理文稿和节点，已有主题原文不变。 |
-
-**整理的范围**：选中一个节点时，只改这个节点的标题和说明，不改 Doc；选中多个时，整理所选判断及相关正文；什么都不选，就整理整份脉络。再点一次可以停止。
-
-**直接修改**：主题和文稿都能直接编辑，失焦或按 Ctrl+S 保存。在 Map 中点节点可以改标题和说明，点连线可以改这条关系的说明。[编辑与选择的细节](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
-
-**任务与撤回**：切换脉络、刷新或关闭网页，不会停掉已经开始的 AI 任务；回来后能看到进度，也能停止；处理中，按钮上会显示 AI 正在写的修改，比如合并了哪几条、正在改写哪一章。**Ctrl+Z** 按顺序撤回，刷新后依然有效；**Ctrl+Y** 重做刚撤回的修改；设置里的 **操作历史** 可以查看并撤回最近 30 次修改。撤回聊天更新时，原始材料保留，下次更新会重新读到那批消息。
-
-**带走内容**
-
-- **复制**：复制当前 Doc，交给别人或另一个 Agent。
-- **下载**：保存完整脉络文件，在另一份 GFT-Map 中通过右上角「导入」继续使用。含文件材料时，暂停整理后下载 `.gftpack`，原文、修改和处理进度一起带走。
-
-本地使用无需 GFT 账号，跨电脑搬运用下载／导入即可。云同步暂不作为推荐用法；已登录账号的同步行为见[详细说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)。
-
-**数据会去哪？** 脉络保存在本机。点击 AI 更新或整理时，任务所需材料会交给你选的 Agent 的模型服务，使用该服务的账号额度。登录 GFT 账号后，脉络会同步到 GFT 云端。GFT-Map 不会扫描或上传你的全部项目文件和全部聊天。
-
-## 打开、关闭与更新
-
-让 Agent **打开或关闭 GFT-Map** 即可。关闭网页不会关闭后台服务；电脑重启或页面打不开时，再让 Agent 打开 GFT-Map。[运行与排障说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#打开本地页面)
-
+<a id="打开关闭与更新"></a>
 <a id="更新到新版"></a>
 
-**更新到新版**，在 Agent 中说：
+### 更新安装
 
-> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和更新后的版本一致。
+先暂停文件整理，完成或取消其他正在运行的任务，然后让 Agent 执行更新。
 
-更新前暂停文件整理，完成或取消其他运行中的任务；已有数据和处理进度会保留。[更新与恢复说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+> 使用 gft-map，更新到最新正式版，保留我的脉络、聊天连接和设置。重启面板，确认运行的版本和安装的版本一致。
+
+关闭网页后本地服务仍会运行，可以让 Agent 打开或关闭 GFT-Map。[更新与恢复](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade) · [运行与排障](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#打开本地页面)
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest)。现有功能已收尾，后续以问题修复和维护为主。
+当前正式版为 [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest)，后续以修复和维护为主。欢迎分享你实际接续的任务，以及哪里仍需要重新解释。反馈问题时请去掉私人聊天和凭证。[提交反馈](https://github.com/CoralLips/gft-map/issues)
 
-同系列工具：[GFT-Merge](https://github.com/CoralLips/gft-merge)，把 Claude Code 和 Codex 的多个会话合在一起，开一个带着这些上下文的新会话。
-
-欢迎带着自己的写作、决策或技术讨论试用，并在 [Issues](https://github.com/CoralLips/gft-map/issues) 分享使用场景、遇到的问题或做出的工作稿。对你有用的话，也欢迎点一个 Star。
-
----
-
-[安装与详细说明](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [开发与贡献](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [反馈问题](https://github.com/CoralLips/gft-map/issues) · [MIT License](https://github.com/CoralLips/gft-map/blob/main/LICENSE)
-
-遇到问题时，附上操作步骤和报错即可；请去掉私人聊天和凭证。
+[详细使用指南](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [开发与贡献](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT 许可证](https://github.com/CoralLips/gft-map/blob/main/LICENSE)

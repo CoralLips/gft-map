@@ -45,6 +45,8 @@
     "apps/gft-local/serviceLifecycle.mjs",
     "apps/gft-local/serviceSupervisor.mjs",
     "apps/gft-local/serviceLaunch.mjs",
+    "apps/gft-local/showcase/assets/bookkeeping-decision.en.jpg",
+    "apps/gft-local/showcase/assets/bookkeeping-decision.zh.jpg",
     "apps/gft-local/showcase/assets/engineering.en.png",
     "apps/gft-local/showcase/assets/engineering.png",
     "apps/gft-local/showcase/assets/mark.svg",

@@ -2,46 +2,28 @@
 
 # GFT-Map
 
-## Don't lose what you worked out with AI.
+Come back to a project a few days later and you may have to reread an old chat to remember what you decided, why, and what comes next. GFT-Map organizes AI discussions about one topic into a mind map and a written explanation. You can correct a decision, then ask an agent in a fresh chat to read the updated document and pick up where you left off.
 
-**Turn the ideas and decisions from your AI conversations into a working document you can read, edit, and take with you.**
+### [Why postpone bank sync in the first release?](https://corallips.github.io/gft-map/demo.html?lang=en&case=product)
 
-As a conversation grows, it gets harder to find what you decided, why, and what remains unresolved. GFT-Map puts those ideas into an editable document and relationship map, so you can review the reasoning, correct a decision, and keep thinking.
+In this fictional bookkeeping project, bank sync takes engineering time and requires access to people's transactions. The team wants to see whether freelancers can log one transaction by hand and come back a few days later to check their totals.
 
-Your work is saved locally. Export it to share with someone else, or let an agent read it in your next conversation.
+[![A bookkeeping mind map showing manual entry, postponed bank sync, and the planned user trial](/apps/gft-local/showcase/assets/bookkeeping-decision.en.jpg)](https://corallips.github.io/gft-map/demo.html?lang=en&case=product)
 
-[Explore examples](https://corallips.github.io/gft-map/index.en.html) · [Get started](#get-started) · [Everyday use](#everyday-use)
+Open **Postpone bank sync** to read the reasoning. You can edit a decision and preview what a new chat could read. The demo uses prewritten material and runs in your browser without installation or model calls.
 
-[![GFT-Map: explore a map, edit its document, preview context, and export it](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=product)
+More examples · [Why cut the claim that all meetings are a waste?](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) · [Which parts of an interrupted upload need to be sent again?](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering)
 
-### See it in use
+### A handoff for a game
 
-| Product decisions | Writing | Technical planning |
-|---|---|---|
-| [![A map of product decisions](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/product.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=product) | [![An editable writing document](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/writing.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) | [![Technical constraints and a validation plan](https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/engineering.en.png)](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering) |
-| Keep the tradeoffs and their reasons. | Organize ideas and clarify your position. | Keep track of constraints and open questions. |
-| [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=product) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=writing&view=doc) | [Open example →](https://corallips.github.io/gft-map/demo.html?lang=en&case=engineering) |
-
-The examples use prewritten material, with English and Chinese versions. Edit and export them without installing anything or calling a model. AI-powered Update and Tidy require the local app.
-
-### A real handoff review
-
-In [this public discussion](https://github.com/openai/codex/discussions/55901), the Turnfeed Kingdoms author wanted a fresh chat to continue a game where players give orders in chat while the existing kingdom map stays visible. With AI assistance, we manually organized his [public excerpt](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) into a [readable document and importable GFT archive](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea).
-
-He [reviewed the result](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095) and added a boundary: a map-only session must not fall back to visible council controls without the player's agreement. The document and GFT nodes now include that correction and keep "order executed" separate from "chosen experience preserved."
-
-**Still untested:** using this handoff in the game or a fresh chat, and whether the GFT diagram helps more than Markdown containing the same information. Hand-editing Doc does not automatically update the map nodes, or vice versa. [Initial GFT decision diagram](https://raw.githubusercontent.com/CoralLips/gft-map/b8021c47d3daa92a4da31d37771d911e23a9e27e/apps/gft-local/showcase/assets/walkthrough-20261022/turnfeed-map.png) — this is not the game's kingdom map.
-
-Have a similar handoff? Share a short, non-sensitive excerpt and your next step in [Issues](https://github.com/CoralLips/gft-map/issues). We can start with a readable version before installation.
+The Turnfeed Kingdoms author reviewed our AI-assisted handoff and clarified that players who choose the map-only view must agree before the council controls reappear. We haven't tested the handoff in the game or a fresh chat, or compared the map with plain Markdown containing the same information. [Original excerpt](https://github.com/openai/codex/discussions/55901#discussioncomment-19105382) · [Handoff and importable map](https://gist.github.com/CoralLips/97554bc21e9edfb35944cfd8acdcc0ea) · [Author's review](https://github.com/openai/codex/discussions/55901#discussioncomment-19129095)
 
 <a id="第一次使用"></a>
 <a id="开始使用"></a>
 
 ## Get started
 
-### 1. Install the skill and open the panel
-
-You'll need **Node.js 22.20+** and your agent's CLI installed and signed in. Choose your agent:
+You'll need **Node.js 22.20+** and the Codex or Claude Code CLI installed and signed in. Run the command for your agent.
 
 **Codex**
 
@@ -55,82 +37,38 @@ npx skills add CoralLips/gft-map --skill gft-map --agent codex --global
 npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 ```
 
-If Claude Code is not authorized, choose **Sign in** under **Settings → AI processing**, or run `claude auth login` in a terminal. First use needs internet access to prepare connection components; the page and saved content can open while preparation runs.
-
-After installing, reopen your agent conversation and ask:
-
-> Open gft-map for me.
-
-The panel usually runs at `http://127.0.0.1:4317/`; use the address your agent returns. To change the panel language, open **Settings → Language**.
-
-Choose Codex or Claude Code in **Settings → AI processing**. Page AI actions use that agent's account quota. The provider-recommended model is the default, and you can pick another one there; effort always stays the chosen model's default. The conversations you bring in can come from either agent; for example, Claude Code can process a Codex conversation. [Agent and usage details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)
-
-### 2. Connect a conversation and create a map
-
-1. Create a new map in the panel and click **Update**.
-2. Select a Codex or Claude Code conversation. Choose **Include existing content** to import its past messages.
-3. Read and edit the document in **Doc**; explore decisions and relationships in **Map**.
-
-Later, click **Update** to read all conversations connected to this map in sequence, bringing in only new messages. Long conversations, including oversized individual messages, are processed in batches. Stop at any time; the next update resumes after the completed batches.
-
-**Already have a file?** Click **Import** at the top right to add UTF-8 text, Markdown, or chat records. Materials are organized by topic in batches, with each result appearing in Doc/Map. **Pause or continue** at any time. [Large-file details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#materials)
-
-### 3. Keep thinking, with your agent alongside
-
-In your current or a new agent conversation, say which map to read and what you want to do next. For example:
-
-> Use gft-map to connect to and read “Product launch plan.” Help me plan next week's work based on the current progress.
-
-Replace the name and task with your own. The agent first checks a brief index of connected maps, then decides which content to read for the task. Panel edits don't automatically wake the chat; ask the agent to read again when needed.
+Reopen your chat and ask it to “Open gft-map.” The first launch needs internet access to prepare the connection. Open the local panel at the address the agent returns, usually `http://127.0.0.1:4317/`. [Installation and sign-in guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#installation)
 
 <a id="日常使用"></a>
+<a id="everyday-use"></a>
 
-## Everyday use
+### Use it with your own discussions
 
-Each map includes **Doc for writing and Map for relationships**. The topic decides what belongs in them.
+1. Create a map in the panel, click **Update**, and select a chat. Choose **Include existing content** to bring in earlier messages. Future updates pick up new messages. You can also **Import** a text or Markdown file.
+2. Open **Map** to see how the decisions relate. Click one to edit its title or explanation. Use **Doc** to read or edit the longer account. To combine repeated ideas, select the relevant decisions and click **Tidy**.
+3. In another chat, name the map and the task. If you called yours “Bookkeeping v1,” for example, ask “Use gft-map to connect to and read ‘Bookkeeping v1.’ Help me plan a test of manual entry with a freelancer.” The agent checks an index of connected maps and reads the current content as needed. Edits in the panel are available the next time it reads.
 
-| What you want to do | Action |
-|---|---|
-| Bring in new progress from a conversation | **Update**: receive new messages and update Doc / Map. |
-| Clarify your notes and combine repeated ideas | **Tidy**: organize the document and nodes within the topic; keep the existing topic text unchanged. |
+To share your work, copy the Doc or download the complete map and import it on another computer. [Editing and export guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
 
-**What Tidy changes:** with one node selected, only that node's title and explanation change, not Doc. With several selected, it revises those ideas and their related text. With nothing selected, it tidies the whole map. Click again to stop.
+### Data and AI usage
 
-**Edit directly:** the topic and document are editable; click outside the editor or press Ctrl+S to save. In Map, click a node to edit its title and explanation, or click a line to edit how one idea leads to the next. [Editing and selection details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#editing)
+Maps stay on your computer by default. You can use the local app without a GFT account. In **Settings → AI processing**, choose Codex or Claude Code. **Update** and **Tidy** send the material each task needs to that agent's model service and use its account quota. GFT-Map only imports chats and materials you select.
 
-**Tasks and undo:** switching maps, refreshing, or closing the page does not stop an AI task that has started; come back to see its progress or stop it. While it runs, the button shows the edit the AI is writing, such as which items it merges or which chapter it rewrites. **Ctrl+Z** undoes changes in order, even after a refresh; **Ctrl+Y** redoes what you just undid; and **Operation history** in Settings shows and undoes the latest 30 changes. Undoing a chat update keeps the original material, and the next update reads those messages again.
+If you sign in to a GFT account, your maps, including existing ones, sync to GFT's cloud. Deleting a synced map also deletes it on the other side. Local changes are kept and retried if the network fails. [Account and sync details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account)
 
-**Take your work with you**
-
-- **Copy**: copy the current Doc for someone else or another agent.
-- **Download**: save the complete map file, then use **Import** in another GFT-Map installation to keep working. For a map with file materials, pause processing and download its `.gftpack` to carry the originals, edits, and progress.
-
-No GFT account is needed for local use; use Download and Import to move between computers. Cloud sync is not currently a recommended workflow; existing account users can check its behavior in the [detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#account).
-
-**Where does your data go?** Maps stay on your computer. AI-powered Update and Tidy send the materials needed for the task to your selected agent's model service, using its account quota. If you sign in to GFT, your maps sync to GFT's cloud. GFT-Map does not scan or upload all your project files or conversations.
-
-## Open, close, and update
-
-Ask your agent to **open or close GFT-Map**. Closing the page leaves the service running. After restarting your computer, or if the page is unavailable, ask your agent to open GFT-Map again. [Service and troubleshooting details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#打开本地页面)
-
+<a id="open-close-and-update"></a>
 <a id="update-your-installation"></a>
 
-**To update**, ask your agent:
+### Update the app
+
+Pause file processing and finish or cancel other running tasks, then ask your agent to update.
 
 > Use gft-map to update to the latest stable release. Keep my maps, chat connections, and settings. Restart the panel and verify that the running version matches the installed version.
 
-Pause file processing and finish or cancel other running tasks before updating. Existing data and progress are preserved. [Update and recovery details (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade)
+Closing the page leaves the local service running. Ask your agent to open or close GFT-Map. [Update and recovery (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#upgrade) · [Running the app and troubleshooting (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md#打开本地页面)
 
 ## Project status and feedback
 
-The current stable release is [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest). The current feature set is complete; work now focuses on fixes and maintenance.
+The current stable release is [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest). Work now focuses on fixes and maintenance. We'd like to hear which task you continued and what you still had to explain again. Remove private conversations and credentials before posting. [Share feedback](https://github.com/CoralLips/gft-map/issues)
 
-Sibling tool: [GFT-Merge](https://github.com/CoralLips/gft-merge) combines several Claude Code and Codex sessions and starts a new session that carries their context.
-
-Try it with your own writing, decisions, or technical discussions. Share your use case, problems, or a document you made in [Issues](https://github.com/CoralLips/gft-map/issues). If it helps you, a Star is welcome too.
-
----
-
-[Detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [Contributing (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [Report an issue](https://github.com/CoralLips/gft-map/issues) · [MIT License](https://github.com/CoralLips/gft-map/blob/main/LICENSE)
-
-If something goes wrong, include the steps you took and any error message. Remove private conversations and credentials before sharing.
+[Detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [Contributing (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT License](https://github.com/CoralLips/gft-map/blob/main/LICENSE)

@@ -4,27 +4,25 @@ import type { Example } from './examples';
 export const englishExamples: readonly Example[] = [
   {
     id: 'product',
-    name: 'Product launch: get the first person using it',
+    name: 'First release of a bookkeeping app',
     category: 'Product decisions',
-    headline: 'Continue the discussion without reopening every decision.',
-    situation:
-      'Positioning yesterday, features today, a release next week. Keep the decisions, reasons, and open questions together.',
+    headline: 'Why launch a bookkeeping app without bank sync?',
     scope:
-      'Track the first users, core workflow, and release tradeoffs for a personal bookkeeping app. Exclude branding and long-term fundraising.',
+      'Decide what to include in the first release of a bookkeeping app for freelancers and how to test it.',
     summary:
-      'Start with freelancers who struggle to keep recording expenses. Complete the flow from manual entry to a monthly overview; postpone bank sync. Next, let three target users record a transaction independently and observe where they get stuck.',
+      'Bank sync can wait. Connecting to banks takes work and requires permission to read transactions. First, see whether freelancers can log a transaction by hand without help and come back a few days later to check their monthly totals.',
     sections: [
       [
         'Who it serves',
-        'The recurring concern in this fictional discussion is not knowing where the money went at month end. Focus on freelancers with irregular income and scattered expenses.',
+        'The freelancers in this example have irregular income and expenses spread across accounts. At the end of the month, they struggle to remember where the money went.',
       ],
       [
         'First release',
-        'Check whether people keep recording before adding automation. Help someone enter and understand one transaction before building every bookkeeping feature.',
+        'The first release includes manual entry and a monthly overview. If people keep recording transactions, consider bank sync to save them time.',
       ],
       [
         'Next validation',
-        'A smooth demonstration does not prove continued use. Ask users to record a real transaction independently and return a few days later; note where they still need help.',
+        'Ask freelancers to log a real transaction. Note where they need help, then check whether they come back a few days later to review it.',
       ],
     ],
     nodes: [
@@ -41,16 +39,16 @@ export const englishExamples: readonly Example[] = [
         'Enter an amount, choose a category, save, and immediately see the change in monthly totals.',
       ],
       [
-        '⏸',
+        '◆',
         'First release',
         'Postpone bank sync',
-        'Integration and permissions would expand the first release. Test whether the manual workflow has lasting value first.',
+        'Connecting to banks takes work and requires users to grant access to their transactions. First, see whether freelancers can log one by hand without help and come back a few days later to check it.',
       ],
       [
         '◇',
         'Next validation',
-        'Let three users try it independently',
-        'Do not operate it for them. Record difficulties during entry and review.',
+        'Watch the first unaided entry',
+        'Ask a freelancer to log a real transaction and note where they need help.',
       ],
       [
         '？',
@@ -73,9 +71,9 @@ export const englishExamples: readonly Example[] = [
       [4, 5],
     ],
     editTip:
-      'In Doc, replace “three target users” with your own plan. Open “Continue in another chat” and check that the reading preview includes your edit.',
+      'Edit the trial plan under “Next validation” in Doc. Open “Continue in another chat” to read the updated document.',
     nextPrompt:
-      'read “Product launch: get the first person using it” and help me prepare a user trial within the current release scope. Do not bring bank sync back into the first release.',
+      'read “First release of a bookkeeping app” and help me plan a trial with a freelancer. What should I watch during their first entry, and what should I check a few days later?',
   },
   {
     id: 'writing',
