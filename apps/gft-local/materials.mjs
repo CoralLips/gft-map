@@ -51,23 +51,6 @@ export async function list(topicId) {
     }
   return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-export async function evidence(topicId, nodeIds = [], limit = 12000) {
-  let text = '';
-  for (const job of await list(topicId)) {
-    if (job.kind !== 'text') continue;
-    const names = (await readdir(directory(job.id)))
-      .filter(n => /^part-\d+\.json$/.test(n))
-      .sort((a, b) => Number(b.slice(5, -5)) - Number(a.slice(5, -5)));
-    for (const name of names) {
-      const item = JSON.parse(await readFile(path.join(directory(job.id), name), 'utf8'));
-      if (!item.outputs?.some(id => nodeIds.includes(id))) continue;
-      const source = await page(job.id, item.start);
-      text += `\n\n[${job.name} · ${source.start}–${source.end}]\n${source.text.slice(0, limit - text.length)}`;
-      if (text.length >= limit) return text.slice(0, limit);
-    }
-  }
-  return text;
-}
 export async function create({ topicId, name, size, kind = 'text' }) {
   if (typeof name !== 'string' || !name.trim() || name.length > 240 || /[\x00-\x1f]/.test(name))
     throw store.fail('文件名无效');
@@ -198,17 +181,27 @@ export async function finish(id) {
     return next;
   });
 }
+/** Removes the original and its checkpoints; what reached the map stays there. */
+export async function remove(id) {
+  const root = path.resolve(store.homeDir(), 'materials'),
+    target = path.resolve(directory(id));
+  if (path.dirname(target) !== root) throw store.fail('材料目录无效');
+  await rm(target, { recursive: true, force: true });
+  await unlink(metaFile(id)).catch(error => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+  return { removed: true };
+}
 export async function discard(id) {
   return lock(id, async () => {
-    const job = await get(id);
-    if (job.state !== 'uploading')
-      throw store.fail('只能取消未完成的文件导入；已保存的材料请使用暂停', 409);
-    const root = path.resolve(store.homeDir(), 'materials'),
-      target = path.resolve(directory(id));
-    if (path.dirname(target) !== root) throw store.fail('材料目录无效');
-    await rm(target, { recursive: true, force: true });
-    await unlink(metaFile(id));
-    return { removed: true };
+    try {
+      await get(id);
+    } catch (error) {
+      // Finished while the cancel was waiting: nothing is left to remove.
+      if (error.status === 404) return { removed: true };
+      throw error;
+    }
+    return remove(id);
   });
 }
 async function slice(job, start) {
@@ -246,7 +239,7 @@ export async function editPage(id, start, end, text, etag) {
   if (typeof text !== 'string' || text.length > PAGE_BYTES * 2) throw store.fail('请分段编辑材料');
   return store.withRecordLock('materials', id, async () => {
     const job = await get(id);
-    if (!['paused', 'completed', 'failed'].includes(job.state))
+    if (!['paused', 'failed'].includes(job.state))
       throw store.fail('请先暂停整理，再编辑原文', 409);
     const current = await page(id, start);
     if (current.end !== end || current.etag !== etag)
@@ -292,9 +285,12 @@ export function createWorker({ run }) {
           pid = Number(await readFile(filename, 'utf8').catch(() => 0));
         if (pid > 0 && exited(pid)) await unlink(filename).catch(() => {});
       }
-    for (const job of await list())
+    for (const job of await list()) {
       if (job.state === 'running' && job.pid && exited(job.pid))
         await save({ ...job, state: 'queued', pid: null });
+      // An import is one update: once finished, its original is not kept.
+      if (job.kind === 'text' && job.state === 'completed') await lock(job.id, () => remove(job.id));
+    }
     // A hard exit may occur inside the atomic topic commit, before its short
     // lock is removed. Recover only locks belonging to dead owners of our topics.
     for (const job of await list())
@@ -303,6 +299,11 @@ export function createWorker({ run }) {
         const pid = Number(await readFile(filename, 'utf8').catch(() => 0));
         if (pid > 0 && exited(pid)) await unlink(filename).catch(() => {});
       }
+  }
+  /** Stops an unfinished import and drops what was not processed yet. */
+  async function cancel(id) {
+    if (active?.id === id) active.controller.abort();
+    return discard(id);
   }
   async function control(id, action) {
     if (!['pause', 'resume'].includes(action)) throw store.fail('不支持的材料操作');
@@ -316,7 +317,6 @@ export function createWorker({ run }) {
         await save(next);
         return next;
       }
-      if (job.state === 'completed' && !job.pendingEdits?.length) return job;
       if (action === 'resume' && job.state === 'running') return job;
       const next = {
         ...job,
@@ -413,13 +413,14 @@ export function createWorker({ run }) {
       });
       const pendingEdits = correction ? job.pendingEdits.slice(1) : job.pendingEdits || [];
       const processed = correction ? job.processed : part.end;
+      if (processed === job.size && !pendingEdits.length) return remove(job.id);
       await save({
         ...job,
         scope: job.scope || result.scope || '',
         processed,
         batches: job.batches + (correction ? 0 : 1),
         pendingEdits,
-        state: processed === job.size && !pendingEdits.length ? 'completed' : 'queued',
+        state: 'queued',
         pid: null,
         error: null,
       });
@@ -462,10 +463,8 @@ export function createWorker({ run }) {
     try {
       const topic = await store.getTopic(job.topicId);
       if (topic.archived) throw store.fail('脉络已删除，材料保留');
-      if (job.scope && topic.scope !== job.scope)
-        throw store.fail('主题范围已改变，请恢复原主题再继续；已完成内容保留');
       if (job.processed >= job.size && !job.pendingEdits?.length) {
-        await save({ ...job, state: 'completed', pid: null });
+        await lock(job.id, () => remove(job.id));
         return;
       }
       const correction = job.pendingEdits?.length > 0;
@@ -486,8 +485,6 @@ export function createWorker({ run }) {
         check,
       );
       const base = await store.getTopic(job.topicId);
-      if (base.scope !== topic.scope)
-        throw store.fail('主题范围已改变，请恢复原主题再继续；已完成内容保留');
       let output = '';
       if (saved.summary || correction) {
         const input = pageInput(job, part, saved, correction, previousSummary);
@@ -512,6 +509,7 @@ export function createWorker({ run }) {
   return {
     recover,
     control,
+    cancel,
     snapshot: () => (active ? { id: active.id } : null),
     tick() {
       if (closed || running) return running;

@@ -65,6 +65,6 @@ Closing the page leaves the local service running. Ask your agent to open or clo
 
 ## Project status and feedback
 
-The current stable release is [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest). Work now focuses on fixes and maintenance. We'd like to hear which task you continued and what you still had to explain again. Remove private conversations and credentials before posting. [Share feedback](https://github.com/CoralLips/gft-map/issues)
+The current stable release is [v0.3.19](https://github.com/CoralLips/gft-map/releases/latest). Work now focuses on fixes and maintenance. We'd like to hear which task you continued and what you still had to explain again. Remove private conversations and credentials before posting. [Share feedback](https://github.com/CoralLips/gft-map/issues)
 
 [Detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [Contributing (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT License](https://github.com/CoralLips/gft-map/blob/main/LICENSE)

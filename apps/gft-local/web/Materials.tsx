@@ -38,7 +38,6 @@ const labels: Record<string, string> = {
   running: '正在整理',
   paused: '已暂停',
   failed: '需要继续',
-  completed: '已完成',
   ready: '已保存',
 };
 export async function addMaterial(file: File, topicId: string, existingId?: string) {
@@ -313,7 +312,7 @@ export function Materials({
           </p>
           <p className="gft-local-note">
             {tr(
-              '文件原文与处理进度保存在本机，下载完整存档可带走；云端同步包含主题和 Doc／Map。',
+              '原文在本机保存到整理完成，之后只留下 Doc／Map 里的内容；取消会丢掉还没整理的部分。',
             )}
           </p>
           {!executor && (
@@ -339,7 +338,7 @@ export function Materials({
                 >
                   {tr('添加文件')}
                 </button>
-                <small>{tr('拖入 UTF-8 文本、Markdown 或聊天记录；原文保存到本机。')}</small>
+                <small>{tr('拖入 UTF-8 文本、Markdown 或聊天记录。')}</small>
               </div>
               <ul className="gft-material-list">
                 {jobs.map(job => (
@@ -368,28 +367,26 @@ export function Materials({
                       </p>
                     )}
                     <div className="gft-material-buttons">
-                      {(job.state !== 'completed' || !!job.pendingEdits?.length) && (
-                        <button
-                          onClick={() =>
-                            void control(
-                              job,
-                              ['running', 'queued'].includes(job.state) ? 'pause' : 'resume',
-                            )
-                          }
-                        >
-                          {tr(
-                            ['running', 'queued'].includes(job.state)
-                              ? '暂停'
-                              : job.state === 'uploading'
-                                ? isUploading(job.id)
-                                  ? '暂停'
-                                  : '选择原文件续传'
-                                : job.pendingEdits?.length
-                                  ? '应用修正并继续'
-                                  : '继续',
-                          )}
-                        </button>
-                      )}
+                      <button
+                        onClick={() =>
+                          void control(
+                            job,
+                            ['running', 'queued'].includes(job.state) ? 'pause' : 'resume',
+                          )
+                        }
+                      >
+                        {tr(
+                          ['running', 'queued'].includes(job.state)
+                            ? '暂停'
+                            : job.state === 'uploading'
+                              ? isUploading(job.id)
+                                ? '暂停'
+                                : '选择原文件续传'
+                              : job.pendingEdits?.length
+                                ? '应用修正并继续'
+                                : '继续',
+                        )}
+                      </button>
                       {job.state !== 'uploading' && (
                         <button
                           onClick={() => {
@@ -400,9 +397,7 @@ export function Materials({
                           {tr('查看原文')}
                         </button>
                       )}
-                      {job.state === 'uploading' && (
-                        <button onClick={() => void discard(job)}>{tr('取消导入')}</button>
-                      )}
+                      <button onClick={() => void discard(job)}>{tr('取消导入')}</button>
                     </div>
                   </li>
                 ))}
@@ -434,7 +429,7 @@ export function Materials({
                 className="gft-material-text"
                 aria-label={tr('材料原文')}
                 value={text}
-                readOnly={!selected || !['paused', 'failed', 'completed'].includes(selected.state)}
+                readOnly={!selected || !['paused', 'failed'].includes(selected.state)}
                 onChange={e => setText(e.target.value)}
                 onKeyDown={e => {
                   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {

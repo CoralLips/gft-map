@@ -92,7 +92,7 @@ export function AccountDialog({ onClose }: { onClose(): void }) {
       </p>
       <p className="gft-local-note">
         {tr(
-          '文件原文与处理进度保存在本机，下载完整存档可带走；云端同步仍包含主题、Doc／Map 和 Log。',
+          '导入的文件原文只在整理完成前保存在本机；云端同步包含主题和 Doc／Map。',
         )}
       </p>
       {account?.connected && (

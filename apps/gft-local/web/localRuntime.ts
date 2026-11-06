@@ -381,13 +381,8 @@ export function createLocalRuntime(options: LocalRuntimeOptions) {
       hasRemoteChanges: maps.hasRemoteChanges,
       accept: maps.accept,
       insertCondensation: async () => {},
-      async fetchSourceSnapshots(id, nodeIds) {
-        const fileSources = await request<{ text: string }>(
-          `/api/material-evidence?${new URLSearchParams([['topicId', id], ...nodeIds.map(node => ['node', node])])}`,
-        );
-        const text = fileSources.text;
-        return text.length > 8000 ? `${text.slice(0, 8000)}…` : text;
-      },
+      // Imported originals are not kept once processed, so there is no source to quote.
+      fetchSourceSnapshots: async () => '',
     },
   };
   const store = createThinkingMapStore(runtime);

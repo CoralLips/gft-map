@@ -181,10 +181,15 @@ async function restoreRecord(entry, item) {
   await store.writeJsonAtomic(path.join(materials.directory(entry.id), item.record), value);
 }
 
-/** Saves the restored materials (paused unless fully processed); returns their checkpoints. */
+/** Saves the unfinished restored materials as paused; returns their checkpoints. */
 async function saveRestoredMaterials(entries, topicId) {
   const checkpoints = {};
   for (const entry of entries.values()) {
+    // A finished import already lives in the restored map; its original is not kept.
+    if (entry.processed === entry.size && !entry.pendingEdits?.length) {
+      await materials.remove(entry.id);
+      continue;
+    }
     checkpoints[entry.id] = { offset: entry.processed, batches: entry.batches };
     const { hash, ...metadata } = entry;
     await store.writeJsonAtomic(path.join(store.homeDir(), 'materials', `${entry.id}.json`), {
@@ -192,7 +197,7 @@ async function saveRestoredMaterials(entries, topicId) {
       topicId,
       name: path.basename(entry.name),
       kind: 'text',
-      state: entry.processed === entry.size && !entry.pendingEdits?.length ? 'completed' : 'paused',
+      state: 'paused',
       epoch: 0,
       contentRevision: entry.contentRevision || 0,
       createdAt: new Date().toISOString(),

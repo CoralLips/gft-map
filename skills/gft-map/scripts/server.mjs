@@ -591,10 +591,6 @@ async function createService(
         return id === 'executors'
           ? discoverExecutors({ agent: query('agent'), refresh: query('refresh') === '1' })
           : runtime();
-      case 'material-evidence':
-        return {
-          text: await materials.evidence(query('topicId'), url.searchParams.getAll('node')),
-        };
       case 'materials':
         if (!id) return materials.list(query('topicId'));
         return action === 'page'
@@ -725,7 +721,7 @@ async function createService(
       case 'restore':
         return restoreMaterialArchive(id);
       case 'discard':
-        return materials.discard(id);
+        return materialWorker.cancel(id);
       case 'pause':
       case 'resume':
         return materialWorker.control(id, action);

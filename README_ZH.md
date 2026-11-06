@@ -63,6 +63,6 @@ npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.18](https://github.com/CoralLips/gft-map/releases/latest)，后续以修复和维护为主。欢迎分享你实际接续的任务，以及哪里仍需要重新解释。反馈问题时请去掉私人聊天和凭证。[提交反馈](https://github.com/CoralLips/gft-map/issues)
+当前正式版为 [v0.3.19](https://github.com/CoralLips/gft-map/releases/latest)，后续以修复和维护为主。欢迎分享你实际接续的任务，以及哪里仍需要重新解释。反馈问题时请去掉私人聊天和凭证。[提交反馈](https://github.com/CoralLips/gft-map/issues)
 
 [详细使用指南](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [开发与贡献](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT 许可证](https://github.com/CoralLips/gft-map/blob/main/LICENSE)
