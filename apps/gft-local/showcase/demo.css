@@ -32,9 +32,10 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.demo-brand span {
-  color: #7157de;
-  margin-right: 5px;
+.demo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .demo-header nav {
   display: flex;

@@ -1,6 +1,11 @@
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
-# GFT-Map
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/wordmark-dark.svg">
+    <img src="https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/wordmark-light.svg" alt="GFT-Map" width="196" height="48">
+  </picture>
+</h1>
 
 隔几天回到一个项目，往往得翻聊天记录，才知道上次定了什么、为什么这么定、下一步要做什么。GFT-Map 把同一主题下的 AI 讨论整理成一张导图和一份说明。你可以纠正其中的判断，再让下一场聊天读取这份脉络，接着做。
 

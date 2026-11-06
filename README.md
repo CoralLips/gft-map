@@ -1,6 +1,11 @@
 <p align="center"><strong>English</strong> · <a href="README_ZH.md">简体中文</a></p>
 
-# GFT-Map
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/wordmark-dark.svg">
+    <img src="https://raw.githubusercontent.com/CoralLips/gft-map/main/apps/gft-local/showcase/assets/wordmark-light.svg" alt="GFT-Map" width="196" height="48">
+  </picture>
+</h1>
 
 Come back to a project a few days later and you may have to reread an old chat to remember what you decided, why, and what comes next. GFT-Map organizes AI discussions about one topic into a mind map and a written explanation. You can correct a decision, then ask an agent in a fresh chat to read the updated document and pick up where you left off.
 

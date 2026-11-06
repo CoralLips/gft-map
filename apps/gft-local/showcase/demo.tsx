@@ -121,7 +121,7 @@ function App() {
     <>
       <header className="demo-header">
         <a className="demo-brand" href={home}>
-          <span aria-hidden="true">↳</span> GFT-Map
+          <img src="assets/mark.svg" width="26" height="26" alt="" /> GFT-Map
         </a>
         <nav aria-label={tx('选择样例')}>
           {examples.map(e => (

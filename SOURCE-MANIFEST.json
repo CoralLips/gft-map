@@ -2,7 +2,7 @@
   "format": 2,
   "hashAlgorithm": "sha256",
   "sourceProject": "GFT",
-  "sourceRevision": "2e107fbf77aae4f3586b9e692b13d7fd2c79b280",
+  "sourceRevision": "ff7dd52d7e84ff0eade4e1edda9082550b33bf0c",
   "sourceDirty": true,
   "version": "0.3.19",
   "files": [
@@ -189,12 +189,12 @@
     {
       "path": "apps/gft-local/README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "155df21e71a3ce488afee2d4f4122e8f9aeeb2dfc2465f35f2472b086fc5012a"
+      "sha256": "07c26dd88917d7979f00d7712956238b317c6aba38ab7ca0ea0e8abb02059d1a"
     },
     {
       "path": "apps/gft-local/README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "6ce59a11dc71498511b6ebe848e17dc1159c63a04d2e48f415ac6fd3a7fc012b"
+      "sha256": "cd46963a4717ee32a25499b12a416e7a0ac5181047a220e6d98480af6c473c6e"
     },
     {
       "path": "apps/gft-local/release/LICENSE",
@@ -239,7 +239,7 @@
     {
       "path": "apps/gft-local/release/source-files.json",
       "source": "apps/gft-local/release/source-files.json",
-      "sha256": "1ac98b57051c2c26c0fdad6f99416d09a290ee3b57ee7cf3cead608d1822aac0"
+      "sha256": "9725de9bea894441bdc51618a31270f2d25ce2ab465adb63435b1c6a887cb0d7"
     },
     {
       "path": "apps/gft-local/runner.mjs",
@@ -289,7 +289,7 @@
     {
       "path": "apps/gft-local/showcase/assets/mark.svg",
       "source": "apps/gft-local/showcase/assets/mark.svg",
-      "sha256": "f2f5d15b75b9b5424f7b41c79ede158d12cf2b709a5b36a0a0b02ce6608c5074"
+      "sha256": "d5659d231888d0079a606d37dfb58efb70e9948a59390713a162a00fedf9e7cf"
     },
     {
       "path": "apps/gft-local/showcase/assets/product.en.png",
@@ -305,6 +305,16 @@
       "path": "apps/gft-local/showcase/assets/walkthrough.gif",
       "source": "apps/gft-local/showcase/assets/walkthrough.gif",
       "sha256": "197a4de76bb86fdd51401a916e8c7c5f6c14c7dbbc8a28b4956816268bb217c1"
+    },
+    {
+      "path": "apps/gft-local/showcase/assets/wordmark-dark.svg",
+      "source": "apps/gft-local/showcase/assets/wordmark-dark.svg",
+      "sha256": "6e61e269cbcfcc6ccb828ef9fe7bc9dfaef7b3f2671825d8d37993eca6188a68"
+    },
+    {
+      "path": "apps/gft-local/showcase/assets/wordmark-light.svg",
+      "source": "apps/gft-local/showcase/assets/wordmark-light.svg",
+      "sha256": "57322dc93fa8f9be648d8776021feb67fc822561f7695744584dcffcf5fe6730"
     },
     {
       "path": "apps/gft-local/showcase/assets/writing.en.png",
@@ -324,7 +334,7 @@
     {
       "path": "apps/gft-local/showcase/demo.css",
       "source": "apps/gft-local/showcase/demo.css",
-      "sha256": "20594a86b1767eee39f068979c70649ef230be3b2e40a996c3ce2c5f11a42327"
+      "sha256": "5d2bd656036fc1ba385b137b7e91cdac9ae51d5f87a989e74773b6c4550e486b"
     },
     {
       "path": "apps/gft-local/showcase/demo.html",
@@ -334,7 +344,7 @@
     {
       "path": "apps/gft-local/showcase/demo.tsx",
       "source": "apps/gft-local/showcase/demo.tsx",
-      "sha256": "6b9e95137e4e4b766e8faee3e6fda971c0ecf1287a88c75e12f8b16c8e657894"
+      "sha256": "178a82b84c9c244c94bc2b0725da40b53d8e6028adb6f3292e47ba509d36f479"
     },
     {
       "path": "apps/gft-local/showcase/examples-en.ts",
@@ -544,12 +554,12 @@
     {
       "path": "README_ZH.md",
       "source": "apps/gft-local/README_ZH.md",
-      "sha256": "155df21e71a3ce488afee2d4f4122e8f9aeeb2dfc2465f35f2472b086fc5012a"
+      "sha256": "07c26dd88917d7979f00d7712956238b317c6aba38ab7ca0ea0e8abb02059d1a"
     },
     {
       "path": "README.md",
       "source": "apps/gft-local/README.md",
-      "sha256": "6ce59a11dc71498511b6ebe848e17dc1159c63a04d2e48f415ac6fd3a7fc012b"
+      "sha256": "cd46963a4717ee32a25499b12a416e7a0ac5181047a220e6d98480af6c473c6e"
     },
     {
       "path": "skills/gft-map/LICENSE",
