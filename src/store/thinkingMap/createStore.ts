@@ -10,7 +10,7 @@ import { MAP_VIEW_DETACHED, MAP_OPERATION_SUPERSEDED } from './runtime';
 import type { MapOperationOutcome, MapOperationRequest, OperationProgress, ThinkingMapRuntime, ThinkingMapStore } from './runtime';
 import type { FocusCard } from '../../type/focusCard';
 import { THINKING_MAP_PROJECT_ID, DEFAULT_PROJECT_NAME } from '../../service/thinkingMapCore';
-import { runTidy, linesFromGenerateCapped } from '../../service/tidyRun';
+import { runTidy, linesFromUpdateWithinCap } from '../../service/tidyRun';
 import { NODE_CAP_DEFAULT, nodeCapViolation } from '../../service/nodeCap';
 import { parseLedger, emptyLedgerState, appendLines, judgmentLines, relationLine, sessionLine, decision, aiDecision, liveJudgments, docChars, themeOf, renderSourceDoc, type LedgerState } from '../../service/ledger';
 import { foldLedger } from '../../service/ledger/bridge';
@@ -892,12 +892,23 @@ export function createThinkingMapStore(runtime: ThinkingMapRuntime): ThinkingMap
         activeGenBoundId = null;
         // ===== 账为正本：AI 产出 → 账行（场次头 / 走向 / 判断 / 承接 / 改标）→ 折算成图与文档 =====
         {
-          const st = get();
           const at = Date.now();
           const sourceTag = opts?.source ? `chat:${opts.source.sessionId}` : '本地';
           const note = opts?.live ? '现场' : isUpdate ? '更新' : '首次生成';
+          if (get().ledger !== state.ledger) throw new Error('生成期间内容已变化，已保留当前图，请重新生成。');
+          // 超上限时由模型把新旧判断一起整理到上限以内（2026-11-09），整理失败才机械合并
+          const generated = await linesFromUpdateWithinCap(state.ledger, result, {
+            source: sourceTag, note, at, requireChapterDoc: true, cap: nodeCapOf(),
+            tidyHeader: sessionLine(Date.now(), sourceTag, '整理'),
+            tidy: input => browserAi().tidy(input, modelId ? { modelId } : undefined, context),
+          });
+          if (run !== generationRun) return;
+          if (get().boundProjectId !== boundAtStart) {
+            set({ isGenerating: false, streamingCount: null });
+            return;
+          }
+          const st = get();
           if (st.ledger !== state.ledger) throw new Error('生成期间内容已变化，已保留当前图，请重新生成。');
-          const generated = linesFromGenerateCapped(st.ledger, result, { source: sourceTag, note, at, requireChapterDoc: true, cap: nodeCapOf() });
           const { lines } = generated;
           const newIds = isUpdate ? generated.newIds : [];
           // 未读红点：增量更新新长出来的与被改动的旧判断（首次整图皆新，标了=满屏红点无意义）

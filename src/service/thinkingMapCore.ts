@@ -2,7 +2,8 @@
 import type { FocusCard } from '../type/focusCard';
 import { type ThinkingEdge, type ThinkingEdgeType } from '../type/thinkingMap';
 import { WHITEBOX_MARKS, type WhiteboxMark, type DocSegment } from './whiteboxDoc';
-import { MAP_DOC_RULES, readTagAttributes, validateMapDocOutput } from './mapDocContract';
+import { MAP_DOC_RULES, isMainThread, readTagAttributes, validateMapDocOutput, stripOperationTags } from './mapDocContract';
+import { textWidth } from './textWidth';
 import { mapReferenceLines } from './ledger/text';
 import { NODE_CAP_DEFAULT, newNodeBudget } from './nodeCap';
 
@@ -174,7 +175,7 @@ const DOC_FORMAT_RULES = `# 输出格式（覆盖前面一切标签格式说明�
 **第一部分：<doc> 块**——写这一轮新增判断及各自的独立说明；共同背景与完整论述留给第二部分的章节正文：
 
 <doc>
-## 域名
+## 〈章节名〉
 
 ### ◆ 塔尖短句
 一两句概述（约 40–80 字）：为什么这样判断、在什么条件下成立。不复述标题；依据细节、数字与例子写进章节正文。
@@ -185,14 +186,14 @@ const DOC_FORMAT_RULES = `# 输出格式（覆盖前面一切标签格式说明�
 </doc>
 
 判断格式：
-- 内容用 \`## 域名\` 组织：**优先沿用文档里已有的域名**（一字不差），新话题才开新域；域名 ≤6 字
+- 内容用 \`## 域名\` 组织（示例里的〈章节名〉是占位，写实际章节名）：**优先沿用文档里已有的域名**（一字不差，不限字数），新判断回答的问题已有章节在讲就放进那一章；确实是新问题才开新域，新域名用这章回答的具体问题命名，不用「战略」「产品」这类泛称
 - 判断写成 \`### {◆◇？✗⏸} 短句\` 一行（短句 ≤16 字），节点独立说明跟在下面。五档：**◆**=用户明确拍板的结论；**◇**=推断、试探（默认档）；**？**=未决的问题；**✗**=被否决的路（说清为何否）；**⏸**=明说先搁置。材料的论点与 AI 的推演可以用 ◇ 保留，并说明依据；不能把回答冒充用户已认可的结论
 
 判断之外的信息量（走向/背景/论证/被否的中间方案）写进对应章节的 prose。已有判断不重复创建；重写章节时保留理解它所需的旧信息。不写锚（^jN 由系统分配）。**不写一级标题 # 和开篇导语**——主题与定位由系统维护，全局概述写进「## 主线」段。
 
 **第二部分：受影响章节的共同正文，写在 </doc> 之后**：
 
-<prose domain="域名" refs="j3,d1">直接提出本章的问题或共同背景。
+<prose domain="〈章节名〉" refs="j3,d1">直接提出本章的问题或共同背景。
 
 > ^j3
 
@@ -422,8 +423,8 @@ export function parseThinkingMapTags(raw: string, options?: { streaming?: boolea
       const lastNl = body.lastIndexOf('\n');
       body = lastNl === -1 ? '' : body.slice(0, lastNl + 1);
     }
-    // 模型偶尔把关系标签放在 doc 内；边仍由全局解析，不能混进可读正文。
-    body = body.replace(/<edge\s+[^>]*\/>/g, '').replace(/<prose\s+[^>]*>[\s\S]*?(?:<\/prose\s*>|$)/g, '');
+    // 模型偶尔把关系、修订、合并等指令放在 doc 内；它们由全局解析，不能混进可读正文。
+    body = stripOperationTags(body);
     // 按 ## 域标题切段；域标题之前的散文本归「其他」
     let current: { domain: string; lines: string[] } | null = null;
     let dSeq = 0;
@@ -439,7 +440,7 @@ export function parseThinkingMapTags(raw: string, options?: { streaming?: boolea
       if (segText) {
         docSegments.push({ domain: current.domain, text: segText });
         // 主线段=替换语义的活节、主题段=一句话基调：都不抽节点
-        if (current.domain !== '主线' && current.domain !== '主题') {
+        if (!isMainThread(current.domain) && current.domain !== '主题') {
           for (const line of segText.split('\n')) {
             const em = /^###\s*(◆|◇|？|\?|✗|⏸)\s*(.+?)\s*$/.exec(line.replace(/(?:\s*\^j\d+)+\s*$/, ''));
             if (!em) continue;
@@ -477,7 +478,7 @@ export function parseThinkingMapTags(raw: string, options?: { streaming?: boolea
     const domain = attributes.domain?.trim().replace(/[[\]\r\n]/g, '');
     // 保留未知引用交给新 AI 输出的落账校验，不能静默抹掉引用再保存。
     const refs = [...new Set((attributes.refs ?? '').split(/[\s,，]+/).filter(Boolean))];
-    const body = match[2].trim();
+    const body = stripOperationTags(match[2]).trim();
     if (domain && body && domain !== '主题') docSegments.push({ domain, text: body, refs });
   }
 
@@ -576,11 +577,11 @@ export function buildGenerateRequest(input: string, options?: GenerateOptions): 
 }
 
 export const DEFAULT_PROJECT_NAME = '新脉络';
-export const PROJECT_NAME_PROMPT = '\n\n当前脉络尚未命名。如本次生成了有效图文，同时输出 <map-name>简短名称</map-name>，用 4–8 个汉字概括持续讨论的事情，最多 16 字符，不带解释、换行或标点。仅 <noop/> 时不要命名。名称不是图中节点，不得代替图文。';
+export const PROJECT_NAME_PROMPT = '\n\n当前脉络尚未命名。如本次生成了有效图文，同时输出 <map-name>简短名称</map-name>，用材料的语言概括持续讨论的事情：中文 4–8 个字，其他语言 2–4 个词、不超过 32 个字符，不带解释、换行或标点。仅 <noop/> 时不要命名。名称不是图中节点，不得代替图文。';
 export function extractProjectName(raw: string): string | undefined {
   const name = raw.match(/<map-name>\s*([^<>\r\n]+?)\s*<\/map-name>/)?.[1]?.trim()
     .replace(/^["'「『《【]+|["'」』》】。.!！?？,，、;；]+$/g, '').trim();
-  return name && [...name].length <= 16 && ![...name].some(char => char.charCodeAt(0) < 32) && name !== DEFAULT_PROJECT_NAME ? name : undefined;
+  return name && textWidth(name) <= 16 && ![...name].some(char => char.charCodeAt(0) < 32) && name !== DEFAULT_PROJECT_NAME ? name : undefined;
 }
 export const withoutProjectName = (raw: string): string => raw.replace(/<map-name>[\s\S]*?<\/map-name>/g, '');
 
@@ -655,7 +656,9 @@ export function resolveEdgeRefs(
     text: mapReferenceLines(seg.text, resolveRef),
     refs: seg.refs.map(resolveRef),
   });
-  if (parsed.edges.length === 0) return { ...parsed, docSegments };
+  // 模型偶尔把修订目标写成本轮临时编号（n11），换回账内编号。
+  const docRevisions = parsed.docRevisions.map(r => /^n\d+$/.test(r.anchor) ? { ...r, anchor: resolveRef(r.anchor) } : r);
+  if (parsed.edges.length === 0) return { ...parsed, docSegments, docRevisions };
   const normalize = (s: string) => stripWrapQuotes(s).replace(/[？?]$/, '').trim();
   const titleToAliases = new Map<string, Set<string>>();
   const refs = new Map<string, string>();
@@ -685,7 +688,7 @@ export function resolveEdgeRefs(
     if (!from || !to || from === to) return [];
     return [{ ...e, from, to }];
   });
-  return { ...parsed, edges, docSegments };
+  return { ...parsed, edges, docSegments, docRevisions };
 }
 
 function newCardFromParsed(n: ParsedMapNode, realId: string, order: number, createdAt: number): FocusCard {

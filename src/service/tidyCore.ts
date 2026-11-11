@@ -1,7 +1,7 @@
 /** 共享整理核心：完整提示词、操作解析与范围校验；不调用模型。 */
 import type { LedgerMark } from './ledger/types';
 import { THEME_SCOPE_RULE } from './thinkingMapCore';
-import { MAP_DOC_RULES, readTagAttributes, validateMapDocOutput } from './mapDocContract';
+import { MAP_DOC_RULES, isMainThread, readTagAttributes, validateMapDocOutput, stripOperationTags } from './mapDocContract';
 import { mapReferenceLines } from './ledger/text';
 
 /** 旧写法章节每轮交给模型的上限（D61）。 */
@@ -30,6 +30,8 @@ export interface TidyInput {
   cap: number;
   /** 还是 D61 之前写法的章节：整理时一并转成「节点＝标题＋概述、引用写在正文中」。 */
   legacyChapters?: string[];
+  /** 上一轮整理之后仍超上限时，告诉这一轮哪些操作没能执行、为什么（D71）。 */
+  note?: string;
 }
 
 export type TidyAiOp =
@@ -40,12 +42,13 @@ export type TidyAiOp =
   | { kind: 'prose'; domain: string; text: string; refs?: string[] }
   | { kind: 'link' | 'unlink'; from: string; to: string; reason: string; evidence: string };
 
-const stripQuotes = (s: string): string => s.trim().replace(/^[「“"']+|[」”"']+$/g, '').trim();
+// 档位单独由 mark 表达，标题开头的档位符号（“◆ 内容先行…”）一并去掉。
+const stripQuotes = (s: string): string => s.trim().replace(/^[「“"']+|[」”"']+$/g, '').trim().replace(/^(?:[◆◇？?✗⏸]\s*)+/, '').trim();
 const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim();
 /** 判断不能归入只承载叙述的主题/主线；域名保持单行，避免破坏账格式。 */
 export const tidyDomain = (s?: string): string | undefined => {
   const domain = s && oneLine(s).replace(/[[\]]/g, '').trim();
-  return domain && domain !== '主题' && domain !== '主线' ? domain : undefined;
+  return domain && domain !== '主题' && !isMainThread(domain) ? domain : undefined;
 };
 
 /** 解析前后共用同一选区边界，不能先过滤越界成员再执行剩余合并。 */
@@ -69,14 +72,31 @@ function serialize(input: TidyInput): { text: string; alias: Map<string, string>
   // 文稿里的引用行换成本轮 n 编号，与判断列表、输出的引用行同一套编号。
   const prose = input.prose.map(p => `【${p.domain}】\n${mapReferenceLines(p.text, id => idToAlias.get(id) ?? id)}`);
   const theme = input.theme?.trim() ? `# 主题（这张脉络记什么）\n${oneLine(input.theme)}\n\n` : '';
-  const text = `${theme}# 判断（按思考先后编号；[五档]：◆定了 ◇推断 ？悬着 ✗已推翻 ⏸搁置）\n${lines.join('\n') || '（无）'}\n\n# 承接（前→后）\n${edges.join('\n') || '（无）'}\n\n# 当前文稿（人的新输入也是有效依据；不要求已存在节点）\n${prose.join('\n') || '（无）'}`;
+  const options = input.scopeIds === undefined && input.judgments.length > input.cap ? `# 本次能执行的减法（系统按承接算好，超上限只在这里面按重要性挑）\n${reductionOptions(input)}\n\n` : '';
+  const text = `${theme}# 判断（按思考先后编号；[五档]：◆定了 ◇推断 ？悬着 ✗已推翻 ⏸搁置）\n${lines.join('\n') || '（无）'}\n\n# 承接（前→后）\n${edges.join('\n') || '（无）'}\n\n${options}# 当前文稿（人的新输入也是有效依据；不要求已存在节点）\n${prose.join('\n') || '（无）'}`;
   return { text, alias };
+}
+
+/**
+ * 超上限时系统能执行的合并与删除（D71），与写入时的规则一致：同类（问题与问题、结论与结论）才合，
+ * 中间夹着承接到后一条的判断不合（合并后承接会倒流）；问题与前后都有承接的中间判断不删。
+ */
+function reductionOptions(input: TidyInput): string {
+  const items = input.judgments;
+  const alias = (j: TidyItem) => `n${items.indexOf(j) + 1}`;
+  const linked = (from: string, to: string) => input.edges.some(([f, t]) => f === from && t === to);
+  const pairs: string[] = [];
+  items.forEach((a, i) => items.slice(i + 1).forEach((b, k) => {
+    if (a.question === b.question && !items.slice(i + 1, i + 1 + k).some(x => linked(x.id, b.id))) pairs.push(`${alias(a)}+${alias(b)}`);
+  }));
+  const drops = items.filter(j => !j.question && !(input.edges.some(([, t]) => t === j.id) && input.edges.some(([f]) => f === j.id)));
+  return `可以合并的两条：${pairs.join('、') || '（无）'}\n三条以上一起合并时，中间同样不能夹着承接到后面成员的判断；一条承接链上连续的几条可以整段合并。\n可以删除（降为正文）的判断：${drops.map(alias).join('、') || '（无）'}`;
 }
 
 /** 节点数与上限（D63）：超出就必须收拢，未超出只合并真正重复的。 */
 function mapGoal(count: number, cap: number): string {
   return count > cap
-    ? `当前 ${count} 条，超过这张图的上限 ${cap} 条：本次至少要减少 ${count - cap} 条，输出后总数必须 ≤${cap}，这是硬规则。做法：一个节点对应一个要回答的问题——同一问题下的决定、理由、验证办法、待定细节用一个 merge 合成一条（members 可以 3 条以上，也可以跨时间），标题与概述保留关键决定，展开细节、数字、例子、转折经过写进章节正文，信息不丢。超上限时不要 add。输出前自己核算：${count} − Σ(每个 merge 的成员数 − 1) − drop 数 ≤ ${cap}。`
+    ? `当前 ${count} 条，超过这张图的上限 ${cap} 条：本次要减少 ${count - cap} 条，输出后总数必须 ≤${cap}，这是硬规则；也只减这 ${count - cap} 条，回到 ${cap} 条就停——独立的判断不为凑数合并，除非本来就重复。按重要性留下最重要的 ${cap} 条，挑最不重要的 ${count - cap} 条去掉：先把回答同一问题的判断用一个 merge 合成一条——同一问题下的决定、理由、验证办法、待定细节合在一起（members 至少 2 条，可以 3 条以上，也可以跨时间），标题与概述保留关键决定，展开细节、数字、例子、转折经过写进章节正文；合并后仍超出，就把最不重要的判断降为正文：drop 这条，同时在同轮所属章节的 prose 里写下它的标题、概述和依据，信息不丢。〔悬着〕的问题与承上启下的中间判断（前后都有承接）系统不允许 drop，只能和同类合并。超上限时不要 add。merge 只用于 2 条以上；只改一条的标题、概述或章节用 revise，它不减少条数。输入列出了「本次能执行的减法」时，合并与删除只在里面挑，列表外的会被系统拒绝。合并与删除按最该减的先写：系统按先后执行，回到 ${cap} 条就停，后面的不再执行。输出前自己核算：${count} − Σ(每个 merge 的成员数 − 1) − drop 数，结果应正好是 ${cap}；少于 ${cap} 就是减多了，只有本来重复的判断才再合。`
     : `当前 ${count} 条，这张图的上限是 ${cap} 条。不必为减少条数而合并，只合并真正重复的判断；add 后总数不能超过 ${cap} 条，超出的不会写入。`;
 }
 
@@ -87,7 +107,7 @@ function buildPrompt(count: number, cap: number): string {
 
 # Doc 怎样讲清楚
 
-先看现有判断和文稿，再决定哪些判断共同回答一个问题。现有章节和正文是可调整的草稿，不是必须沿用的提纲或结论；把不同问题挤在一个大章时，用 revise 的 domain 重新分组，以具体问题命名章节。${count > cap ? '节点数超上限时，同一问题下的目标、路线选择、验证办法合成一个节点，联系与细节由正文讲清。' : '归为同章不等于合成一个节点：例如目标、路线选择、验证办法相互关联，却回答不同问题，应分别保留判断，由正文解释联系。'}章节已经清楚就沿用，不强行拆分，也不改变 Map 的时间与连线。
+先看现有判断和文稿，再决定哪些判断共同回答一个问题。现有章节和正文是可调整的草稿，不是必须沿用的提纲或结论；把不同问题挤在一个大章时，用 revise 的 domain 重新分组，以具体问题命名章节。${count > cap ? `节点数超上限时，先把同一问题下的目标、路线选择、验证办法合成一个节点，联系与细节由正文讲清；减到 ${cap} 条就停，其余判断照常分别保留。` :'归为同章不等于合成一个节点：例如目标、路线选择、验证办法相互关联，却回答不同问题，应分别保留判断，由正文解释联系。'}章节已经清楚就沿用，不强行拆分，也不改变 Map 的时间与连线。
 每章围绕一个具体问题，用节点与文稿里的依据解释为什么这样选、怎样验证、还有什么没定；不要用几句总括包住几个不同问题，也不要逐节点换句话说。合并、删除节点时，被压掉但仍影响当前理解的背景、验证步骤和条件挪进正文。在正文讲到某判断的位置单独一行写 \`> ^n编号\`，系统在那里显示它的标题、档位和概述；正文不复述标题和概述里的结论，只写依据、条件和判断之间的过渡。章节开头直接提出问题，不写“本章／这一章……”。用自然短段落，确实并列的事项才列点。
 主线简短说明当前理解，其余章节各讲自己的问题，不重复主线。保留仍有解释作用的愿景、定位与关键历史；过去诊断标明阶段，不能未经依据就当成今天仍然成立。保留确定程度、适用范围和条件中的“或/且”，不能把暂定方案写成铁律、删掉例外来让结论更整齐。原文前后条件不同，只有明确替代才按新条件叙述；否则交代阶段差异或仍待澄清，不擅自选择最严的一条。现有说明与依据冲突时按依据纠正，不自行补出结论。
 
@@ -111,7 +131,7 @@ function buildPrompt(count: number, cap: number): string {
 （仅全局整理可用，id 为本轮唯一 new 编号；refs 可引用 new1。没有明确确认就用 ◇，问题用 ？；已有判断不要重复 add。）
 
 <drop id="n4"/>
-（只删没有独有信息的重复、无关或已失效内容；“不是核心结论”不等于可删。说明如何验证、获得反馈和修正判断的步骤有独立价值。已被推翻的 ✗ 若仍解释当前取舍，须保留其否定缘由；删节点不能让仍重要的依据、步骤或条件从 Doc 一起消失。）
+（只删没有独有信息的重复、无关或已失效内容；“不是核心结论”不等于可删。说明如何验证、获得反馈和修正判断的步骤有独立价值。已被推翻的 ✗ 若仍解释当前取舍，须保留其否定缘由；删节点不能让仍重要的依据、步骤或条件从 Doc 一起消失。${count > cap ? '超上限时例外：合并之后仍超出，可以 drop 最不重要的判断，把它降为正文——它的全部信息必须写进同轮所属章节的 prose。' : ''}）
 
 <revise id="n3" title="更清楚的短句" body="一两句概述：为什么、在什么条件下成立" domain="实际章节名"/>
 （title、body、domain 均可单独给。重组章节时给相关判断新的 domain；不需要为了改章节而改写判断。）
@@ -160,8 +180,8 @@ export function parseTidyOps(text: string, alias: Map<string, string>, items: Ti
       const attrs = readTagAttributes(m[3]);
       const domain = attrs.domain && oneLine(attrs.domain).replace(/[[\]]/g, '').trim();
       // 正文里的引用行与 refs 同用 n 编号（D61）；new 编号留到落账时换。
-      const body = mapReferenceLines(m[4].trim(), ref => alias.get(ref) ?? ref);
-      if (scopeIds && (domain === '主题' || (domain === '主线' && !items.some(item => item.domain === '主线' && scopeIds.has(item.id))))) throw new Error('局部整理不能改主题或选区外的主线，已保留原图文。');
+      const body = mapReferenceLines(stripOperationTags(m[4]).trim(), ref => alias.get(ref) ?? ref);
+      if (scopeIds && (domain === '主题' || (isMainThread(domain) && !items.some(item => isMainThread(item.domain) && scopeIds.has(item.id))))) throw new Error('局部整理不能改主题或选区外的主线，已保留原图文。');
       const refs = attrs.refs === undefined ? undefined : [...new Set(attrs.refs.split(/[\s,，]+/).filter(Boolean).map(ref => alias.get(ref) ?? ref))];
       // 空正文只在整图整理里保留：收掉已无节点的章节；局部整理不动选区外章节。
       if (domain && (body || !scopeIds)) ops.push({ kind: 'prose', domain, text: body, ...(refs !== undefined ? { refs } : {}) });
@@ -196,6 +216,13 @@ export function parseTidyOps(text: string, alias: Map<string, string>, items: Ti
       const memberIds = question ? qs : js;
       const title = stripQuotes(attrs.title ?? '');
       if (scopeIds && (!title || memberIds.length < 2 || memberIds.length !== all.length)) throw new Error('局部整理包含不可执行的合并，已保留原图文。');
+      // 只列一个成员的“合并”是在改写这一条：按 revise 落账，不丢模型的新写法。
+      if (title && all.length === 1) {
+        used.add(all[0]);
+        const body = attrs.body?.trim(), domain = tidyDomain(attrs.domain);
+        ops.push({ kind: 'revise', id: all[0], title, ...(body ? { body } : {}), ...(domain ? { domain } : {}) });
+        continue;
+      }
       if (!title || memberIds.length < 2) continue;
       memberIds.forEach(id => used.add(id));
       const mark: LedgerMark = question ? '？' : memberIds.every(id => byId.get(id)?.mark === '◆') ? '◆' : '◇';
@@ -221,7 +248,7 @@ export function parseTidyOps(text: string, alias: Map<string, string>, items: Ti
     throw new Error(`${scopeIds ? '局部整理' : '整理'}的章节正文引用了不存在或未成功新增的判断，已保留原图文。`);
   }
   // 等文字操作解析完再认章节，允许模型先写新章节说明、后写改域操作。
-  const available = new Set([...domains, '主线', '主题', ...items.map(j => j.domain)]);
+  const available = new Set([...domains, '主线', 'Main thread', '主题', ...items.map(j => j.domain)]);
   for (const op of ops) if ((op.kind === 'merge' || op.kind === 'revise' || op.kind === 'add') && op.domain) available.add(op.domain);
   if (scopeIds && ops.some(op => op.kind === 'prose' && !available.has(op.domain))) throw new Error('局部整理包含无对应判断的章节，已保留原图文。');
   return ops.filter(op => !scopeIds || op.kind !== 'prose' || available.has(op.domain));
@@ -255,6 +282,10 @@ export function buildTidyRequest(input: TidyInput) {
   const serialized = serialize(input);
   // 旧写法的图：整理时一并转成新写法（D61），没转完的下次整理继续。
   if (input.legacyChapters?.length && input.scopeIds === undefined) serialized.text = `# 本次一并转换为新写法\n以下章节还是旧写法：${input.legacyChapters.slice(0, TIDY_CONVERT_BATCH).map(domain => `「${domain}」`).join('、')}。除了正常整理，这些章节每条判断的 body 若超过两句，就用 revise 改成一两句概述（详细依据、数字、例子挪进正文，不丢信息）；并为这些章节完整输出 prose，把每条判断的引用行写在正文讲到它的位置。\n\n${serialized.text}`;
+  if (input.note && input.scopeIds === undefined) serialized.text = `# 上一轮整理之后仍超上限
+${input.note}
+
+${serialized.text}`;
   if (input.scopeIds === undefined) return { ...serialized, systemPrompt: buildPrompt(input.judgments.length, input.cap) };
   const scope = new Set(input.scopeIds);
   const selected = [...serialized.alias].filter(([, id]) => scope.has(id)).map(([alias]) => alias);

@@ -1,4 +1,5 @@
 import {RELATION_REASON_LIMIT} from '../../../service/relationReason';
+import {textWidth} from '../../../service/textWidth';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {useT} from '../../../i18n';
 import styles from './ExploreTreeNode.module.css';
@@ -27,7 +28,7 @@ export function RelationReason({relation,onChange,onEditing,onExplain,onCancel,o
 
    <textarea ref={input} aria-label={tr('承接说明')} maxLength={RELATION_REASON_LIMIT*2} rows={draft.length>60?3:1} placeholder={tr(relation.pending?'正在分析承接…':'说明这两点怎样承接…')} value={draft} readOnly={!onChange || relation.pending}
     onFocus={()=>{if(relation.pending)return;cancel.current=false;setEditing(true);onEditing?.(relation.id);}}
-    onChange={e=>{if(Array.from(e.target.value).length<=RELATION_REASON_LIMIT || Array.from(e.target.value).length<Array.from(draft).length)setDraft(e.target.value);}}
+    onChange={e=>{if(textWidth(e.target.value)<=RELATION_REASON_LIMIT || textWidth(e.target.value)<textWidth(draft))setDraft(e.target.value);}}
     onBlur={()=>{if(relation.pending)return;if(!cancel.current)onChange?.(relation.id,draft);else setDraft(relation.reason);setEditing(false);onEditing?.(null);}}
     onKeyDown={e=>{if(e.nativeEvent.isComposing)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancel.current=true;e.currentTarget.blur();}else if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();e.currentTarget.blur();}}}/>
  </div>;

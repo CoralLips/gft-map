@@ -916,8 +916,20 @@ async function createService(
         return;
       }
       const prompt = await store.taskPrompt(task.id);
-      const output = outputOf(await modelCaller(task, controller, taskRunner)(prompt));
-      if (!closed) await store.completeTask(task.id, output);
+      const callModel = modelCaller(task, controller, taskRunner);
+      const output = outputOf(await callModel(prompt));
+      if (closed) return;
+      // An update that overfills the map: the model tidies old and new together first (D71).
+      // If that tidy fails, the update is still written and the system merges neighbours to fit.
+      let tidyOps = null;
+      try {
+        tidyOps = await store.updateTidy(task.id, output, async request =>
+          outputOf(await callModel({ ...prompt, ...request })),
+        );
+      } catch (error) {
+        if (controller.signal.aborted || error.status === 409) throw error;
+      }
+      if (!closed) await store.completeTask(task.id, output, tidyOps);
     } catch (error) {
       if (!controller.signal.aborted) lastError = errorRecord(error);
       // Concurrent node jobs use separate runners, but an expired account applies

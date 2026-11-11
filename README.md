@@ -9,6 +9,8 @@
 
 Come back to a project a few days later and you may have to reread an old chat to remember what you decided, why, and what comes next. GFT-Map organizes AI discussions about one topic into a mind map and a written explanation. You can correct a decision, then ask an agent in a fresh chat to read the updated document and pick up where you left off.
 
+▶ [Watch the 67-second film](https://youtu.be/5aOXmyl7Epc) · [中文版](https://youtu.be/PM2wmetWuQI)
+
 ### [Why postpone bank sync in the first release?](https://corallips.github.io/gft-map/demo.html?lang=en&case=product)
 
 In this fictional bookkeeping project, bank sync takes engineering time and requires access to people's transactions. The team wants to see whether freelancers can log one transaction by hand and come back a few days later to check their totals.
@@ -70,6 +72,6 @@ Closing the page leaves the local service running. Ask your agent to open or clo
 
 ## Project status and feedback
 
-The current stable release is [v0.3.19](https://github.com/CoralLips/gft-map/releases/latest). Work now focuses on fixes and maintenance. We'd like to hear which task you continued and what you still had to explain again. Remove private conversations and credentials before posting. [Share feedback](https://github.com/CoralLips/gft-map/issues)
+The current stable release is [v0.3.20](https://github.com/CoralLips/gft-map/releases/latest). Work now focuses on fixes and maintenance. We'd like to hear which task you continued and what you still had to explain again. Remove private conversations and credentials before posting. [Share feedback](https://github.com/CoralLips/gft-map/issues)
 
 [Detailed guide (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [Contributing (Chinese)](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT License](https://github.com/CoralLips/gft-map/blob/main/LICENSE)

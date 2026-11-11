@@ -1,6 +1,6 @@
 import { checkedRelationReason } from '../../src/service/relationReason';
 import { prepareSourceSummary } from '../../src/service/sourceCompaction';
-import { validateMapDocOutput } from '../../src/service/mapDocContract';
+import { isMainThread, validateMapDocOutput } from '../../src/service/mapDocContract';
 export {
   MAP_EXPRESSION_CONTRACT,
   MAP_EXPRESSION_CONTRACT_VERSION,
@@ -29,8 +29,8 @@ import {
   type LedgerState,
   type LedgerMark,
 } from '../../src/service/ledger/index';
-import { runTidy, fitCap, linesFromGenerateCapped } from '../../src/service/tidyRun';
-import { tidyCall } from '../../src/service/tidyCore';
+import { runTidy, fitCap, linesFromUpdate, updateTidyRounds } from '../../src/service/tidyRun';
+import { tidyCall, type TidyAiOp, type TidyInput } from '../../src/service/tidyCore';
 import {
   buildRelationExplanationRequest,
   parseRelationExplanation,
@@ -135,7 +135,7 @@ function safeTitle(value: unknown): string {
 
 function safeDomain(value: unknown): string {
   const domain = oneLine(value, '章节名');
-  if (/\[|\]/.test(domain) || domain === '主题' || domain === '主线') {
+  if (/\[|\]/.test(domain) || domain === '主题' || isMainThread(domain)) {
     throw new Error('判断需要放在普通章节，章节名不能包含方括号。');
   }
   return domain;
@@ -298,11 +298,16 @@ export function prepareTask(
   return { system: system + THEME_RULE + naming, user: input.trim() };
 }
 
+/**
+ * `tidyRounds` is the model's tidy for an update that would leave the map above its
+ * cap (from updateTidyOps); without it the system merges neighbours to fit.
+ */
 export function applyTask(
   topic: Topic,
   action: TaskAction,
   output: string,
   nodeCap = NODE_CAP_DEFAULT,
+  tidyRounds?: TidyAiOp[][],
 ) {
   if (typeof output !== 'string' || !output.trim())
     throw new Error('模型返回空内容，已保留原图文。');
@@ -340,6 +345,50 @@ export function applyTask(
     return finish(topic, lines);
   }
   if (action !== 'update') throw new Error('不支持的任务。');
+  const parsed = updateAnswer(topic, state, output);
+  if (!parsed) return finish(topic, []);
+  const { answer, serialized, suggestedName } = parsed;
+  const generated = linesFromUpdate(topic.ledger, answer, { ...updateOptions(nodeCap), tidyRounds });
+  if (generated.lines.length < 2) throw new Error('模型没有返回新的有效内容，已保留原图文。');
+  return {
+    ...finish(topic, generated.lines),
+    // Shown as unread: what this update added and the existing judgments it changed (D65).
+    unreadIds: serialized ? [...generated.newIds, ...generated.touchedIds] : [],
+    ...(suggestedName ? { name: suggestedName } : {}),
+  };
+}
+
+const updateOptions = (cap: number) => ({
+  source: SOURCE,
+  note: '更新',
+  at: Date.now(),
+  requireChapterDoc: true,
+  cap,
+  tidyHeader: sessionLine(Date.now(), SOURCE, '整理'),
+});
+
+/**
+ * When an update's answer would leave the map above its cap, the model tidies old
+ * and new judgments together before anything is written (D71). Null when it fits.
+ */
+export async function updateTidyOps(
+  topic: Topic,
+  output: string,
+  nodeCap: number,
+  callModel: ModelCall,
+): Promise<TidyAiOp[][] | null> {
+  validateMapDocOutput(output);
+  const parsed = updateAnswer(topic, stateOf(topic), output);
+  if (!parsed) return null;
+  const rounds = await updateTidyRounds(topic.ledger, parsed.answer, {
+    ...updateOptions(nodeCap),
+    tidy: tidyThrough(callModel),
+  });
+  return rounds.length ? rounds : null;
+}
+
+/** An update answer parsed against the topic it was asked about; null for a bare `<noop/>`. */
+function updateAnswer(topic: Topic, state: LedgerState, output: string) {
   const suggestedName =
     topic.name === DEFAULT_PROJECT_NAME ? extractProjectName(output) : undefined;
   output = withoutProjectName(output);
@@ -360,7 +409,7 @@ export function applyTask(
     !parsed.docRevisions.length &&
     !reorganize
   ) {
-    if (/^\s*<noop\s*\/>\s*$/.test(output)) return finish(topic, []);
+    if (/^\s*<noop\s*\/>\s*$/.test(output)) return null;
     throw new Error('模型没有返回可用图文，已保留原图文。');
   }
   const result = serialized
@@ -368,23 +417,16 @@ export function applyTask(
     : parsed.nodes.length
       ? buildFreshMap(parsed)
       : { nodes: [], edges: [], newIds: [], docEntryNodeIds: [] };
-  const generated = linesFromGenerateCapped(
-    topic.ledger,
-    {
+  return {
+    answer: {
       ...result,
       docSegments: parsed.docSegments,
       docMarks: usableMarks,
       docRevisions: parsed.docRevisions,
       reorganize,
     },
-    { source: SOURCE, note: '更新', at: Date.now(), requireChapterDoc: true, cap: nodeCap },
-  );
-  if (generated.lines.length < 2) throw new Error('模型没有返回新的有效内容，已保留原图文。');
-  return {
-    ...finish(topic, generated.lines),
-    // Shown as unread: what this update added and the existing judgments it changed (D65).
-    unreadIds: serialized ? [...generated.newIds, ...generated.touchedIds] : [],
-    ...(suggestedName ? { name: suggestedName } : {}),
+    serialized,
+    suggestedName,
   };
 }
 
@@ -428,6 +470,20 @@ function edgeIdentity(state: LedgerState, from: string, to: string) {
   );
 }
 
+/** The tidy model call through the local executor. */
+function tidyThrough(callModel: ModelCall) {
+  return async (input: TidyInput): Promise<TidyAiOp[]> => {
+    if (input.scopeIds?.length === 0) return [];
+    const call = tidyCall(input);
+    const ops = call.parse(
+      await callModel({ system: call.system + THEME_RULE, user: call.user, aliases: call.aliases }),
+    );
+    for (const op of ops)
+      if ((op.kind === 'merge' || op.kind === 'revise') && op.title) safeTitle(op.title);
+    return ops;
+  };
+}
+
 /** One tidy of the whole topic or of the selected judgments (D65). */
 export async function tidyOperation(
   topic: Topic,
@@ -449,20 +505,7 @@ export async function tidyOperation(
     cap,
     scopeIds: scope,
     header: sessionLine(Date.now(), SOURCE, scope ? '整理选中' : '整理'),
-    async tidy(input) {
-      if (input.scopeIds?.length === 0) return [];
-      const call = tidyCall(input);
-      const ops = call.parse(
-        await callModel({
-          system: call.system + THEME_RULE,
-          user: call.user,
-          aliases: call.aliases,
-        }),
-      );
-      for (const op of ops)
-        if ((op.kind === 'merge' || op.kind === 'revise') && op.title) safeTitle(op.title);
-      return ops;
-    },
+    tidy: tidyThrough(callModel),
   });
   const { applied, newIds, merged, dropped, forced, before } = result!;
   const after = liveJudgments(result!.state).filter(

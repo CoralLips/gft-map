@@ -9,6 +9,8 @@
 
 隔几天回到一个项目，往往得翻聊天记录，才知道上次定了什么、为什么这么定、下一步要做什么。GFT-Map 把同一主题下的 AI 讨论整理成一张导图和一份说明。你可以纠正其中的判断，再让下一场聊天读取这份脉络，接着做。
 
+▶ [看 67 秒短片](https://youtu.be/PM2wmetWuQI) · [English version](https://youtu.be/5aOXmyl7Epc)
+
 ### [为什么首版暂缓银行同步？](https://corallips.github.io/gft-map/demo.html?lang=zh&case=product)
 
 在这个虚构的记账项目里，接银行接口要花开发时间，也要用户授权读取流水。团队想先看看自由职业者能否自己记完一笔，过几天还愿不愿意回来查账。
@@ -68,6 +70,6 @@ npx skills add CoralLips/gft-map --skill gft-map --agent claude-code --global
 
 ## 项目状态与反馈
 
-当前正式版为 [v0.3.19](https://github.com/CoralLips/gft-map/releases/latest)，后续以修复和维护为主。欢迎分享你实际接续的任务，以及哪里仍需要重新解释。反馈问题时请去掉私人聊天和凭证。[提交反馈](https://github.com/CoralLips/gft-map/issues)
+当前正式版为 [v0.3.20](https://github.com/CoralLips/gft-map/releases/latest)，后续以修复和维护为主。欢迎分享你实际接续的任务，以及哪里仍需要重新解释。反馈问题时请去掉私人聊天和凭证。[提交反馈](https://github.com/CoralLips/gft-map/issues)
 
 [详细使用指南](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/ADVANCED.md) · [开发与贡献](https://github.com/CoralLips/gft-map/blob/main/apps/gft-local/CONTRIBUTING.md) · [MIT 许可证](https://github.com/CoralLips/gft-map/blob/main/LICENSE)

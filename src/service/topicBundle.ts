@@ -1,5 +1,6 @@
 import { parseLedger, themeOf, liveProse } from './ledger';
 import { deriveCaches } from './ledger/bridge';
+import { isMainThread } from './mapDocContract';
 import type { PersistedThinkingMap } from '../type/thinkingMap';
 
 /** Content only: no credentials, active connections or import cursors. */
@@ -38,7 +39,7 @@ export function mapToBundle(name: string, map: PersistedThinkingMap): TopicBundl
 
 /** Read the current mainline; no extra model call or independent summary cache. */
 export function topicSummary(ledger: string): string {
-  const text = liveProse(parseLedger(ledger)).filter(p => p.domain === '主线' || p.domain === 'Main thread').flatMap(p => p.lines).join(' ').replace(/\s+/g, ' ').trim();
+  const text = liveProse(parseLedger(ledger)).filter(p => isMainThread(p.domain)).flatMap(p => p.lines).join(' ').replace(/\s+/g, ' ').trim();
   const chars = Array.from(text);
   return chars.length > 240 ? chars.slice(0, 240).join('') + '…' : text;
 }

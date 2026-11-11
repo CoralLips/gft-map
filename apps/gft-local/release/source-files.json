@@ -160,6 +160,7 @@
     "src/service/mapHighlights.ts",
     "src/service/relationExplanation.ts",
     "src/service/relationReason.ts",
+    "src/service/textWidth.ts",
     "src/service/mapSelection.ts",
     "apps/gft-local/adapter-locks/claude-acp/package.json",
     "apps/gft-local/adapter-locks/claude-acp/package-lock.json",

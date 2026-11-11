@@ -13,6 +13,7 @@ import {
   editGraph,
   prepareTask,
   applyTask,
+  updateTidyOps,
   prepareImport,
   parseImportSummary,
   appendOperation,
@@ -1107,10 +1108,10 @@ function withUnread(topic, { unreadIds, ...delta }) {
     panel: { ...topic.panel, nodes: [...nodes, ...unreadIds.map(id => ({ id, unread: true }))] },
   };
 }
-function topicChange(topic, task, output, nodeCap) {
+function topicChange(topic, task, output, nodeCap, tidyOps) {
   if (task.source?.stage === 'distill') return distillCheckpoint(topic, task, output);
   const delta = {
-    ...withUnread(topic, applyTask(topic, task.action, output, nodeCap)),
+    ...withUnread(topic, applyTask(topic, task.action, output, nodeCap, tidyOps)),
     ...(task.action === 'update' ? appended(topic) : {}),
     _operationAction: task.action,
   };
@@ -1140,7 +1141,21 @@ function completedRecord(task, resultRevision) {
   };
 }
 
-export async function completeTask(id, output) {
+/**
+ * An update that would leave the map above its cap gets the model's tidy before it
+ * is written (D71). Null when it fits, or when the task is not an update applied to
+ * the topic as it was asked about.
+ */
+export async function updateTidy(id, output, callModel) {
+  const task = await getTask(id);
+  if (task.action !== 'update' || task.source?.stage === 'distill') return null;
+  const topic = await getTopic(task.topicId);
+  if (topic.revision !== task.baseRevision) return null;
+  return updateTidyOps(topic, output, (await getSettings()).nodeCap, callModel);
+}
+
+/** `tidyOps` comes from updateTidy; without it an over-cap update merges neighbours to fit. */
+export async function completeTask(id, output, tidyOps) {
   if (typeof output !== 'string' || output.length > 2000000) throw fail('结果无效');
   return locked('tasks', id, async () => {
     const task = await getTask(id);
@@ -1150,7 +1165,7 @@ export async function completeTask(id, output) {
       mutateTopic(
         task.topicId,
         task.baseRevision,
-        (topic, { nodeCap }) => topicChange(topic, task, output, nodeCap),
+        (topic, { nodeCap }) => topicChange(topic, task, output, nodeCap, tidyOps ?? undefined),
         id,
         task.action !== 'compact',
       );

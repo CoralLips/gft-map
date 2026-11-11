@@ -4,7 +4,8 @@
  * 账是唯一正本；nodes / edges / doc / groupMap 全是从账折算出来的缓存，形状保持 FocusCard/ThinkingEdge，
  * 现有画布、文档面板、注入、导出一个字不改照样工作。所有写入＝先造账行，再折算。
  */
-import {checkedRelationReason} from '../relationReason';
+import {checkedRelationReason, fitsRelationReason} from '../relationReason';
+import { isMainThread, mainThreadName, sameChapter } from '../mapDocContract';
 import type { FocusCard } from '../../type/focusCard';
 import type { ThinkingEdge } from '../../type/thinkingMap';
 import type { DocSegment, WhiteboxMark } from '../whiteboxDoc';
@@ -72,20 +73,23 @@ function segmentToLines(st: LedgerState, seg: DocSegment, alloc: (k: 'j' | 'p') 
     else lines.push(...proseLines(alloc('p'), '主题', text));
     return { lines, entryIds };
   }
-  if (domain === '主线') {
+  if (isMainThread(domain)) {
     // 主线＝状态叙述，不承载条目：误写的条目头降为加粗行；已有主线段就改它（替换语义），没有才新开
     const text = markdownLines(seg.text.split('\n')).map(({ line, code }) => {
       const m = !code && BARE_ENTRY_RE.exec(line.replace(/\s*\^j\d+\s*$/, ''));
       return m ? `**${m[1] === '?' ? '？' : m[1]} ${m[2].trim()}**` : line;
     }).join('\n').trim();
     if (!text) return { lines, entryIds };
-    const main = liveProse(st).find(p => p.domain === '主线' && /^p\d+$/.test(p.id));
+    const main = liveProse(st).find(p => isMainThread(p.domain) && /^p\d+$/.test(p.id));
     if (main) lines.push(aiDecision.remove(main.id));
-    lines.push(...proseLines(alloc('p'), '主线', text));
+    lines.push(...proseLines(alloc('p'), domain, text));
     return { lines, entryIds };
   }
+  // 模型把已有判断原样重写成新条目：不另建，指向原判断（改旧判断用 doc-revise）。
+  const plainTitle = (title: string) => title.replace(/[？?]\s*$/, '').trim();
+  const existing = new Map(liveJudgments(st).map(j => [plainTitle(j.title), j.id]));
   let prose: string[] = [];
-  let cur: { id: string; mark: WhiteboxMark; title: string; content: string[] } | null = null;
+  let cur: { id: string; mark: WhiteboxMark; title: string; content: string[]; old: boolean } | null = null;
   const flushProse = () => {
     const text = prose.join('\n').trim();
     if (text) lines.push(...proseLines(alloc('p'), domain, text));
@@ -93,7 +97,7 @@ function segmentToLines(st: LedgerState, seg: DocSegment, alloc: (k: 'j' | 'p') 
   };
   const flushEntry = () => {
     if (!cur) return;
-    lines.push(...judgmentLines(cur.id, cur.mark, domain, cur.title, cur.content.join('\n').trim()));
+    if (!cur.old) lines.push(...judgmentLines(cur.id, cur.mark, domain, cur.title, cur.content.join('\n').trim()));
     cur = null;
   };
   for (const { line: raw, code } of markdownLines(seg.text.split('\n'))) {
@@ -102,9 +106,9 @@ function segmentToLines(st: LedgerState, seg: DocSegment, alloc: (k: 'j' | 'p') 
     if (m) {
       flushEntry();
       flushProse();
-      const id = alloc('j');
-      cur = { id, mark: (m[1] === '?' ? '？' : m[1]) as WhiteboxMark, title: m[2].trim(), content: [] };
-      entryIds.push(id);
+      const title = m[2].trim(), old = existing.get(plainTitle(title));
+      cur = { id: old ?? alloc('j'), mark: (m[1] === '?' ? '？' : m[1]) as WhiteboxMark, title, content: [], old: !!old };
+      entryIds.push(cur.id);
       continue;
     }
     if (cur) cur.content.push(raw);
@@ -135,7 +139,8 @@ export function linesFromGenerate(
   const alloc = allocator(st);
   const idMap = new Map<string, string>(); // AI 节点 id → 账 id
   const allEntryIds: string[] = [];
-  for (const seg of result.docSegments ?? []) {
+  const segments = (result.docSegments ?? []).map(seg => isMainThread(seg.domain) ? { ...seg, domain: mainThreadName(seg.text) } : seg);
+  for (const seg of segments) {
     if (seg.refs !== undefined) continue; // 共同正文等本轮编号全部落定再处理。
     const { lines: segLines, entryIds } = segmentToLines(st, seg, alloc);
     lines.push(...segLines);
@@ -158,7 +163,7 @@ export function linesFromGenerate(
       lines.push(relationLine(to, from));
     }
     const currentReason = currentReasons.get(key);
-    if (e.reason !== undefined && e.reason.trim() !== (currentReason ?? '')) {
+    if (e.reason !== undefined && e.reason.trim() !== (currentReason ?? '') && fitsRelationReason(e.reason)) {
       lines.push(aiDecision.edgeNote(to,from,checkedRelationReason(e.reason)));
       currentReasons.set(key,e.reason.trim());
     }
@@ -194,14 +199,18 @@ export function linesFromGenerate(
   const chapterEntries = [...liveJudgments(st), ...liveJudgments(generated)];
   const chapterProse = [...liveProse(st), ...liveProse(generated)];
   const resolve = (ref: string) => /^d\d+$/.test(ref) ? allEntryIds[Number(ref.slice(1)) - 1] : ref;
-  const chapters = new Map((result.docSegments ?? []).filter(seg => seg.refs !== undefined && seg.text.trim()).map(seg => [seg.domain, seg.text]));
+  const chapters = new Map(segments.filter(seg => seg.refs !== undefined && seg.text.trim()).map(seg => [seg.domain, seg.text]));
   // 本轮新增判断所在的章没给正文时，沿用原正文、把新判断补在章末（D63），不因漏写整次作废。
   const pending = opts.requireChapterDoc ? liveJudgments(generated).map(j => j.domain) : [];
   for (const domain of new Set([...chapters.keys(), ...pending])) {
     if (domain === '主题') continue;
-    const blocks = chapterProse.filter(p => p.domain === domain && /^p\d+$/.test(p.id));
+    const blocks = chapterProse.filter(p => sameChapter(p.domain, domain) && /^p\d+$/.test(p.id));
     const members = chapterEntries.filter(j => j.domain === domain).map(j => j.id);
-    const base = chapters.get(domain) ?? blocks.map(p => p.lines.join('\n')).join('\n\n');
+    const old = blocks.map(p => p.lines.join('\n')).join('\n\n');
+    const written = chapters.get(domain);
+    // 改写把原有行文缩成了摘要：原文保留，新写的接在后面（主线是概述，照常替换）。
+    const base = written === undefined ? old
+      : !isMainThread(domain) && dropsProse(old, written) ? `${old}\n\n${written}` : written;
     if (!base.trim()) continue; // 没有底稿：判断按原样完整显示，不写只有引用的空正文
     const text = narrativeText(base, members, resolve);
     for (const p of blocks) lines.push(aiDecision.remove(p.id));
@@ -210,7 +219,20 @@ export function linesFromGenerate(
     const first = chapterEntries.find(j => j.domain === domain);
     if (first) lines.push(aiDecision.reorder(id, first.id));
   }
-  return { lines, idMap, newIds: allEntryIds };
+  return { lines, idMap, newIds: allEntryIds.filter(id => !st.judgments.has(id)) };
+}
+
+/**
+ * 章节改写不许丢原文（2026-11-10）：新行文（不计节点引用）不足原文六成，或覆盖不到原文一半的字词
+ * （按相邻两字计），就不是改写，而是缩成了摘要或换成了别的内容。
+ */
+function dropsProse(before: string, after: string): boolean {
+  const plain = (text: string) => mapReferenceLines(text, () => undefined).replace(/[\s\p{P}\p{S}]/gu, '');
+  const pairs = (text: string) => new Set(Array.from({ length: Math.max(text.length - 1, 0) }, (_, i) => text.slice(i, i + 2)));
+  const old = plain(before), now = plain(after);
+  if (!old) return false;
+  const kept = pairs(now), wanted = pairs(old);
+  return now.length < 0.6 * old.length || [...wanted].filter(pair => kept.has(pair)).length < 0.5 * wanted.size;
 }
 
 /**
@@ -280,8 +302,9 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
   if (scopeIds?.size === 0) return { lines: [], newIds: [], merged: 0, dropped: 0, linked: 0, unlinked: 0 };
   // 超上限时同一问题可跨时间合并；系统兜底合并（forced）还允许待定与已定混合（D63）。
   const mergeRule = { crossTime: options?.cap !== undefined && liveJudgments(st).length > options.cap, mixMarks: !!options?.forced };
+  // 超上限的整图整理减到上限就停（D71）：合并与删除按模型给的先后执行，回到上限后的不再执行，独立判断不被凑数合掉。
+  const reachedCap = () => !scopeIds && mergeRule.crossTime && chapterEntries.length <= options!.cap!;
   for (const op of ops) {
-    if(op.kind==='link')checkedRelationReason(op.reason);
     assertTidyScopeIds(op.kind === 'merge' ? op.memberIds : op.kind === 'revise' || op.kind === 'drop' ? [op.id] : op.kind === 'prose' || op.kind === 'add' ? [] : [op.from, op.to], scopeIds);
     if (scopeIds && op.kind === 'add') throw new Error('局部整理不新增判断。');
     {
@@ -322,7 +345,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
     handledPairs.add(key);
     const exists = renderGraph(st).edges.some(e => e.from === op.from && e.to === op.to);
     if (op.kind === 'link' && exists) {
-      if ((renderGraph(st).edges.find(e => e.from === op.from && e.to === op.to)?.reason ?? '') === op.reason.trim()) continue;
+      if ((renderGraph(st).edges.find(e => e.from === op.from && e.to === op.to)?.reason ?? '') === op.reason.trim() || !fitsRelationReason(op.reason)) continue;
       lines.push(aiDecision.edgeNote(op.to,op.from,op.reason.trim()));
       continue;
     }
@@ -330,7 +353,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
     // 原句保存在动作行中，重放/同步时可审计；不能改写成新的用户判断。
     lines.push(`${op.kind === 'link' ? aiDecision.link(op.to, op.from) : aiDecision.unlink(op.to, op.from)} # ${JSON.stringify({ reason: op.reason, evidence: op.evidence })}`);
     if (op.kind === 'link') {
-      lines.push(aiDecision.edgeNote(op.to,op.from,op.reason.trim()));
+      if (fitsRelationReason(op.reason)) lines.push(aiDecision.edgeNote(op.to,op.from,op.reason.trim()));
       st.cuts.delete(key);
       st.relations.push({ from: op.from, to: op.to, seq: st.lineCount + lines.length });
       linked++;
@@ -353,6 +376,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
       lines.push(...judgmentLines(id,op.mark,domain,op.title,op.body));
       chapterEntries.push({id,domain});
     } else if (op.kind === 'merge') {
+      if (reachedCap()) continue;
       const ids = op.memberIds.filter(id => { const j = st.judgments.get(id); return !!j && !j.deleted; });
       if (invalid((!!scopeIds && ids.length !== op.memberIds.length) || ids.some(id => used.has(id)) || !canMergeJudgments(st, ids, mergeRule))) continue;
       ids.forEach(id => used.add(id));
@@ -367,6 +391,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
       chapterEntries.splice(position, 0, { id, domain });
       merged += 1;
     } else if (op.kind === 'drop') {
+      if (reachedCap()) continue;
       const j = st.judgments.get(op.id);
       if (invalid(!j || j.deleted || used.has(op.id) || j.mark === '？' || j.mark === '⏸')) continue;
       const edges = renderGraph(st).edges;
@@ -392,7 +417,7 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
   }
   // 章节正文（D63）：模型给了就用；没给而本章判断有增减的，沿用原正文并换上合并后的编号。
   // 正文没讲到的判断补在章末，模型漏写一章不再让整次整理作废。同章最后一份说明生效。
-  const prose = new Map(ops.flatMap(op => op.kind === 'prose' && op.text.trim() ? [[op.domain, op.text] as const] : []));
+  const prose = new Map(ops.flatMap(op => op.kind === 'prose' && op.text.trim() ? [[isMainThread(op.domain) ? mainThreadName(op.text) : op.domain, op.text] as const] : []));
   if (scopeIds) {
     for (const domain of prose.keys())
       if (domain === '主题' || !allowedChapters.has(domain)) throw new Error('局部整理包含选区外的章节，已保留原图文。');
@@ -400,24 +425,37 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
   const original = liveJudgments(st).map(j => ({ id: j.id, domain: j.domain }));
   const membersOf = (entries: Array<{ id: string; domain: string }>, domain: string) => entries.filter(j => j.domain === domain).map(j => j.id);
   const resolve = (id: string) => mergedRefs.get(id) ?? id;
-  const proseOf = (domain: string) => liveProse(st).filter(p => p.domain === domain && /^p\d+$/.test(p.id));
+  const proseOf = (domain: string) => liveProse(st).filter(p => sameChapter(p.domain, domain) && /^p\d+$/.test(p.id));
   // 空正文收掉原本就没有节点的章节（D68）；仍有节点的章当作没写，原文保留；
   // 本次节点全部迁出的章由下面的整章迁出处理。
   const emptied = new Set(ops.flatMap(op => op.kind === 'prose' && !op.text.trim() ? [op.domain] : []));
   for (const domain of emptied) {
-    if (prose.has(domain) || domain === '主题' || domain === '主线') continue;
+    if (prose.has(domain) || domain === '主题' || isMainThread(domain)) continue;
     if (membersOf(chapterEntries, domain).length || membersOf(original, domain).length) continue;
     for (const b of proseOf(domain)) lines.push(aiDecision.remove(b.id));
   }
-  // 整章迁出且两章都没给新正文（如系统兜底合并）：旧正文接到判断去的那章，不随章节消失（D65）。
-  const carried = new Map<string, string[]>();
+  // 改写不许丢原文（2026-11-10）：新正文缩成了它要接替的原文的摘要，就当作没写、原文保留；
+  // 主线是概述，照常替换。先比本章原文，再比本章加上整章并进来的旧正文。
+  const textOf = (domain: string) => proseOf(domain).map(b => b.lines.join('\n')).join('\n\n').trim();
+  const keepOriginal = (domain: string, replaced: string) => {
+    if (!isMainThread(domain) && dropsProse(replaced, prose.get(domain)!)) prose.delete(domain);
+  };
+  for (const domain of [...prose.keys()]) keepOriginal(domain, textOf(domain));
+  // 整章迁出：判断都并去或改到了别的章、这章没给新正文时，旧正文跟着判断去，不随章节消失（D65）；
+  // 判断全被删掉、无处可去时，正文原样留在本章（降为正文）。
+  const movedInto = new Map<string, string[]>();
+  const stranded = new Set<string>();
   for (const domain of new Set(original.map(j => j.domain))) {
     if (prose.has(domain) || membersOf(chapterEntries, domain).length) continue;
-    const text = proseOf(domain).map(b => b.lines.join('\n')).join('\n\n').trim();
-    const moved = original.find(j => j.domain === domain && mergedRefs.has(j.id));
-    const target = moved && chapterEntries.find(j => j.id === resolve(moved.id))?.domain;
-    if (text && target && target !== domain && !prose.has(target)) carried.set(target, [...(carried.get(target) ?? []), text]);
+    const text = textOf(domain);
+    const target = original.filter(j => j.domain === domain)
+      .map(j => chapterEntries.find(entry => entry.id === resolve(j.id))?.domain)
+      .find((d): d is string => !!d && d !== domain);
+    if (text && target) movedInto.set(target, [...(movedInto.get(target) ?? []), text]);
+    else if (text) stranded.add(domain);
   }
+  for (const [target, texts] of movedInto) if (prose.has(target)) keepOriginal(target, [textOf(target), ...texts].join('\n\n'));
+  const carried = new Map([...movedInto].filter(([target]) => !prose.has(target)));
   for (const domain of new Set([...prose.keys(), ...chapterEntries.map(j => j.domain), ...original.map(j => j.domain)])) {
     // 已有主题属于用户的收录边界，普通整理不能改写；空主题仍可初始化。历史数据里放在主题下的判断也不牵动它。
     if (domain === '主题' && (themeOf(st) || !prose.has(domain))) continue;
@@ -426,14 +464,14 @@ export function tidyOpsToLines(st: LedgerState, ops: TidyAiOp[], scopeIds?: Read
     const changed = members.length !== before.length || members.some(id => !before.includes(id));
     const blocks = proseOf(domain);
     const provided = prose.get(domain);
-    if (provided === undefined && !changed) continue;
+    if (provided === undefined && (!changed || stranded.has(domain))) continue;
     if (provided === undefined && !members.length) {
       // 整章迁出：判断都去了别的章并在那里引用，旧导语随之收掉。
       for (const b of blocks) lines.push(aiDecision.remove(b.id));
       continue;
     }
     const first = chapterEntries.find(j => j.domain === domain);
-    if (scopeIds && !first && !blocks.length && domain !== '主线') continue;
+    if (scopeIds && !first && !blocks.length && !isMainThread(domain)) continue;
     const base = provided ?? [...blocks.map(b => b.lines.join('\n')), ...(carried.get(domain) ?? [])].join('\n\n');
     if (!base.trim() && !blocks.length) continue; // 没有底稿：判断按原样完整显示，不写只有引用的空正文
     const text = narrativeText(base, members, resolve);

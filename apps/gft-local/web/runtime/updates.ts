@@ -44,7 +44,7 @@ function changeSummary(before: MapState, after: MapState) {
     before.doc !== after.doc ? t('正文已更新') : '',
   ]
     .filter(Boolean)
-    .join('，');
+    .join(t('，'));
 }
 /** A chat update that ended early: cancelled by the person, or failed. */
 const updateEnded = (operation: ChatUpdate, error: unknown) => ({
